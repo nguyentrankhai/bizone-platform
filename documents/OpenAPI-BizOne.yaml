@@ -1,0 +1,1965 @@
+openapi: 3.0.3
+info:
+  title: BizOne Omni Channel POS & Management Platform API
+  description: |
+    API cho hệ thống quản lý bán hàng BizOne dành cho SME Việt Nam.
+
+    ## Authentication
+    - **Bearer JWT**: Dùng cho tất cả endpoint nội bộ. Access token 15 phút, refresh token 7 ngày.
+    - **OAuth 2.0**: Dùng cho tích hợp bên thứ ba (xem `OAuth 2.0 Spec` trong tài liệu riêng).
+
+    ## Multi-tenant
+    Mọi request phải kèm header `X-Tenant-ID` để xác định tenant (cửa hàng).
+
+    ## Rate Limiting
+    - General: 100 req/phút
+    - POS endpoints: 300 req/phút
+    - Auth: 10 req/phút
+    - Search: 60 req/phút
+    - Import/Export: 10 req/phút
+
+    ## Idempotency
+    Các mutation endpoint quan trọng (tạo hóa đơn, thanh toán) hỗ trợ `Idempotency-Key` header.
+  version: "1.0.0"
+  contact:
+    name: BizOne Team
+    email: dev@bizone.vn
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development
+  - url: https://staging-api.bizone.vn/api
+    description: Staging
+  - url: https://api.bizone.vn/api
+    description: Production
+
+tags:
+  - name: Auth
+    description: Xác thực và phân quyền
+  - name: POS
+    description: Bán hàng tại quầy (Point of Sale)
+  - name: Products
+    description: Quản lý sản phẩm
+  - name: Inventory
+    description: Quản lý kho hàng
+  - name: Customers
+    description: Quản lý khách hàng (CRM)
+  - name: Orders
+    description: Quản lý đơn hàng
+  - name: Staff
+    description: Quản lý nhân viên
+  - name: Reports
+    description: Báo cáo và phân tích
+  - name: Suppliers
+    description: Quản lý nhà cung cấp
+  - name: Marketing
+    description: Khuyến mãi và marketing
+  - name: OmniChannel
+    description: Bán hàng đa kênh
+  - name: Accounting
+    description: Kế toán và tài chính
+  - name: Dashboard
+    description: Dashboard tổng quan
+  - name: AuditLog
+    description: Nhật ký thao tác
+  - name: Notifications
+    description: Thông báo hệ thống
+  - name: Settings
+    description: Cài đặt hệ thống
+  - name: OAuth
+    description: OAuth 2.0 Authorization Server endpoints
+
+# ─────────────────────────────────────────────────────────────
+# SECURITY SCHEMES
+# ─────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token. Lấy từ `POST /auth/login` hoặc `POST /auth/refresh`.
+        Payload chứa: user_id, role, branch_id, tenant_id.
+        TTL: 15 phút. Refresh bằng refresh_token (7 ngày, rotation).
+
+    OAuth2:
+      type: oauth2
+      description: |
+        OAuth 2.0 cho tích hợp bên thứ ba (third-party apps, Omni Channel connectors).
+        Xem chi tiết trong tài liệu OAuth-Spec.md.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://api.bizone.vn/oauth/authorize
+          tokenUrl: https://api.bizone.vn/oauth/token
+          refreshUrl: https://api.bizone.vn/oauth/token
+          scopes:
+            "pos:read": Đọc thông tin ca bán hàng và hóa đơn
+            "pos:write": Tạo và cập nhật hóa đơn
+            "products:read": Đọc danh sách sản phẩm
+            "products:write": Thêm, sửa, xóa sản phẩm
+            "inventory:read": Đọc tồn kho
+            "inventory:write": Nhập/xuất/chuyển kho
+            "customers:read": Đọc thông tin khách hàng
+            "customers:write": Thêm, sửa thông tin khách hàng
+            "orders:read": Đọc đơn hàng
+            "orders:write": Cập nhật trạng thái đơn hàng
+            "reports:read": Đọc báo cáo
+            "omni:sync": Đồng bộ sản phẩm và đơn hàng đa kênh
+            "webhooks:write": Quản lý webhook
+        clientCredentials:
+          tokenUrl: https://api.bizone.vn/oauth/token
+          scopes:
+            "omni:sync": Đồng bộ sản phẩm và đơn hàng (Shopee/Lazada/TikTok connector)
+            "webhooks:write": Quản lý webhook nội bộ
+            "reports:read": Đọc báo cáo tự động
+
+  # ─────────────────────────────────────────────────────────────
+  # COMMON PARAMETERS
+  # ─────────────────────────────────────────────────────────────
+  parameters:
+    TenantId:
+      in: header
+      name: X-Tenant-ID
+      required: true
+      schema:
+        type: string
+        example: "tenant_abc123"
+      description: Multi-tenant identifier
+
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      description: UUID v4 để chống trùng lặp mutation (Redis TTL 24h)
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+      description: Số trang
+
+    PageSizeParam:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Số item trên mỗi trang (tối đa 100)
+
+    SortByParam:
+      in: query
+      name: sortBy
+      schema:
+        type: string
+      description: Tên trường để sắp xếp
+
+    SortOrderParam:
+      in: query
+      name: sortOrder
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
+    SearchParam:
+      in: query
+      name: search
+      schema:
+        type: string
+      description: Từ khóa tìm kiếm
+
+    FromDateParam:
+      in: query
+      name: fromDate
+      schema:
+        type: string
+        format: date-time
+      description: Lọc từ ngày (ISO 8601)
+
+    ToDateParam:
+      in: query
+      name: toDate
+      schema:
+        type: string
+        format: date-time
+      description: Lọc đến ngày (ISO 8601)
+
+    BranchIdParam:
+      in: query
+      name: branchId
+      schema:
+        type: integer
+      description: Lọc theo chi nhánh
+
+  # ─────────────────────────────────────────────────────────────
+  # COMMON SCHEMAS
+  # ─────────────────────────────────────────────────────────────
+  schemas:
+    SuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - VALIDATION_ERROR
+                - CONFLICT
+                - RATE_LIMITED
+                - INTERNAL_ERROR
+                - TENANT_MISMATCH
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: "Validation failed"
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    TokenPair:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (15 phút)
+        refreshToken:
+          type: string
+          description: Refresh token (7 ngày, rotation)
+        expiresIn:
+          type: integer
+          example: 900
+          description: Số giây trước khi access token hết hạn
+        tokenType:
+          type: string
+          example: Bearer
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "Áo Thun Nam Cotton"
+        sku:
+          type: string
+          example: "AO-THUN-NAM-001"
+        barcode:
+          type: string
+          example: "8934567890123"
+        categoryId:
+          type: integer
+        costPrice:
+          type: number
+          format: float
+          example: 80000
+        sellingPrice:
+          type: number
+          format: float
+          example: 150000
+        taxRate:
+          type: number
+          example: 10
+        unit:
+          type: string
+          example: "cái"
+        minStock:
+          type: integer
+          example: 10
+        trackInventory:
+          type: boolean
+          example: true
+        status:
+          type: string
+          enum: [active, inactive, out_of_stock]
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVariant"
+        units:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductUnit"
+
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku:
+          type: string
+        barcode:
+          type: string
+        sellingPrice:
+          type: number
+        attributes:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: "Màu sắc"
+              value:
+                type: string
+                example: "Đen"
+
+    ProductUnit:
+      type: object
+      properties:
+        unitName:
+          type: string
+          example: "cái"
+        conversionRate:
+          type: number
+          example: 1
+        sellingPrice:
+          type: number
+        isBase:
+          type: boolean
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+          example: "Nguyễn Văn A"
+        phone:
+          type: string
+          example: "0987654321"
+          description: Unique trong tenant
+        email:
+          type: string
+          format: email
+        gender:
+          type: string
+          enum: [male, female, other]
+        birthday:
+          type: string
+          format: date
+        groupId:
+          type: integer
+        rank:
+          type: string
+          enum: [Silver, Gold, VIP, Diamond]
+        totalPoints:
+          type: integer
+        totalDebt:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceCode:
+          type: string
+          example: "HD-20260612-0001"
+        branchId:
+          type: integer
+        cashSessionId:
+          type: integer
+        customerId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoicePayment"
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        totalAmount:
+          type: number
+        status:
+          type: string
+          enum: [draft, paid, refunded, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+
+    InvoiceItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        variantId:
+          type: integer
+          nullable: true
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        discountPercent:
+          type: number
+          default: 0
+        costPrice:
+          type: number
+
+    InvoicePayment:
+      type: object
+      properties:
+        method:
+          type: string
+          enum: [cash, transfer, card, wallet, qr]
+          example: "cash"
+        amount:
+          type: number
+        referenceCode:
+          type: string
+          nullable: true
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderCode:
+          type: string
+        channel:
+          type: string
+          enum: [pos, website, shopee, lazada, tiktok, facebook, zalo]
+        customerId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, preparing, shipping, delivered, completed, cancelled, returned]
+        totalAmount:
+          type: number
+        shippingInfo:
+          type: object
+          properties:
+            carrier:
+              type: string
+              enum: [ghn, ghtk, shopee_express, j_and_t]
+            trackingNumber:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        branchId:
+          type: integer
+        isDefault:
+          type: boolean
+
+    Staff:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, seller, warehouse, viewer]
+        branchIds:
+          type: array
+          items:
+            type: integer
+        status:
+          type: string
+          enum: [active, inactive]
+
+    OAuthClient:
+      type: object
+      properties:
+        clientId:
+          type: string
+          example: "shopee_connector_abc123"
+        clientName:
+          type: string
+          example: "Shopee Connector"
+        clientType:
+          type: string
+          enum: [confidential, public]
+        redirectUris:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        grantTypes:
+          type: array
+          items:
+            type: string
+            enum: [authorization_code, client_credentials, refresh_token]
+
+# ─────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  # ───────────── AUTH ─────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Đăng nhập
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin@chuahang.vn"
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Sai username hoặc password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Làm mới access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Token mới
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Đăng xuất (vô hiệu hóa refresh token)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Đăng xuất thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Yêu cầu đặt lại mật khẩu (gửi OTP qua email/SMS)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier]
+              properties:
+                identifier:
+                  type: string
+                  description: Email hoặc số điện thoại
+      responses:
+        "200":
+          description: OTP đã được gửi
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Xác thực OTP / 2FA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, otp]
+              properties:
+                identifier:
+                  type: string
+                otp:
+                  type: string
+                  example: "123456"
+      responses:
+        "200":
+          description: OTP hợp lệ, trả về reset token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Đặt lại mật khẩu mới
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetToken, newPassword]
+              properties:
+                resetToken:
+                  type: string
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        "200":
+          description: Mật khẩu đã được đặt lại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Đổi mật khẩu
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        "200":
+          description: Đổi mật khẩu thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── OAUTH 2.0 AUTHORIZATION SERVER ─────────────
+  /oauth/authorize:
+    get:
+      tags: [OAuth]
+      summary: OAuth 2.0 Authorization Endpoint
+      description: |
+        Bắt đầu Authorization Code flow. Người dùng sẽ được chuyển đến trang đăng nhập
+        BizOne, sau khi cấp quyền sẽ redirect về `redirect_uri` kèm `code`.
+      parameters:
+        - in: query
+          name: response_type
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - in: query
+          name: client_id
+          required: true
+          schema:
+            type: string
+          description: Client ID đã đăng ký
+        - in: query
+          name: redirect_uri
+          required: true
+          schema:
+            type: string
+            format: uri
+        - in: query
+          name: scope
+          required: true
+          schema:
+            type: string
+          description: "Danh sách scope cách nhau bằng space. Ví dụ: products:read inventory:read"
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+          description: CSRF protection token (random string từ client)
+        - in: query
+          name: code_challenge
+          required: false
+          schema:
+            type: string
+          description: PKCE code challenge (S256, khuyến nghị cho public clients)
+        - in: query
+          name: code_challenge_method
+          required: false
+          schema:
+            type: string
+            enum: [S256, plain]
+            default: S256
+      responses:
+        "302":
+          description: |
+            Redirect đến redirect_uri với:
+            - Thành công: `?code=AUTH_CODE&state=STATE`
+            - Thất bại: `?error=access_denied&state=STATE`
+
+  /oauth/token:
+    post:
+      tags: [OAuth]
+      summary: OAuth 2.0 Token Endpoint
+      description: |
+        Đổi authorization code lấy token, hoặc refresh token.
+        Hỗ trợ các grant type: `authorization_code`, `client_credentials`, `refresh_token`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, client_credentials, refresh_token]
+                  example: authorization_code
+                code:
+                  type: string
+                  description: Authorization code (khi grant_type=authorization_code)
+                redirect_uri:
+                  type: string
+                  description: Phải khớp với redirect_uri trong /oauth/authorize
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  description: Chỉ dành cho confidential clients
+                code_verifier:
+                  type: string
+                  description: PKCE code verifier (khi dùng PKCE)
+                refresh_token:
+                  type: string
+                  description: Khi grant_type=refresh_token
+                scope:
+                  type: string
+                  description: Scope yêu cầu (khi grant_type=client_credentials)
+      responses:
+        "200":
+          description: Token thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    example: 3600
+                  refresh_token:
+                    type: string
+                    description: Chỉ có với authorization_code và refresh_token grants
+                  scope:
+                    type: string
+                    description: Scope thực tế được cấp
+        "400":
+          description: Lỗi OAuth (invalid_grant, invalid_client...)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - invalid_request
+                      - invalid_client
+                      - invalid_grant
+                      - unauthorized_client
+                      - unsupported_grant_type
+                      - invalid_scope
+                  error_description:
+                    type: string
+
+  /oauth/revoke:
+    post:
+      tags: [OAuth]
+      summary: Thu hồi token (access hoặc refresh)
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+      responses:
+        "200":
+          description: Thu hồi thành công (luôn trả về 200 per RFC 7009)
+
+  /oauth/userinfo:
+    get:
+      tags: [OAuth]
+      summary: Lấy thông tin user hiện tại (OpenID Connect userinfo endpoint)
+      security:
+        - BearerAuth: []
+        - OAuth2: ["customers:read"]
+      responses:
+        "200":
+          description: Thông tin user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sub:
+                    type: string
+                    description: User ID
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  role:
+                    type: string
+                  tenant_id:
+                    type: string
+                  branch_ids:
+                    type: array
+                    items:
+                      type: integer
+
+  /oauth/clients:
+    get:
+      tags: [OAuth]
+      summary: Danh sách OAuth clients đã đăng ký (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Danh sách clients
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OAuthClient"
+    post:
+      tags: [OAuth]
+      summary: Đăng ký OAuth client mới
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientName, redirectUris, scopes, grantTypes]
+              properties:
+                clientName:
+                  type: string
+                  example: "Shopee Connector"
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                grantTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [authorization_code, client_credentials, refresh_token]
+                clientType:
+                  type: string
+                  enum: [confidential, public]
+                  default: confidential
+      responses:
+        "201":
+          description: Client đã tạo, trả về client_secret (chỉ hiển thị một lần)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/OAuthClient"
+                          - type: object
+                            properties:
+                              clientSecret:
+                                type: string
+                                description: "Chỉ trả về lần này duy nhất — lưu ngay"
+
+  # ───────────── POS ─────────────
+  /pos/sessions:
+    post:
+      tags: [POS]
+      summary: Mở ca bán hàng
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, openingBalance]
+              properties:
+                branchId:
+                  type: integer
+                openingBalance:
+                  type: number
+                  example: 500000
+      responses:
+        "201":
+          description: Ca đã mở
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "409":
+          description: Ca đang mở cho branch này
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags: [POS]
+      summary: Danh sách ca bán hàng
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/BranchIdParam"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+      responses:
+        "200":
+          description: Danh sách ca
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /pos/sessions/{id}/close:
+    put:
+      tags: [POS]
+      summary: Khóa ca bán hàng
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actualClosingBalance]
+              properties:
+                actualClosingBalance:
+                  type: number
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Ca đã khóa, trả về tổng kết ca
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /pos/invoices:
+    post:
+      tags: [POS]
+      summary: Tạo hóa đơn
+      description: |
+        Tạo hóa đơn mới, tự động trừ tồn kho, tính điểm thưởng khách hàng.
+        Thời gian xử lý mục tiêu: < 5 giây.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, cashSessionId, items, payments]
+              properties:
+                branchId:
+                  type: integer
+                cashSessionId:
+                  type: integer
+                customerId:
+                  type: integer
+                  nullable: true
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: "#/components/schemas/InvoiceItem"
+                payments:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: "#/components/schemas/InvoicePayment"
+                couponCode:
+                  type: string
+                  nullable: true
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Hóa đơn đã tạo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Invoice"
+        "409":
+          description: Trùng Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Lỗi validation (tồn kho không đủ, sản phẩm không hoạt động...)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      tags: [POS]
+      summary: Danh sách hóa đơn
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+        - $ref: "#/components/parameters/BranchIdParam"
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, paid, refunded, cancelled]
+        - in: query
+          name: cashSessionId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Danh sách hóa đơn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /pos/invoices/{id}:
+    get:
+      tags: [POS]
+      summary: Chi tiết hóa đơn
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chi tiết hóa đơn
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Invoice"
+
+  /pos/invoices/{id}/refund:
+    post:
+      tags: [POS]
+      summary: Đổi/trả hàng
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, totalRefundAmount]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [invoiceItemId, productId, quantity, refundAmount, reason]
+                    properties:
+                      invoiceItemId:
+                        type: integer
+                      productId:
+                        type: integer
+                      quantity:
+                        type: number
+                      refundAmount:
+                        type: number
+                      reason:
+                        type: string
+                totalRefundAmount:
+                  type: number
+      responses:
+        "200":
+          description: Đổi/trả thành công, tạo hóa đơn hoàn trả
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── PRODUCTS ─────────────
+  /products:
+    get:
+      tags: [Products]
+      summary: Danh sách sản phẩm
+      security:
+        - BearerAuth: []
+        - OAuth2: ["products:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - $ref: "#/components/parameters/SortByParam"
+        - $ref: "#/components/parameters/SortOrderParam"
+        - in: query
+          name: categoryId
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, inactive, out_of_stock]
+        - in: query
+          name: lowStock
+          schema:
+            type: boolean
+          description: Lọc hàng sắp hết tồn kho
+      responses:
+        "200":
+          description: Danh sách sản phẩm
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      tags: [Products]
+      summary: Thêm sản phẩm mới
+      security:
+        - BearerAuth: []
+        - OAuth2: ["products:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Product"
+      responses:
+        "201":
+          description: Sản phẩm đã tạo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Product"
+        "409":
+          description: SKU hoặc barcode đã tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/search:
+    get:
+      tags: [Products]
+      summary: Tìm kiếm real-time (< 300ms, dùng cho POS barcode scan)
+      security:
+        - BearerAuth: []
+        - OAuth2: ["products:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+          description: Từ khóa tìm kiếm (tên, SKU, barcode)
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 10
+            maximum: 20
+        - in: query
+          name: includeInactive
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Kết quả tìm kiếm (< 300ms)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /products/import:
+    post:
+      tags: [Products]
+      summary: Import sản phẩm từ file Excel
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File Excel (.xlsx), tối đa 50MB
+                updateExisting:
+                  type: boolean
+                  default: false
+                  description: Cập nhật sản phẩm đã tồn tại nếu trùng SKU
+      responses:
+        "200":
+          description: Kết quả import (1000 SP trong < 30 giây)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          imported:
+                            type: integer
+                          updated:
+                            type: integer
+                          errors:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                row:
+                                  type: integer
+                                field:
+                                  type: string
+                                message:
+                                  type: string
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Chi tiết sản phẩm
+      security:
+        - BearerAuth: []
+        - OAuth2: ["products:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chi tiết sản phẩm
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Products]
+      summary: Cập nhật sản phẩm
+      security:
+        - BearerAuth: []
+        - OAuth2: ["products:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Product"
+      responses:
+        "200":
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    delete:
+      tags: [Products]
+      summary: Xóa sản phẩm (soft delete)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Đã xóa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── INVENTORY ─────────────
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: Tồn kho theo kho
+      security:
+        - BearerAuth: []
+        - OAuth2: ["inventory:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - in: query
+          name: warehouseId
+          schema:
+            type: integer
+        - in: query
+          name: lowStock
+          schema:
+            type: boolean
+        - in: query
+          name: expiring
+          schema:
+            type: boolean
+          description: Hàng sắp hết hạn
+      responses:
+        "200":
+          description: Danh sách tồn kho
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /inventory/transactions:
+    post:
+      tags: [Inventory]
+      summary: Tạo phiếu nhập/xuất kho
+      security:
+        - BearerAuth: []
+        - OAuth2: ["inventory:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionTypeId, warehouseId, items]
+              properties:
+                transactionTypeId:
+                  type: integer
+                  description: "1=nhập kho, 2=xuất kho, 3=điều chỉnh"
+                warehouseId:
+                  type: integer
+                referenceType:
+                  type: string
+                  enum: [purchase_order, invoice, adjustment, transfer]
+                  nullable: true
+                referenceId:
+                  type: integer
+                  nullable: true
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [productId, quantity]
+                    properties:
+                      productId:
+                        type: integer
+                      variantId:
+                        type: integer
+                        nullable: true
+                      quantity:
+                        type: number
+                      unitCost:
+                        type: number
+                      batchCode:
+                        type: string
+                        nullable: true
+                      expiryDate:
+                        type: string
+                        format: date
+                        nullable: true
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Phiếu đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── CUSTOMERS ─────────────
+  /customers:
+    get:
+      tags: [Customers]
+      summary: Danh sách khách hàng
+      security:
+        - BearerAuth: []
+        - OAuth2: ["customers:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - in: query
+          name: groupId
+          schema:
+            type: integer
+        - in: query
+          name: rank
+          schema:
+            type: string
+            enum: [Silver, Gold, VIP, Diamond]
+      responses:
+        "200":
+          description: Danh sách khách hàng
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      tags: [Customers]
+      summary: Thêm khách hàng
+      security:
+        - BearerAuth: []
+        - OAuth2: ["customers:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Customer"
+      responses:
+        "201":
+          description: Đã thêm khách hàng
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Customer"
+        "409":
+          description: Số điện thoại đã tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /customers/{id}/points/adjust:
+    post:
+      tags: [Customers]
+      summary: Điều chỉnh điểm thành viên
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [points, reason]
+              properties:
+                points:
+                  type: integer
+                  description: "Dương = cộng điểm, âm = trừ điểm"
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Điểm đã được điều chỉnh
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── ORDERS ─────────────
+  /orders:
+    get:
+      tags: [Orders]
+      summary: Danh sách đơn hàng
+      security:
+        - BearerAuth: []
+        - OAuth2: ["orders:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+        - $ref: "#/components/parameters/BranchIdParam"
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum: [pos, website, shopee, lazada, tiktok, facebook, zalo]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, confirmed, preparing, shipping, delivered, completed, cancelled, returned]
+      responses:
+        "200":
+          description: Danh sách đơn hàng
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /orders/{id}/status:
+    put:
+      tags: [Orders]
+      summary: Cập nhật trạng thái đơn hàng
+      security:
+        - BearerAuth: []
+        - OAuth2: ["orders:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [confirmed, preparing, shipping, delivered, completed, cancelled]
+                note:
+                  type: string
+                trackingNumber:
+                  type: string
+      responses:
+        "200":
+          description: Trạng thái đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── REPORTS ─────────────
+  /reports/dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard tổng quan
+      security:
+        - BearerAuth: []
+        - OAuth2: ["reports:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/BranchIdParam"
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [today, 7days, 30days, custom]
+            default: today
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+      responses:
+        "200":
+          description: Dữ liệu dashboard (< 2 giây với Redis cache 5 phút)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reports/revenue:
+    get:
+      tags: [Reports]
+      summary: Báo cáo doanh thu
+      security:
+        - BearerAuth: []
+        - OAuth2: ["reports:read"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+        - $ref: "#/components/parameters/BranchIdParam"
+        - in: query
+          name: groupBy
+          schema:
+            type: string
+            enum: [day, week, month, year]
+            default: day
+      responses:
+        "200":
+          description: Báo cáo doanh thu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ───────────── WEBHOOKS (outbound) ─────────────
+  /webhooks:
+    get:
+      tags: [Settings]
+      summary: Danh sách webhook endpoints đã cấu hình
+      security:
+        - BearerAuth: []
+        - OAuth2: ["webhooks:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Danh sách webhooks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    post:
+      tags: [Settings]
+      summary: Đăng ký webhook endpoint mới
+      description: |
+        BizOne sẽ gửi HTTP POST đến URL này khi có sự kiện.
+        Signature xác thực: `X-BizOne-Signature: HMAC-SHA256(secret, body)`.
+
+        **Các sự kiện hỗ trợ:**
+        - `invoice.created`, `invoice.paid`, `invoice.refunded`
+        - `order.created`, `order.status_changed`, `order.cancelled`
+        - `inventory.low_stock`, `inventory.updated`
+        - `customer.created`, `customer.updated`
+      security:
+        - BearerAuth: []
+        - OAuth2: ["webhooks:write"]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://partner-app.vn/webhooks/bizone"
+                events:
+                  type: array
+                  items:
+                    type: string
+                  example: ["invoice.created", "order.status_changed"]
+                secret:
+                  type: string
+                  description: Secret để verify HMAC-SHA256 signature
+                active:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Webhook đã đăng ký
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+# ─────────────────────────────────────────────────────────────
+# COMMON RESPONSES
+# ─────────────────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Token không hợp lệ hoặc hết hạn
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: "Token hết hạn hoặc không hợp lệ"
+
+    Forbidden:
+      description: Không có quyền thực hiện hành động này
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource không tồn tại
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: "Resource không tồn tại"
+
+    RateLimited:
+      description: Vượt quá giới hạn request
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+# ─────────────────────────────────────────────────────────────
+# GLOBAL SECURITY
+# ─────────────────────────────────────────────────────────────
+security:
+  - BearerAuth: []

@@ -1,0 +1,1112 @@
+openapi: 3.0.3
+info:
+  title: BizOne Payment Hub API
+  description: |
+    Payment Hub là cổng thanh toán tập trung cho hệ sinh thái BizOne.
+    Hỗ trợ VNPay, MoMo, ZaloPay, VietQR thông qua kiến trúc connector hot-plug.
+
+    ## Hai lớp API
+
+    ### 1. Merchant API
+    Dành cho hệ thống BizOne (internal) hoặc đối tác tích hợp thanh toán.
+    - **Auth**: HMAC-SHA256 (`X-Api-Key` + `X-Signature` + `X-Timestamp`)
+    - **Signature**: `HMAC-SHA256(secret, HTTP_METHOD + "\n" + URI_PATH + "\n" + X-Timestamp + "\n" + SHA256(Body))`
+
+    ### 2. Admin API
+    Dành cho vận hành nội bộ Payment Hub.
+    - **Auth**: JWT Bearer (Keycloak realm `payment-hub`, role `payhub-admin`)
+
+    ## Transaction State Machine
+    ```
+    Created → Pending → Success
+                     ↘ Failed
+                     ↘ Expired
+    Success → Refunded
+    ```
+
+    ## Idempotency
+    Các mutation endpoint (`POST /transactions`, `POST /qr/generate`, `POST /transactions/{id}/refund`)
+    hỗ trợ `Idempotency-Key` header. Redis TTL 24h.
+
+    ## Rate Limiting
+    - Merchant API: 200 req/phút per API key
+    - Admin API: 100 req/phút per user
+  version: "1.0.0"
+  contact:
+    name: BizOne Payment Team
+    email: payment@bizone.vn
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:4000/api
+    description: Development
+  - url: https://staging-payment.bizone.vn/api
+    description: Staging
+  - url: https://payment.bizone.vn/api
+    description: Production
+
+tags:
+  - name: Transactions
+    description: Khởi tạo và quản lý giao dịch thanh toán
+  - name: QR
+    description: Tạo và kiểm tra QR Code thanh toán (VietQR, MoMo, ZaloPay)
+  - name: Refunds
+    description: Hoàn tiền giao dịch
+  - name: Partners
+    description: Danh sách đối tác thanh toán (PSP connectors)
+  - name: Webhooks
+    description: Nhận sự kiện thanh toán từ PSP (inbound) và cấu hình webhook gửi đi
+  - name: Admin Dashboard
+    description: Dashboard vận hành Payment Hub
+  - name: Admin Transactions
+    description: Quản lý giao dịch toàn hệ thống (admin)
+  - name: Admin Partners
+    description: Quản lý cấu hình đối tác PSP
+
+# ─────────────────────────────────────────────────────────────
+# SECURITY SCHEMES
+# ─────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    MerchantHMAC:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        HMAC-SHA256 authentication cho Merchant API.
+        Mỗi request phải kèm 3 header:
+        - `X-Api-Key`: Merchant API key (lấy từ dashboard)
+        - `X-Signature`: `HMAC-SHA256(secret, HTTP_METHOD + "\n" + URI_PATH + "\n" + X-Timestamp + "\n" + SHA256(Body))`
+        - `X-Timestamp`: Unix timestamp (giây), sai lệch tối đa 300s
+
+    AdminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token từ Keycloak. Realm `payment-hub`, client `payhub-api`.
+        Token phải có role `payhub-admin` hoặc `payhub-viewer` tùy endpoint.
+        Lấy token: `POST /auth/realms/payment-hub/protocol/openid-connect/token`
+
+    KeycloakOIDC:
+      type: openIdConnect
+      openIdConnectUrl: https://keycloak.bizone.vn/realms/payment-hub/.well-known/openid-configuration
+      description: Keycloak OpenID Connect (realm payment-hub)
+
+  # ─────────────────────────────────────────────────────────────
+  # COMMON PARAMETERS
+  # ─────────────────────────────────────────────────────────────
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      description: UUID v4 để chống trùng lặp (Redis TTL 24h)
+
+    HMACSignature:
+      in: header
+      name: X-Signature
+      required: true
+      schema:
+        type: string
+      description: HMAC-SHA256 signature
+
+    HMACTimestamp:
+      in: header
+      name: X-Timestamp
+      required: true
+      schema:
+        type: integer
+        example: 1735660800
+      description: Unix timestamp (giây), sai lệch tối đa ±300s
+
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+
+    PageSizeParam:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+    FromDateParam:
+      in: query
+      name: fromDate
+      schema:
+        type: string
+        format: date-time
+
+    ToDateParam:
+      in: query
+      name: toDate
+      schema:
+        type: string
+        format: date-time
+
+  # ─────────────────────────────────────────────────────────────
+  # SCHEMAS
+  # ─────────────────────────────────────────────────────────────
+  schemas:
+    SuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHORIZED
+                - INVALID_SIGNATURE
+                - TIMESTAMP_EXPIRED
+                - FORBIDDEN
+                - NOT_FOUND
+                - VALIDATION_ERROR
+                - CONFLICT
+                - RATE_LIMITED
+                - PAYMENT_PROVIDER_ERROR
+                - TRANSACTION_NOT_REFUNDABLE
+                - AMOUNT_EXCEEDS_ORIGINAL
+                - INTERNAL_ERROR
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: PayHub internal transaction ID
+        externalId:
+          type: string
+          description: ID từ merchant system (BizOne invoice code)
+        partnerId:
+          type: string
+          enum: [vnpay, momo, zalopay, vietqr]
+          example: "vnpay"
+        partnerTransactionId:
+          type: string
+          description: Transaction ID từ PSP
+        amount:
+          type: number
+          description: Số tiền VND
+          example: 150000
+        currency:
+          type: string
+          default: VND
+          example: VND
+        status:
+          type: string
+          enum: [created, pending, success, failed, expired, refunded]
+          example: success
+        paymentMethod:
+          type: string
+          enum: [qr, wallet, card, transfer]
+          example: qr
+        description:
+          type: string
+          example: "Thanh toán hóa đơn HD-20260612-0001"
+        metadata:
+          type: object
+          description: Dữ liệu bổ sung (tùy PSP)
+        webhookUrl:
+          type: string
+          format: uri
+        returnUrl:
+          type: string
+          format: uri
+        expiredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTransactionRequest:
+      type: object
+      required: [externalId, partnerId, amount, paymentMethod]
+      properties:
+        externalId:
+          type: string
+          description: ID từ merchant (unique per merchant)
+          example: "HD-20260612-0001"
+        partnerId:
+          type: string
+          enum: [vnpay, momo, zalopay, vietqr]
+          example: "vnpay"
+        amount:
+          type: number
+          minimum: 1000
+          description: Số tiền VND (tối thiểu 1,000)
+          example: 150000
+        currency:
+          type: string
+          default: VND
+        paymentMethod:
+          type: string
+          enum: [qr, wallet, card, transfer]
+          example: qr
+        description:
+          type: string
+          maxLength: 255
+          example: "Thanh toán hóa đơn HD-20260612-0001"
+        webhookUrl:
+          type: string
+          format: uri
+          description: URL nhận callback khi giao dịch thay đổi trạng thái
+        returnUrl:
+          type: string
+          format: uri
+          description: URL redirect sau khi thanh toán (dùng cho web/app)
+        expiresInSeconds:
+          type: integer
+          default: 900
+          maximum: 3600
+          description: Thời gian hết hạn (giây), mặc định 15 phút
+        metadata:
+          type: object
+          description: Dữ liệu bổ sung gửi đến PSP
+
+    RefundRequest:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount:
+          type: number
+          minimum: 1000
+          description: Số tiền hoàn (partial hoặc full)
+          example: 150000
+        reason:
+          type: string
+          maxLength: 255
+          example: "Khách hàng đổi ý, hủy đơn"
+        metadata:
+          type: object
+
+    QRGenerateRequest:
+      type: object
+      required: [externalId, partnerId, amount]
+      properties:
+        externalId:
+          type: string
+          example: "QR-HD-20260612-0001"
+        partnerId:
+          type: string
+          enum: [vietqr, vnpay, momo, zalopay]
+          example: "vietqr"
+        amount:
+          type: number
+          minimum: 1000
+          example: 150000
+        description:
+          type: string
+          maxLength: 255
+        expiresInSeconds:
+          type: integer
+          default: 900
+        size:
+          type: integer
+          default: 300
+          description: Kích thước QR image (pixels)
+
+    QRResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        qrContent:
+          type: string
+          description: Nội dung QR code (URL hoặc EMVCo string)
+        qrImageUrl:
+          type: string
+          format: uri
+          description: URL ảnh PNG QR code
+        deeplink:
+          type: string
+          description: App deeplink (MoMo/ZaloPay)
+        expiredAt:
+          type: string
+          format: date-time
+
+    Partner:
+      type: object
+      properties:
+        id:
+          type: string
+          enum: [vnpay, momo, zalopay, vietqr]
+        name:
+          type: string
+          example: "VNPay"
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+        supportedMethods:
+          type: array
+          items:
+            type: string
+            enum: [qr, wallet, card, transfer]
+        currencySupport:
+          type: array
+          items:
+            type: string
+          example: ["VND"]
+        webhookUrl:
+          type: string
+          description: URL nhận webhook từ PSP (internal)
+
+    WebhookConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - transaction.success
+              - transaction.failed
+              - transaction.expired
+              - refund.success
+              - refund.failed
+        active:
+          type: boolean
+        secret:
+          type: string
+          writeOnly: true
+          description: Secret để verify HMAC-SHA256 signature (write-only)
+
+    DashboardStats:
+      type: object
+      properties:
+        period:
+          type: string
+          example: "2026-11-02"
+        totalTransactions:
+          type: integer
+        successfulTransactions:
+          type: integer
+        failedTransactions:
+          type: integer
+        totalAmount:
+          type: number
+        successRate:
+          type: number
+          description: Phần trăm (0-100)
+        avgProcessingTimeMs:
+          type: integer
+        byPartner:
+          type: array
+          items:
+            type: object
+            properties:
+              partnerId:
+                type: string
+              count:
+                type: integer
+              amount:
+                type: number
+              successRate:
+                type: number
+
+# ─────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  # ───────────── MERCHANT API: TRANSACTIONS ─────────────
+  /v1/transactions:
+    post:
+      tags: [Transactions]
+      summary: Khởi tạo giao dịch thanh toán
+      description: |
+        Tạo transaction mới tại PayHub, chuyển tiếp đến PSP phù hợp.
+
+        **SLA**: Phản hồi trong 3 giây. Giao dịch ở trạng thái `pending` sau khi tạo.
+
+        **Idempotency**: Cùng `Idempotency-Key` trả về kết quả cũ trong 24h.
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionRequest"
+            examples:
+              vnpay_qr:
+                summary: Thanh toán VNPay QR
+                value:
+                  externalId: "HD-20260612-0001"
+                  partnerId: "vnpay"
+                  amount: 150000
+                  paymentMethod: "qr"
+                  description: "Thanh toán hóa đơn HD-20260612-0001"
+                  webhookUrl: "https://api.bizone.vn/webhooks/payment"
+                  expiresInSeconds: 900
+              momo_wallet:
+                summary: Thanh toán MoMo wallet
+                value:
+                  externalId: "HD-20260612-0002"
+                  partnerId: "momo"
+                  amount: 250000
+                  paymentMethod: "wallet"
+                  description: "Thanh toán qua MoMo"
+                  returnUrl: "https://app.bizone.vn/pos/payment/result"
+      responses:
+        "201":
+          description: Giao dịch đã tạo, trạng thái `pending`
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/Transaction"
+                          - type: object
+                            properties:
+                              paymentUrl:
+                                type: string
+                                format: uri
+                                description: URL redirect để thanh toán (VNPay/MoMo)
+                              qr:
+                                $ref: "#/components/schemas/QRResponse"
+        "409":
+          description: Trùng Idempotency-Key hoặc externalId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Lỗi validation (số tiền, partner không hỗ trợ method...)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PSP không phản hồi
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Trạng thái giao dịch
+      description: |
+        Lấy trạng thái hiện tại của giao dịch. Dùng để polling khi chưa nhận được webhook.
+
+        **Polling khuyến nghị**: Mỗi 2 giây, tối đa 30 lần (1 phút).
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: PayHub transaction ID (UUID)
+      responses:
+        "200":
+          description: Thông tin giao dịch
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Transaction"
+        "401":
+          description: Signature không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Giao dịch không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/transactions/{id}/refund:
+    post:
+      tags: [Refunds]
+      summary: Hoàn tiền giao dịch
+      description: |
+        Yêu cầu hoàn tiền (full hoặc partial).
+
+        **Điều kiện**:
+        - Giao dịch phải ở trạng thái `success`
+        - Số tiền hoàn ≤ số tiền gốc - số tiền đã hoàn trước đó
+        - Một số PSP chỉ hỗ trợ full refund (xem từng PSP)
+
+        **Async**: Hoàn tiền xử lý bất đồng bộ. Kết quả gửi qua webhook `refund.success` hoặc `refund.failed`.
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+      responses:
+        "202":
+          description: Yêu cầu hoàn tiền đã nhận, đang xử lý
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          refundId:
+                            type: string
+                            format: uuid
+                          status:
+                            type: string
+                            enum: [pending]
+                          estimatedCompletionTime:
+                            type: string
+                            format: date-time
+        "409":
+          description: Giao dịch không thể hoàn (trạng thái không hợp lệ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Số tiền hoàn vượt quá số tiền cho phép
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ───────────── MERCHANT API: QR ─────────────
+  /v1/qr/generate:
+    post:
+      tags: [QR]
+      summary: Tạo QR thanh toán
+      description: |
+        Tạo QR code thanh toán. Hỗ trợ VietQR (bank transfer), MoMo, ZaloPay, VNPay.
+
+        **VietQR**: Trả về chuỗi EMVCo, ảnh PNG, và URL Napas.
+        **MoMo/ZaloPay**: Trả về deeplink mở app và QR image.
+        **VNPay**: Trả về URL và QR image.
+
+        QR hết hạn theo `expiresInSeconds`. Polling qua `GET /v1/transactions/{id}`.
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QRGenerateRequest"
+            examples:
+              vietqr:
+                summary: Tạo VietQR
+                value:
+                  externalId: "QR-POS-001"
+                  partnerId: "vietqr"
+                  amount: 150000
+                  description: "Thanh toán cửa hàng BizOne"
+                  expiresInSeconds: 300
+              momo:
+                summary: Tạo MoMo QR
+                value:
+                  externalId: "QR-POS-002"
+                  partnerId: "momo"
+                  amount: 250000
+      responses:
+        "201":
+          description: QR đã tạo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/QRResponse"
+
+  # ───────────── MERCHANT API: PARTNERS ─────────────
+  /v1/partners:
+    get:
+      tags: [Partners]
+      summary: Danh sách đối tác thanh toán khả dụng
+      description: Trả về các PSP connector đang active và supported methods.
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+      responses:
+        "200":
+          description: Danh sách partners
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Partner"
+
+  # ───────────── MERCHANT API: WEBHOOKS ─────────────
+  /v1/webhooks:
+    post:
+      tags: [Webhooks]
+      summary: Đăng ký webhook nhận sự kiện thanh toán
+      description: |
+        PayHub sẽ gửi HTTP POST đến URL đã đăng ký khi có sự kiện thanh toán.
+
+        **Retry policy**: 3 lần (tức thì → sau 1 phút → sau 5 phút).
+
+        **Signature verification**: PayHub ký mỗi webhook với:
+        `X-PayHub-Signature: HMAC-SHA256(secret, timestamp + "." + body)`
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://api.bizone.vn/webhooks/payment"
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - transaction.success
+                      - transaction.failed
+                      - transaction.expired
+                      - refund.success
+                      - refund.failed
+                secret:
+                  type: string
+                  description: Secret để BizOne verify HMAC-SHA256 trên webhook
+      responses:
+        "201":
+          description: Webhook đã đăng ký
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /v1/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Gửi test webhook (kiểm tra kết nối)
+      security:
+        - MerchantHMAC: []
+      parameters:
+        - $ref: "#/components/parameters/HMACSignature"
+        - $ref: "#/components/parameters/HMACTimestamp"
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eventType:
+                  type: string
+                  enum: [transaction.success, refund.success]
+                  default: transaction.success
+      responses:
+        "200":
+          description: Test webhook đã gửi, trả về kết quả nhận
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          responseStatus:
+                            type: integer
+                            example: 200
+                          responseTimeMs:
+                            type: integer
+                          success:
+                            type: boolean
+
+  # ───────────── PSP CALLBACK ENDPOINTS (inbound webhooks) ─────────────
+  /v1/callbacks/{partnerId}:
+    post:
+      tags: [Webhooks]
+      summary: Nhận callback từ PSP (inbound)
+      description: |
+        Endpoint công khai nhận payment notification từ các PSP.
+        PayHub verify signature từng PSP, cập nhật trạng thái transaction, rồi gửi ra webhook đã đăng ký.
+
+        **Không cần auth**: PSP gọi trực tiếp, xác thực bằng signature riêng của từng PSP.
+      parameters:
+        - in: path
+          name: partnerId
+          required: true
+          schema:
+            type: string
+            enum: [vnpay, momo, zalopay, vietqr]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payload riêng theo từng PSP
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              description: VNPay gửi form-encoded
+      responses:
+        "200":
+          description: Đã nhận và xử lý
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  RspCode:
+                    type: string
+                    description: "VNPay compat: '00' = OK"
+                  Message:
+                    type: string
+
+  # ───────────── ADMIN API ─────────────
+  /admin/dashboard:
+    get:
+      tags: [Admin Dashboard]
+      summary: Tổng quan hoạt động Payment Hub
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [today, 7days, 30days, custom]
+            default: today
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+      responses:
+        "200":
+          description: Dashboard stats (Redis cache 2 phút)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DashboardStats"
+
+  /admin/transactions:
+    get:
+      tags: [Admin Transactions]
+      summary: Danh sách tất cả giao dịch (admin)
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+        - in: query
+          name: partnerId
+          schema:
+            type: string
+            enum: [vnpay, momo, zalopay, vietqr]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [created, pending, success, failed, expired, refunded]
+        - in: query
+          name: merchantId
+          schema:
+            type: string
+          description: Lọc theo merchant (tenant)
+        - in: query
+          name: minAmount
+          schema:
+            type: number
+        - in: query
+          name: maxAmount
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Danh sách giao dịch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/transactions/{id}:
+    get:
+      tags: [Admin Transactions]
+      summary: Chi tiết giao dịch (admin, bao gồm audit log)
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Chi tiết giao dịch + audit log
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/Transaction"
+                          - type: object
+                            properties:
+                              auditLog:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    timestamp:
+                                      type: string
+                                      format: date-time
+                                    fromStatus:
+                                      type: string
+                                    toStatus:
+                                      type: string
+                                    triggeredBy:
+                                      type: string
+                                      enum: [psp_callback, admin, system, timeout]
+                                    metadata:
+                                      type: object
+
+  /admin/partners:
+    get:
+      tags: [Admin Partners]
+      summary: Danh sách cấu hình PSP connectors
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      responses:
+        "200":
+          description: Danh sách partners với cấu hình chi tiết
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/partners/{id}:
+    put:
+      tags: [Admin Partners]
+      summary: Cập nhật cấu hình PSP connector
+      description: |
+        Cập nhật cấu hình API key, endpoint, merchant code của từng PSP.
+        Thay đổi áp dụng ngay lập tức (hot-reload, không cần restart).
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            enum: [vnpay, momo, zalopay, vietqr]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, inactive, maintenance]
+                config:
+                  type: object
+                  description: Cấu hình riêng từng PSP (encrypted at rest)
+                  properties:
+                    apiKey:
+                      type: string
+                      writeOnly: true
+                    secretKey:
+                      type: string
+                      writeOnly: true
+                    merchantCode:
+                      type: string
+                    endpoint:
+                      type: string
+                      format: uri
+      responses:
+        "200":
+          description: Cấu hình đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/webhooks:
+    get:
+      tags: [Admin Transactions]
+      summary: Danh sách webhook deliveries (admin monitoring)
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/FromDateParam"
+        - $ref: "#/components/parameters/ToDateParam"
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, success, failed, retrying]
+      responses:
+        "200":
+          description: Danh sách webhook deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/webhooks/{deliveryId}/retry:
+    post:
+      tags: [Admin Transactions]
+      summary: Retry webhook delivery thủ công
+      security:
+        - AdminBearer: []
+        - KeycloakOIDC: []
+      parameters:
+        - in: path
+          name: deliveryId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Retry đã được lên lịch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
