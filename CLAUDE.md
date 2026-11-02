@@ -42,6 +42,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 ├── CLAUDE.md                        # context cho AI assistant (file này)
 ├── README.md                        # giới thiệu dự án (EN + VI)
 ├── PLAN.md                          # roadmap 6 giai đoạn, task P1.1 → P7.x
+├── PROGRESS.md                      # tiến độ từng task + kết quả kiểm thử (cập nhật sau mỗi task)
 ├── .env.development                 # credentials dev toàn hệ thống (gitignored)
 ├── .env.example                     # template env toàn hệ thống (commit)
 ├── docker-compose.keycloak.yml      # Keycloak 23 (port 8080, DB keycloakdb), compose project "bizone"
@@ -71,7 +72,18 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── .env.example             # template env của app
     │   ├── .prettierrc / eslint.config.mjs / tsconfig.json / components.json
     │   └── AGENTS.md                # do `next dev` tự sinh — đọc docs trong node_modules/next/dist/docs
-    └── payment-hub/                 # P1.2 — (chưa tạo)
+    └── payment-hub/                 # P1.2 — Payment Hub (NextJS 16 + BullMQ + WebSocket)
+        ├── app/                     # App Router; api/health/route.ts kiểm tra MariaDB + Redis
+        ├── components/ui/           # shadcn/ui
+        ├── lib/                     # db.ts (pool mariadb), redis.ts (ioredis), events.ts (publishEvent)
+        ├── services/
+        │   ├── queue/               # BullMQ connection, queues, enqueueWebhook()
+        │   ├── webhook/deliver.ts   # gửi webhook ký HMAC-SHA256
+        │   └── worker.ts            # process worker (BullMQ)
+        ├── server/ws/server.ts      # process realtime: WebSocket :4001/ws, relay Redis "payhub:events"
+        ├── hooks/  types/  public/
+        ├── Dockerfile               # 1 image cho 3 process (app / dist/worker.js / dist/server.js)
+        └── docker-compose.yml       # project "bizone-payhub": app, worker, realtime, db, cache
 ```
 
 ### Chạy BizOne app (`source/bizone`)
@@ -83,9 +95,22 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
 | `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
 
+### Chạy Payment Hub (`source/payment-hub`)
+
+| Lệnh | Mô tả |
+|------|-------|
+| `npm run dev` | Next app port 4000 |
+| `npm run dev:worker` / `npm run dev:realtime` | BullMQ worker / WebSocket relay (tsx watch, đọc `.env.local`) |
+| `npm run build` + `npm run build:jobs` | Build Next + bundle worker/relay ra `dist/` |
+| `docker compose up -d --build` | app :4000, realtime :4001, worker, MariaDB 10.11 (host 3308), Redis (host 6381) |
+
+**Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub. WebSocket chưa có auth (chờ P1.5).
+
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 
-**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên.
+**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (Metabase), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
+
+**Quy trình**: sau mỗi task trong PLAN, cập nhật `PROGRESS.md` (trạng thái, commit, kết quả kiểm thử, lưu ý).
 
 ---
 

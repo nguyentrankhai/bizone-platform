@@ -282,6 +282,7 @@ bizone/
 ├── README.md                           # Tài liệu này / This file
 ├── CLAUDE.md                           # AI assistant context
 ├── PLAN.md                             # Build roadmap (6 phases)
+├── PROGRESS.md                         # Task progress & test results
 ├── .env.example                        # Env template (copy → .env.development)
 ├── docker-compose.keycloak.yml         # Keycloak 23 (port 8080)
 ├── keycloak/realms/                    # Realm imports: bizone, payment-hub, partners
@@ -295,7 +296,12 @@ bizone/
 │   │   ├── hooks/  lib/  server/  types/
 │   │   ├── Dockerfile                  # Standalone production image
 │   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7
-│   └── payment-hub/                    # Payment Hub (P1.2 — coming next)
+│   └── payment-hub/                    # Payment Hub — NextJS 16 (P1.2)
+│       ├── app/  components/  lib/     # App Router UI + REST API
+│       ├── services/queue|webhook/     # BullMQ queues, webhook delivery
+│       ├── services/worker.ts          # BullMQ worker process
+│       ├── server/ws/server.ts         # WebSocket relay (:4001/ws)
+│       └── docker-compose.yml          # app + worker + realtime + MariaDB + Redis
 ├── documents/
 │   ├── BRD-BizOne.md                   # Business Requirements
 │   ├── SRS-BizOne.md                   # Software Requirements Spec
