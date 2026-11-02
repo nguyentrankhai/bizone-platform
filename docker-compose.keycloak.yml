@@ -1,15 +1,13 @@
-version: "3.9"
-
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0.7
+    image: quay.io/keycloak/keycloak:26.8.1
     container_name: bizone-keycloak
     command: start-dev --import-realm
     environment:
-      # Admin credentials
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: "Bizone@2026!"
-      # Database (dùng MariaDB đang chạy)
+      # Bootstrap admin: only created if the master realm has no admin yet
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "Bizone@2026!"
+      # Database: local MariaDB 10.11 (container mariadbtest)
       KC_DB: mariadb
       KC_DB_URL: jdbc:mariadb://host.docker.internal:3306/keycloakdb?characterEncoding=UTF-8&useUnicode=true
       KC_DB_USERNAME: root
@@ -22,18 +20,20 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_LOG_LEVEL: INFO
-      # Features
-      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+      # Legacy token exchange (v1, deprecated in 26) kept until P1.5 moves to Standard Token
+      # Exchange v2, which is on by default. Fine-grained admin permissions v2 is also on by default.
+      KC_FEATURES: "token-exchange"
     ports:
       - "8080:8080"
     volumes:
       - ./keycloak/realms:/opt/keycloak/data/import
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Health endpoints live on the management port 9000 (not published: MinIO uses 9000 on the host)
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080; echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '\"status\": \"UP\"'"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000; echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s
+      start_period: 90s
     restart: unless-stopped

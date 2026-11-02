@@ -1,5 +1,5 @@
 -- ============================================================
--- Payment Hub Database Schema - MariaDB 10.3+
+-- Payment Hub Database Schema - MariaDB 10.11
 -- Payment Gateway Platform for BizOne Ecosystem
 -- ============================================================
 

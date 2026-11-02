@@ -101,7 +101,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 ├── PROGRESS.md                      # tiến độ từng task + kết quả kiểm thử (cập nhật sau mỗi task)
 ├── .env.development                 # credentials dev toàn hệ thống (gitignored)
 ├── .env.example                     # template env toàn hệ thống (commit)
-├── docker-compose.keycloak.yml      # Keycloak 23 (port 8080, DB keycloakdb), compose project "bizone"
+├── docker-compose.keycloak.yml      # Keycloak 26.8.1 (port 8080, DB keycloakdb trên MariaDB 10.11), compose project "bizone"
 ├── keycloak/realms/                 # realm import: bizone / payment-hub / partners
 ├── database/                        # SQL schema gốc (schema.sql, schema_paymenthub.sql, migrations)
 ├── documents/                       # BRD, SRS, URD, API design, OpenAPI YAML, OAuth2/Keycloak spec, env.txt
@@ -174,12 +174,11 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Metabase**: không thuộc dự án (không có trong BRD/SRS/PLAN). Báo cáo được xây trong app (P2.9, P4.2, P5.5). Container `metabase` trên máy đã dừng — không khởi động lại, không phụ thuộc vào nó.
 
-**Phiên bản MariaDB**:
-- **Đích: 10.11 LTS** (production, Docker compose của 2 app). Không hạ tài liệu xuống 10.3.
-- **Dev local: 10.3** (container `mariadbtest`, cổng 3306, dùng chung với dự án khác — không nâng cấp/sửa container này). Đã kiểm chứng Prisma schema, seed, truy vấn và `/api/health` chạy đúng trên 10.3.
-- **Quy tắc code**: phải chạy được trên cả 10.3 và 10.11 cho tới khi dev local lên ≥ 10.6. Không dùng tính năng chỉ có từ 10.5+: `INSERT … RETURNING` (10.5), `SKIP LOCKED` / `JSON_TABLE` (10.6), kiểu `UUID` (10.7), `INET6` (10.5). Kiểm thử task có SQL đặc thù trên cả hai phiên bản (10.11 qua `docker compose up -d db`).
-- 10.3 hết hỗ trợ từ 2023 và buộc Keycloak dừng ở 23.0.7 (Keycloak ≥ 26 cần MariaDB ≥ 10.4).
-- Server 10.3 mặc định charset `latin1`: sau `prisma migrate reset` chạy lại `ALTER DATABASE bizonedb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` (bảng do Prisma tạo đã là utf8mb4).
+**Phiên bản MariaDB & Keycloak** (cập nhật 2026-11-03):
+- **MariaDB 10.11 LTS ở mọi nơi**: dev local (container `mariadbtest`, cổng 3306, volume `mariadbtest-10.11-data`), Docker compose của 2 app, production. Server mặc định `utf8mb4` / `utf8mb4_unicode_ci`. Được dùng tính năng 10.11 (`INSERT … RETURNING`, `SKIP LOCKED`, `JSON_TABLE`, kiểu `UUID`…).
+- `mariadbtest` dùng chung với dự án khác (`jasperserver`, `openapidb`): không xoá/reset DB của dự án khác.
+- **Keycloak 26.8.1** (`docker-compose.keycloak.yml`): admin bootstrap qua `KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD`; health/metrics ở management port **9000** trong container (không publish ra host vì MinIO dùng 9000). Token Exchange v1 (`KC_FEATURES=token-exchange`) đã deprecated — P1.5 không xây trên nó (xem `documents/OAuth2-Keycloak-Spec.md` §5.2).
+- Rollback (giữ tạm, xoá khi chắc chắn không cần): container `mariadbtest-10.3` (đã dừng) + volume gốc `0da92de461be…` còn nguyên dữ liệu 10.3. Khôi phục: dừng `mariadbtest`, `docker rename mariadbtest-10.3 mariadbtest`, start, và đổi Keycloak về 23.0.7.
 - Cột `updated_at`: dùng `@updatedAt` của Prisma (không có `ON UPDATE CURRENT_TIMESTAMP` ở DB) — SQL thuần phải tự set `updated_at`.
 
 **Quy trình**: xem mục *Quy trình xây dựng & phát triển* ở đầu file (B1–B6).
@@ -193,9 +192,9 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | Framework | NextJS 16 App Router (React 19, Turbopack, `cacheComponents`) |
 | API | tRPC (BizOne) / REST (Payment Hub) |
 | ORM | Prisma |
-| DB | MariaDB 10.11 (đích production + Docker compose); dev local hiện là 10.3 — xem *Phiên bản MariaDB* |
+| DB | MariaDB 10.11 LTS (dev local, Docker compose, production) |
 | Cache/Queue | Redis + BullMQ |
-| Auth | Keycloak 23 (OIDC) — realms `bizone`, `payment-hub`, `partners`; access token 15 phút + refresh 7 ngày. Xem `documents/OAuth2-Keycloak-Spec.md` |
+| Auth | Keycloak 26.8.1 (OIDC) — realms `bizone`, `payment-hub`, `partners`; access token 15 phút + refresh 7 ngày. Xem `documents/OAuth2-Keycloak-Spec.md` |
 | Storage | MinIO/S3 |
 | Real-time | WebSocket + BroadcastChannel API |
 | Validation | Zod |

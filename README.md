@@ -105,7 +105,7 @@ BizOne uses **Keycloak** as a centralized Identity Provider:
 
 ### Getting Started
 
-**Prerequisites**: Node.js 20+, MariaDB 10.6+, Redis 7+, Docker
+**Prerequisites**: Node.js 24+, MariaDB 10.11, Redis 7+, Docker (Keycloak 26.8.1 runs in Docker)
 
 ```bash
 # Clone repository
@@ -230,7 +230,7 @@ BizOne dùng **Keycloak** làm Identity Provider trung tâm:
 
 ### Cài đặt nhanh
 
-**Yêu cầu**: Node.js 20+, MariaDB 10.6+, Redis 7+, Docker
+**Yêu cầu**: Node.js 24+, MariaDB 10.11, Redis 7+, Docker (Keycloak 26.8.1 chạy trong Docker)
 
 ```bash
 # Clone repository
@@ -284,7 +284,7 @@ bizone/
 ├── PLAN.md                             # Build roadmap (6 phases)
 ├── PROGRESS.md                         # Task progress & test results
 ├── .env.example                        # Env template (copy → .env.development)
-├── docker-compose.keycloak.yml         # Keycloak 23 (port 8080)
+├── docker-compose.keycloak.yml         # Keycloak 26.8.1 (port 8080)
 ├── keycloak/realms/                    # Realm imports: bizone, payment-hub, partners
 ├── database/                           # SQL schemas (BizOne, Payment Hub)
 ├── mockups-bizone/                     # BizOne UI mockups (HTML)

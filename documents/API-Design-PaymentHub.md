@@ -29,7 +29,7 @@
 | **Framework** | Next.js 14+ (App Router) |
 | **API Layer** | Next.js API Routes (REST) + tRPC (admin dashboard) |
 | **Authentication** | HMAC-SHA256 (API Key) cho merchant API; JWT cho admin |
-| **Database** | MariaDB 10.3+ |
+| **Database** | MariaDB 10.11+ |
 | **Cache** | Redis (session, rate limiting, idempotency keys) |
 | **Queue/Job** | BullMQ / Inngest (webhook, reconcilation, async tasks) |
 | **Real-time** | Socket.IO / WebSocket API (dashboard) |

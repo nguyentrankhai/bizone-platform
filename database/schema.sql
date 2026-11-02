@@ -1,5 +1,5 @@
 -- ============================================================
--- BizOne Database Schema - MariaDB 10.3+
+-- BizOne Database Schema - MariaDB 10.11
 -- Omni Channel POS & Management Platform
 -- ============================================================
 

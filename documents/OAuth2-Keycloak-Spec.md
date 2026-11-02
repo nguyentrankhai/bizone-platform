@@ -1,7 +1,7 @@
 # OAuth 2.0 & Keycloak Authentication Specification
 
 > **Hệ thống xác thực trung tâm cho BizOne + Payment Hub**
-> Version: 1.0.0 | Ngày: 2026-11-02
+> Version: 1.1.0 | Ngày: 2026-11-03 | Keycloak 26.8.1 · MariaDB 10.11
 
 ---
 
@@ -309,6 +309,8 @@ Scope: payhub:transactions payhub:qr
 Token Exchange: enabled (bizone → payment-hub)
 ```
 
+> ⚠️ **Keycloak 26:** Token Exchange v1 (`KC_FEATURES=token-exchange`) đã deprecated. Standard Token Exchange v2 bật mặc định nhưng chỉ đổi token **trong cùng một realm**, không đổi sang realm `payment-hub`. P1.5 cần chọn lại cách M2M: (a) `bizone-api` lấy token trực tiếp bằng client credentials của một client trong realm `payment-hub`, hoặc (b) gộp client vào chung realm. Không phát triển thêm dựa trên token exchange v1.
+
 **Env variables trên BizOne API server:**
 ```bash
 KEYCLOAK_URL=https://keycloak.bizone.vn
@@ -390,24 +392,30 @@ CREATE TABLE omni_connections (
 
 ### 7.1 Cấu hình Production
 
+**Phiên bản:** Keycloak **26.8.1** · MariaDB **10.11** (Keycloak 26 yêu cầu MariaDB ≥ 10.4).
+
 ```yaml
-# docker-compose.keycloak.yml (simplified)
+# docker-compose.keycloak.yml (production, simplified)
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:24.x
+    image: quay.io/keycloak/keycloak:26.8.1
     command: start
     environment:
       KC_DB: mariadb
       KC_DB_URL: jdbc:mariadb://mariadb:3306/keycloakdb
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KC_DB_PASSWORD}
-      KC_HOSTNAME: keycloak.bizone.vn
-      KC_PROXY: edge  # behind nginx/LB
-      KC_FEATURES: token-exchange,admin-fine-grained-authz
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KC_HOSTNAME: https://keycloak.bizone.vn   # hostname v2: full URL
+      KC_HTTP_ENABLED: "true"                   # TLS terminates at nginx/LB
+      KC_PROXY_HEADERS: xforwarded              # replaces KC_PROXY (removed in 26)
+      KC_HEALTH_ENABLED: "true"                 # /health/* on management port 9000
+      KC_METRICS_ENABLED: "true"                # /metrics on management port 9000
+      KC_FEATURES: token-exchange               # v1, deprecated — see §5.2
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin        # replaces KEYCLOAK_ADMIN (deprecated in 26)
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
     ports:
-      - "8080:8080"
+      - "8080:8080"     # public HTTP (behind proxy)
+      # 9000 = management (health/metrics): keep internal, do not expose publicly
     volumes:
       - ./keycloak/themes:/opt/keycloak/themes  # BizOne custom theme
       - ./keycloak/realms:/opt/keycloak/data/import  # realm configs
@@ -416,7 +424,9 @@ services:
 **Yêu cầu tài nguyên:**
 - CPU: 2 cores (min), 4 cores (recommended)
 - RAM: 2GB (min), 4GB (recommended)
-- DB: MariaDB dedicated `keycloakdb`
+- DB: MariaDB 10.11, dedicated `keycloakdb`
+
+**Lưu ý nâng cấp:** Keycloak tự migrate schema `keycloakdb` khi khởi động bản mới (đã chạy 23.0.7 → 26.8.1 ngày 2026-11-03: các realm migrate tuần tự 24 → 25 → 26.x, không mất dữ liệu). Luôn backup `keycloakdb` trước khi nâng cấp. Fine-Grained Admin Permissions v2 và Standard Token Exchange v2 bật mặc định trong 26.x.
 
 ### 7.2 Realm Import/Export
 
