@@ -19,7 +19,7 @@ CLIENT LAYER
 
 API GATEWAY LAYER
   NextJS API Routes / tRPC / REST
-  Auth (NextAuth/Lucia) / RBAC / Rate Limit
+  Auth (Keycloak OIDC) / RBAC / Rate Limit
 
 SERVICE LAYER
   BizOne: POS · Product · Order · CRM · Report · Warehouse · Staff · Marketing · Accounting
@@ -35,16 +35,70 @@ DATA LAYER
 
 ---
 
+## Cấu trúc dự án
+
+```
+bizone/                              # repo root (git: nguyentrankhai/bizone-platform)
+├── CLAUDE.md                        # context cho AI assistant (file này)
+├── README.md                        # giới thiệu dự án (EN + VI)
+├── PLAN.md                          # roadmap 6 giai đoạn, task P1.1 → P7.x
+├── .env.development                 # credentials dev toàn hệ thống (gitignored)
+├── .env.example                     # template env toàn hệ thống (commit)
+├── docker-compose.keycloak.yml      # Keycloak 23 (port 8080, DB keycloakdb), compose project "bizone"
+├── keycloak/realms/                 # realm import: bizone / payment-hub / partners
+├── database/                        # SQL schema gốc (schema.sql, schema_paymenthub.sql, migrations)
+├── documents/                       # BRD, SRS, URD, API design, OpenAPI YAML, OAuth2/Keycloak spec, env.txt
+├── mockups-bizone/                  # 8 màn hình HTML BizOne
+├── mockups-paymenthub/              # mockup HTML Payment Hub Admin
+├── graphify-out/                    # knowledge graph (graph.html, graph.json, GRAPH_REPORT.md)
+├── .agents/skills/                  # skills: software-architecture-design, frontend-design
+└── source/                          # MÃ NGUỒN ỨNG DỤNG
+    ├── bizone/                      # P1.1 — BizOne Core (NextJS 16)
+    │   ├── app/                     # App Router: pages, layouts, route handlers
+    │   │   ├── api/health/route.ts  # GET /api/health (Docker healthcheck)
+    │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
+    │   │   ├── page.tsx
+    │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
+    │   ├── components/ui/           # shadcn/ui components (style base-nova)
+    │   ├── hooks/                   # React hooks dùng chung
+    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn())
+    │   ├── server/                  # tRPC routers, services, middleware (P1.6)
+    │   ├── types/                   # TypeScript types dùng chung
+    │   ├── public/                  # static assets
+    │   ├── Dockerfile               # multi-stage, output standalone, node:24-alpine
+    │   ├── docker-compose.yml       # project "bizone-core": app + db (MariaDB 10.11) + cache (Redis 7)
+    │   ├── .env.local               # env dev của app (gitignored)
+    │   ├── .env.example             # template env của app
+    │   ├── .prettierrc / eslint.config.mjs / tsconfig.json / components.json
+    │   └── AGENTS.md                # do `next dev` tự sinh — đọc docs trong node_modules/next/dist/docs
+    └── payment-hub/                 # P1.2 — (chưa tạo)
+```
+
+### Chạy BizOne app (`source/bizone`)
+
+| Lệnh | Mô tả |
+|------|-------|
+| `npm run dev` | Dev server (mặc định port 3000 — đang bị Metabase chiếm, dùng `npx next dev -p 3010`) |
+| `npm run build` / `npm start` | Build & chạy production |
+| `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
+| `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
+
+**Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
+
+**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên.
+
+---
+
 ## Stack kỹ thuật
 
 | Component | Technology |
 |-----------|-----------|
-| Framework | NextJS 14+ App Router |
+| Framework | NextJS 16 App Router (React 19, Turbopack, `cacheComponents`) |
 | API | tRPC (BizOne) / REST (Payment Hub) |
 | ORM | Prisma |
 | DB | MariaDB 10.11 |
 | Cache/Queue | Redis + BullMQ |
-| Auth | NextAuth.js / Lucia Auth — JWT 15 phút + Refresh 7 ngày |
+| Auth | Keycloak 23 (OIDC) — realms `bizone`, `payment-hub`, `partners`; access token 15 phút + refresh 7 ngày. Xem `documents/OAuth2-Keycloak-Spec.md` |
 | Storage | MinIO/S3 |
 | Real-time | WebSocket + BroadcastChannel API |
 | Validation | Zod |
@@ -60,6 +114,7 @@ DATA LAYER
 | MariaDB PayHub | localhost | 3306 | root/mypass → paymentdb |
 | Redis | localhost | 6379 | password: 123456 |
 | MinIO | localhost | 9000/9001 | admin/123456a@ → bucket: bizone |
+| Keycloak | localhost | 8080 | admin console: xem `documents/env.txt` / `.env.development` |
 
 ---
 

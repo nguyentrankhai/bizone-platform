@@ -275,13 +275,27 @@ Dự án được chia thành 6 giai đoạn (xem [PLAN.md](PLAN.md)):
 
 ---
 
-## 📁 Cấu trúc tài liệu / Document Structure
+## 📁 Cấu trúc dự án / Project Structure
 
 ```
 bizone/
 ├── README.md                           # Tài liệu này / This file
 ├── CLAUDE.md                           # AI assistant context
 ├── PLAN.md                             # Build roadmap (6 phases)
+├── .env.example                        # Env template (copy → .env.development)
+├── docker-compose.keycloak.yml         # Keycloak 23 (port 8080)
+├── keycloak/realms/                    # Realm imports: bizone, payment-hub, partners
+├── database/                           # SQL schemas (BizOne, Payment Hub)
+├── mockups-bizone/                     # BizOne UI mockups (HTML)
+├── mockups-paymenthub/                 # Payment Hub Admin mockup (HTML)
+├── source/                             # Application source code
+│   ├── bizone/                         # BizOne Core — NextJS 16 (P1.1)
+│   │   ├── app/                        # App Router (pages, layouts, /api/*)
+│   │   ├── components/ui/              # shadcn/ui components
+│   │   ├── hooks/  lib/  server/  types/
+│   │   ├── Dockerfile                  # Standalone production image
+│   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7
+│   └── payment-hub/                    # Payment Hub (P1.2 — coming next)
 ├── documents/
 │   ├── BRD-BizOne.md                   # Business Requirements
 │   ├── SRS-BizOne.md                   # Software Requirements Spec

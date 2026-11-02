@@ -8,11 +8,18 @@
 node_modules/
 .pnpm-store/
 
-# ─── NextJS build ────────────────────────────────────────────
+# ─── NextJS / TypeScript build ───────────────────────────────
 .next/
 out/
 build/
 dist/
+next-env.d.ts
+*.tsbuildinfo
+.eslintcache
+.pnp
+.pnp.*
+.yarn/*
+.pnpm-debug.log*
 
 # ─── Prisma ──────────────────────────────────────────────────
 prisma/migrations/dev.db
@@ -37,6 +44,17 @@ Thumbs.db
 # ─── Test coverage ───────────────────────────────────────────
 coverage/
 .nyc_output/
+
+# ─── Docker ──────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Claude Code (per-user settings) ─────────────────────────
+.claude/settings.local.json
+
+# ─── graphify (machine-local cache & temp files) ─────────────
+graphify-out/cache/
+graphify-out/.graphify_*
+!graphify-out/.graphify_labels.json
 
 # ─── Misc ────────────────────────────────────────────────────
 *.pem
