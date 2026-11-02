@@ -30,7 +30,7 @@
 |----|------|------------|--------|---------|
 | P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) |
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
-| P1.3 | BizOne Database Schema | ✅ | _chưa commit_ | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local chưa đồng bộ (chờ quyết định) |
+| P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local chưa đồng bộ (chờ quyết định) |
 | P1.4 | Payment Hub Database Schema | ⬜ | — | |
 | P1.5 | Authentication System | ⬜ | — | Dùng Keycloak thay NextAuth/Lucia (đã dựng sẵn) |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
@@ -190,7 +190,7 @@
 
 ### P1.3 — BizOne Database Schema
 
-- **Hoàn thành:** 2026-11-02 · **Commit:** _chưa commit_ · **Vị trí:** `source/bizone/prisma`
+- **Hoàn thành:** 2026-11-02 · **Commit:** `4eab67f` · **Vị trí:** `source/bizone/prisma`
 - **Đã làm:**
   - Prisma **7.10.1** (`prisma`, `@prisma/client`, `@prisma/adapter-mariadb`); `prisma.config.ts` đọc `DATABASE_URL` từ `.env.local` (biến shell được ưu tiên)
   - `prisma/schema.prisma`: **70 models, 29 enums, 127 quan hệ** — sinh bằng introspection từ DB tạo bởi `database/schema.sql`, rồi đổi sang tên chuẩn Prisma:
