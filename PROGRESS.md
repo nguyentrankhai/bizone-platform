@@ -29,7 +29,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) — chưa push |
-| P1.2 | Payment Hub Scaffolding | ✅ | _chưa commit_ | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
+| P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) — chưa push |
 | P1.3 | BizOne Database Schema | ⬜ | — | |
 | P1.4 | Payment Hub Database Schema | ⬜ | — | |
 | P1.5 | Authentication System | ⬜ | — | Dùng Keycloak thay NextAuth/Lucia (đã dựng sẵn) |
@@ -155,7 +155,7 @@
 
 ### P1.2 — Payment Hub Scaffolding
 
-- **Hoàn thành:** 2026-11-02 · **Commit:** _chưa commit_ · **Vị trí:** `source/payment-hub`
+- **Hoàn thành:** 2026-11-02 · **Commit:** `2f6be74` · **Vị trí:** `source/payment-hub`
 - **Đã làm:**
   - NextJS 16.4 + TypeScript + Tailwind v4 + shadcn/ui, cùng tooling và theme như P1.1; app chạy port **4000**
   - **3 process, 1 Docker image:**
