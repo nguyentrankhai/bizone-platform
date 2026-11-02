@@ -118,7 +118,10 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
     │   ├── components/ui/           # shadcn/ui components (style base-nova)
     │   ├── hooks/                   # React hooks dùng chung
-    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn())
+    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma())
+    │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
+    │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
+    │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
     │   ├── server/                  # tRPC routers, services, middleware (P1.6)
     │   ├── types/                   # TypeScript types dùng chung
     │   ├── public/                  # static assets
@@ -150,6 +153,9 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run build` / `npm start` | Build & chạy production |
 | `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
 | `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
+| `npm run db:push` / `db:migrate` / `db:seed` / `db:studio` | Prisma: đồng bộ schema / chạy migration / seed dữ liệu mẫu / Prisma Studio |
+
+**Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 
 ### Chạy Payment Hub (`source/payment-hub`)
 

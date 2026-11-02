@@ -293,6 +293,7 @@ bizone/
 │   ├── bizone/                         # BizOne Core — NextJS 16 (P1.1)
 │   │   ├── app/                        # App Router (pages, layouts, /api/*)
 │   │   ├── components/ui/              # shadcn/ui components
+│   │   ├── prisma/                     # Prisma schema (70 models), migrations, seed
 │   │   ├── hooks/  lib/  server/  types/
 │   │   ├── Dockerfile                  # Standalone production image
 │   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7

@@ -32,6 +32,19 @@ docker compose down                       # add -v to drop db/cache volumes
 
 Inside the compose network the app reaches the DB at `db:3306` and Redis at `cache:6379`.
 
+## Database (Prisma 7)
+
+`prisma/schema.prisma` mirrors `../../database/schema.sql` (70 tables): PascalCase models and camelCase fields, mapped back to the snake_case table and column names with `@@map`/`@map`.
+
+```bash
+npm run db:push      # sync schema to DATABASE_URL (or: npm run db:migrate to apply prisma/migrations)
+npm run db:seed      # reference data (roles, permissions, categories, config…); safe to re-run
+npm run db:studio    # browse data
+DATABASE_URL="mysql://root:mypass@localhost:3307/bizonedb" npx prisma db push   # target another DB
+```
+
+In code, use `getPrisma()` from `lib/prisma.ts`. The client is generated into `generated/prisma` (gitignored) by `build`, `typecheck` and `db:generate`.
+
 ## Layout
 
 | Folder           | Contents                                       |
