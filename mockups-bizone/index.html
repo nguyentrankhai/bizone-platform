@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BizOne - UI Mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #0f172a; color: #fff; }
+.hero { padding: 60px 40px 40px; text-align: center; }
+.hero h1 { font-size: 42px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #2563eb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero p { color: #94a3b8; font-size: 18px; margin-top: 8px; }
+.hero .badge { display: inline-block; background: rgba(37,99,235,.15); color: #60a5fa; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; margin-top: 12px; }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; padding: 0 40px 60px; max-width: 1400px; margin: 0 auto; }
+.module { background: #1e293b; border-radius: 16px; padding: 24px; border: 1px solid #334155; transition: .2s; }
+.module:hover { border-color: #2563eb; transform: translateY(-2px); }
+.module h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+.module h2 .icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.module ul { list-style: none; }
+.module ul li { margin-bottom: 6px; }
+.module ul li a { color: #cbd5e1; text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; transition: .15s; }
+.module ul li a:hover { background: #334155; color: #60a5fa; }
+.module ul li a .num { color: #64748b; font-size: 12px; font-weight: 500; width: 20px; }
+footer { text-align: center; padding: 30px; color: #475569; font-size: 13px; border-top: 1px solid #1e293b; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>BizOne UI Mockups</h1>
+  <p>Omni Channel POS &amp; Management Platform — Giao diện người dùng</p>
+  <div class="badge">Phiên bản 1.0 &bull; 11/06/2026</div>
+</div>
+<div class="modules">
+  <div class="module">
+    <h2><span class="icon" style="background:#2563eb20;color:#60a5fa;">🔐</span> Đăng nhập &amp; Dashboard</h2>
+    <ul>
+      <li><a href="01-dashboard.html"><span class="num">01</span> Đăng nhập</a></li>
+      <li><a href="01-dashboard.html#dashboard"><span class="num">02</span> Dashboard tổng quan</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#10b98120;color:#34d399;">🛒</span> POS Bán hàng</h2>
+    <ul>
+      <li><a href="02-pos.html"><span class="num">03</span> POS — Màn hình nhân viên</a></li>
+      <li><a href="02-pos.html#customer"><span class="num">04</span> POS — Màn hình khách hàng</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#f59e0b20;color:#fbbf24;">📦</span> Quản lý Sản phẩm</h2>
+    <ul>
+      <li><a href="03-products.html"><span class="num">05</span> Danh sách sản phẩm</a></li>
+      <li><a href="03-products.html#add"><span class="num">06</span> Thêm sản phẩm</a></li>
+      <li><a href="03-products.html#categories"><span class="num">07</span> Danh mục sản phẩm</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#8b5cf620;color:#a78bfa;">🏭</span> Kho hàng</h2>
+    <ul>
+      <li><a href="04-warehouse.html"><span class="num">08</span> Nhập kho</a></li>
+      <li><a href="04-warehouse.html#inventory"><span class="num">09</span> Kiểm kê kho</a></li>
+      <li><a href="04-warehouse.html#alerts"><span class="num">10</span> Cảnh báo tồn kho</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#ec489920;color:#f472b6;">👥</span> CRM &amp; Khách hàng</h2>
+    <ul>
+      <li><a href="05-crm.html"><span class="num">11</span> Danh sách khách hàng</a></li>
+      <li><a href="05-crm.html#detail"><span class="num">12</span> Chi tiết khách hàng</a></li>
+      <li><a href="05-crm.html#debt"><span class="num">13</span> Công nợ khách hàng</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#3b82f620;color:#60a5fa;">📋</span> Đơn hàng</h2>
+    <ul>
+      <li><a href="06-orders.html"><span class="num">14</span> Danh sách đơn hàng</a></li>
+      <li><a href="06-orders.html#detail"><span class="num">15</span> Chi tiết đơn hàng</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#10b98120;color:#34d399;">📊</span> Báo cáo</h2>
+    <ul>
+      <li><a href="07-reports.html"><span class="num">16</span> Báo cáo doanh thu</a></li>
+      <li><a href="07-reports.html#profit"><span class="num">17</span> Báo cáo lợi nhuận</a></li>
+    </ul>
+  </div>
+  <div class="module">
+    <h2><span class="icon" style="background:#f59e0b20;color:#fbbf24;">👤</span> Nhân viên &amp; Cài đặt</h2>
+    <ul>
+      <li><a href="08-staff-settings.html"><span class="num">18</span> Quản lý nhân viên</a></li>
+      <li><a href="08-staff-settings.html#settings"><span class="num">19</span> Cấu hình hệ thống</a></li>
+      <li><a href="08-staff-settings.html#roles"><span class="num">20</span> Phân quyền</a></li>
+    </ul>
+  </div>
+</div>
+<footer>BizOne POS &amp; Management Platform &bull; Thiết kế giao diện người dùng</footer>
+</body>
+</html>

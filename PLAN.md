@@ -1,0 +1,229 @@
+# Kế hoạch Xây dựng Hệ thống BizOne & Payment Hub
+
+## Kiến trúc tổng thể
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT LAYER                                    │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────────────┐   │
+│  │  BizOne Web App │  │  BizOne POS     │  │  Payment Hub Admin     │   │
+│  │  (NextJS + tRPC)│  │  (NextJS + WS)  │  │  (NextJS + REST)      │   │
+│  └────────┬────────┘  └────────┬────────┘  └───────────┬────────────┘   │
+└───────────┼────────────────────┼──────────────────────┼─────────────────┘
+            │                    │                      │
+┌───────────┼────────────────────┼──────────────────────┼─────────────────┐
+│           │         API GATEWAY LAYER                  │                  │
+│  ┌────────▼────────────────────▼──────────────────────▼──────────────┐  │
+│  │              NextJS API Routes / tRPC / REST                       │  │
+│  │         Auth (NextAuth/Lucia) / RBAC / Rate Limit                  │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+            │                    │                      │
+┌───────────┼────────────────────┼──────────────────────┼─────────────────┐
+│  ┌────────▼────────────────────▼──────────────────────▼──────────────┐  │
+│  │                        SERVICE LAYER                               │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │  │
+│  │  │POS Svc   │ │ Product  │ │ Order    │ │ CRM Svc  │ │ Report  │  │  │
+│  │  │          │ │ Svc      │ │ Svc      │ │          │ │ Svc     │  │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └─────────┘  │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │  │
+│  │  │PayHub    │ │ PayHub   │ │ PayHub   │ │ PayHub   │ │ PayHub  │  │  │
+│  │  │Txn Engine│ │Webhook   │ │ Recon    │ │Connector │ │ Refund  │  │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └─────────┘  │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+            │                    │                      │
+┌───────────┼────────────────────┼──────────────────────┼─────────────────┐
+│  ┌────────▼────────────────────▼──────────────────────▼──────────────┐  │
+│  │                         DATA LAYER                                 │  │
+│  │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐   │  │
+│  │  │ MariaDB (BizOne) │  │ MariaDB (PayHub) │  │ Redis (Cache   │   │  │
+│  │  │ (Multi-tenant)   │  │                  │  │ + Session + QR)│   │  │
+│  │  └──────────────────┘  └──────────────────┘  └────────────────┘   │  │
+│  │  ┌──────────────────┐  ┌──────────────────┐                        │  │
+│  │  │ MinIO/S3 (Files) │  │ BullMQ (Queue)   │                        │  │
+│  │  └──────────────────┘  └──────────────────┘                        │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## GIAI ĐOẠN 1: NỀN TẢNG (Tuần 1-3)
+
+### Mục tiêu: Thiết lập project scaffolding, Docker, database, auth, deployment pipeline
+
+```
+Tuần 1 ─── Tuần 2 ─── Tuần 3
+  │          │          │
+  ├─ P1.1    ├─ P1.3    ├─ P1.5
+  ├─ P1.2    ├─ P1.4    └─ P1.6
+  └─ P1.7    └─ P1.8
+```
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P1.1** | **BizOne Scaffolding** — NextJS + Docker | Tạo `package.json`, `tsconfig.json`, `next.config.js`, `.env.local`, `Dockerfile`, `docker-compose.yml`, `.eslintrc.json`, `.prettierrc`. Cấu trúc thư mục `/app`, `/components`, `/lib`, `/server`, `/types`. | *"Tạo dự án NextJS 14+ với App Router, TypeScript, TailwindCSS, shadcn/ui. Thiết lập Dockerfile và docker-compose.yml với 3 services: app (NextJS), db (MariaDB 10.11), cache (Redis). Cấu hình ESLint, Prettier, tsconfig. Thư mục: /app, /components, /lib, /server, /types. Biến môi trường từ env.txt."* | `npm run dev` chạy được. `docker compose up` start được cả 3 services. |
+| **P1.2** | **Payment Hub Scaffolding** — NextJS + Docker | Tạo project payment-hub với `package.json`, `Dockerfile`, `docker-compose.yml` (thêm BullMQ). Cấu trúc `/services/queue`, `/services/webhook`. | *"Giống P1.1 nhưng cho Payment Hub. Tên project payment-hub, database là paymentdb (MariaDB). Thêm BullMQ service vào docker-compose. Thư mục /services cho background jobs. WebSocket support."* | `docker compose up` start được. Kết nối DB + Redis OK. |
+| **P1.3** | **BizOne Database Schema** | Tạo `prisma/schema.prisma` (50+ models), `prisma/seed.ts`, `prisma/migrations/`. | *"Tạo Prisma schema từ database/schema.sql. Định nghĩa models: branches, roles, permissions, users, products (có variants/categories/units), inventory (warehouses/batches), customers (groups/debts/points), invoices (items/payments/refunds), orders, suppliers, shifts, attendance, commissions, omni-channel connections, accounting, marketing, config. Thêm seed script từ dữ liệu có sẵn trong schema.sql."* | `npx prisma db push` thành công. `npx prisma db seed` tạo dữ liệu mẫu. Có thể query được. |
+| **P1.4** | **Payment Hub Database Schema** | Tạo `prisma/schema.prisma` (20 models), `prisma/seed.ts` cho Payment Hub. | *"Tạo Prisma schema từ database/schema_paymenthub.sql. Models: users, merchants, api_keys, partner_configs, connectors, transactions, transaction_logs, transaction_raw_data, refunds, webhook_configs, webhook_logs, reconciliation_runs, reconciliation_details, disputes, qr_codes, idempotency_keys, notifications. Seed: admin user + BizOne merchant mặc định."* | `npx prisma db push` + seed thành công. |
+| **P1.5** | **Authentication System** | Tạo `lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts`, `components/auth/LoginForm.tsx`, `middleware.ts` (JWT verify + tenant check). File `/types/auth.ts`, `lib/rbac.ts`. | *"Xây dựng auth với NextAuth.js / Lucia Auth. JWT access token (15 phút) + refresh token (7 ngày), lưu user_sessions. Endpoints: POST /api/auth/login, register, refresh, logout, change-password, forgot-password, reset-password, verify-otp. Multi-tenant qua X-Tenant-ID header. RBAC: kiểm tra role_permissions ở server layer. Refresh token rotation. Dùng Zod validate input."* | Test login/refresh/logout flow. Access token hết hạn bị từ chối. Refresh token sinh token mới. Sai password trả 401. Không có X-Tenant-ID trả 403. |
+| **P1.6** | **API Core Infrastructure** | Tạo `server/trpc.ts` (router + middleware), `lib/errors.ts`, `lib/response.ts`, `lib/rate-limit.ts`, `lib/idempotency.ts`. Middleware cho auth, tenant, rbac, rate-limit, idempotency. | *"Thiết lập tRPC router với middleware: auth (verify JWT), tenant (verify X-Tenant-ID), rbac (check permission), rate-limit (Redis, 100 req/min). Response format chuẩn: { success, data, meta } cho thành công, { success, error: { code, message, details } } cho lỗi. Error codes: UNAUTHORIZED, FORBIDDEN, NOT_FOUND, VALIDATION_ERROR, CONFLICT, RATE_LIMITED. Idempotency key middleware cho mutation endpoints (Redis TTL 24h)."* | Test middleware chain: không token → 401, sai tenant → 403, đúng permission → 200, vượt rate limit → 429. Request trùng idempotency key trả response cũ. |
+| **P1.7** | **Shared UI Component Library** | Tạo `components/ui/` gồm: `Sidebar.tsx`, `TopBar.tsx`, `DataTable.tsx`, `Modal.tsx`, `Toast.tsx`, `Card.tsx`, `StatCard.tsx`, `FormFields/` (Input, Select, DatePicker, NumericKeypad). Theme file `app/globals.css`. | *"Xây dựng thư viện UI từ mockups-bizone: Sidebar (collapsible, icon+text), TopBar (search + notifications + profile), DataTable (sort, filter, pagination, export), Form components (input, select, datepicker, numeric), Modal/Dialog, Toast notifications, Charts (recharts), Card/StatCard. Theme từ URD: primary #2563EB, success #10B981, warning #F59E0B, error #EF4444. Font Inter. POS-specific: large buttons (44x44px), font 16px+, numeric keypad."* | Storybook hoặc trang test hiển thị tất cả components. Responsive: desktop >1024px, tablet >768px, mobile >375px. |
+| **P1.8** | **Payment Hub Admin Layout** | Tạo `app/layout.tsx`, `components/ph/Sidebar.tsx`, `components/ph/Header.tsx`, `components/ph/StatusBadge.tsx`. Router pages cho 9 module. | *"Tạo layout admin từ mockups-paymenthub: Sidebar (Dashboard, Giao dịch, Đối tác, Connector, Webhook, Đối soát, Báo cáo, Audit Log, Cài đặt), Header (breadcrumb + search + notif + profile). Content area routing. Trạng thái giao dịch bằng màu sắc: xanh-Success, đỏ-Failed, vàng-Pending, xám-Expired. Font Inter, primary #2563EB, success #10B981, error #EF4444, info #3B82F6."* | Sidebar navigation đúng. Các page load đúng route. Màu trạng thái hiển thị chính xác. |
+
+---
+
+## GIAI ĐOẠN 2: BIZONE CORE MVP (Tuần 4-8)
+
+### Mục tiêu: Xây dựng các module cốt lõi: POS, Sản phẩm, Kho, Đơn hàng, CRM
+
+```
+Tuần 4 ─── Tuần 5 ─── Tuần 6 ─── Tuần 7 ─── Tuần 8
+  │          │          │          │          │
+  ├─ P2.1    ├─ P2.3    ├─ P2.5    ├─ P2.7    ├─ P2.9
+  ├─ P2.2    ├─ P2.4    ├─ P2.6    ├─ P2.8    └─ P2.10
+```
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P2.1** | **Product Module — API** | Tạo `server/routers/product.ts`, `server/routers/category.ts`, `server/routers/productSearch.ts`. File `lib/validators/product.ts` (Zod), `server/services/product.service.ts`. Excel import/export: `lib/excel/product.ts`. | *"Xây dựng API CRUD sản phẩm: GET /api/products (danh sách, sort, filter, pagination), POST /api/products (tạo với variants, units, images), GET /api/products/:id, PUT /api/products/:id, DELETE /api/products/:id. API categories (tree, 5 levels, drag-drop reorder). API search GET /api/products/search?q= với real-time <300ms, Redis cache. API variants, units, combos, images. Import/Export Excel với template + error report. Validation: SKU unique, barcode unique, giá > 0. Sử dụng tRPC. DTO từ SRS-PROD-01 đến 07."* | CRUD thành công. Search <300ms. Import Excel: 1000 SP trong <30s, báo lỗi chính xác. Export ra file xlsx đúng định dạng. |
+| **P2.2** | **Product Module — UI** | Tạo `app/products/page.tsx`, `app/products/[id]/page.tsx`, `components/products/ProductTable.tsx`, `components/products/ProductForm.tsx`, `components/products/CategoryTree.tsx`, `components/products/ImportDialog.tsx`. | *"Tạo UI từ mockups-bizone/03-products.html: Danh sách sản phẩm (bảng: ảnh, tên, SKU, danh mục, giá bán, giá vốn, tồn kho, trạng thái). Form thêm/sửa SP với tabs: Thông tin cơ bản, Đơn vị tính, Biến thể, Hình ảnh. Tree view danh mục. Import/Export dialog. Tìm kiếm real-time. Lọc theo danh mục, trạng thái. Chọn nhiều SP để bulk update."* | UI load đúng dữ liệu từ API. Tìm kiếm real-time phản hồi <300ms. Thêm SP với variants hoạt động. Import kéo-thả file. |
+| **P2.3** | **Inventory Module — API** | Tạo `server/routers/warehouse.ts`, `server/routers/inventory.ts`, `server/routers/stockTake.ts`, `server/routers/transfer.ts`, `server/services/inventory.service.ts`. File `lib/validators/inventory.ts`. | *"Xây dựng API: warehouses CRUD. inventory GET (tồn kho theo kho, summary, low-stock, expiring, overdue). Transactions (nhập/xuất) POST/PUT/GET với items + batches. Stock take: tạo phiếu, nhập số lượng thực tế, tự động tính chênh lệch, điều chỉnh tồn kho. Transfer: 3 bước (tạo phiếu → xuất nguồn → nhập đích). Batches với lô/HSD. Tồn kho real-time update sau mỗi giao dịch (trigger/queue). Cảnh báo khi tồn <= min_stock."* | Nhập kho 1000 SP cập nhật tồn <1s. Kiểm kê 1000 SP <30 phút. Chuyển kho 3 bước đúng. Cảnh báo tồn thấp hiện trong <5s. |
+| **P2.4** | **Inventory Module — UI** | Tạo `app/warehouse/page.tsx`, `app/warehouse/stock-take/page.tsx`, `app/warehouse/transfer/page.tsx`, `components/inventory/WarehouseTable.tsx`, `components/inventory/StockTakeForm.tsx`, `components/inventory/TransferForm.tsx`. | *"Tạo UI từ mockups-bizone/04-warehouse.html: Danh sách kho, tồn kho (bảng + filter). Phiếu nhập/xuất (form + scan barcode). Kiểm kê (danh sách SP + nhập số lượng thực tế). Chuyển kho (form 3 bước). Cảnh báo (badge đỏ). Biểu đồ tồn kho. Hỗ trợ quét mã vạch USB (auto-focus input)."* | Quét mã vạch tự động thêm SP. Kiểm kê: nhập số lượng thực tế, tự động tính chênh lệch. Xem lịch sử giao dịch. |
+| **P2.5** | **POS Module — API & WebSocket** | Tạo `server/routers/pos.ts`, `server/services/cashSession.service.ts`, `server/services/invoice.service.ts`, `server/services/payment.service.ts`. WebSocket handler: `server/ws/pos.ts`. Queue: `server/queue/inventory.ts`. | *"Xây dựng POS API: Cash sessions (mở ca, khóa ca, tổng kết ca). Invoices (tạo, hủy, đổi/trả). Invoice payments (đa phương thức: cash, transfer, card, wallet, QR). WebSocket /ws/pos/{sessionId} cho POS 2 màn hình: events cart:add/update/remove, cart:updated (broadcast), payment:process/completed. BroadcastChannel API fallback. Tồn kho tự động trừ khi thanh toán. Tính điểm thưởng. Auto-apply coupon. Idempotency key cho create invoice."* | Tạo hóa đơn <5 giây. 2 màn hình sync real-time <500ms. WebSocket: thêm SP → giỏ hàng cập nhật trên cả 2 màn hình. Quét mã vạch → thêm SP trong <1s. |
+| **P2.6** | **POS Module — UI** | Tạo `app/pos/page.tsx`, `app/pos/session/page.tsx`, `components/pos/ProductGrid.tsx`, `components/pos/CartPanel.tsx`, `components/pos/NumericKeypad.tsx`, `components/pos/PaymentModal.tsx`, `components/pos/CustomerDisplay.tsx`. Hook: `hooks/usePosWebSocket.ts`, `hooks/useBarcodeScan.ts`. | *"Tạo UI từ mockups-bizone/02-pos.html: Layout 2 panel: SP grid (trái) + giỏ hàng (phải). Thanh tìm kiếm auto-focus khi quét mã vạch. Nút thanh toán lớn (44x44px). Numeric keypad. Màn hình khách hàng (presentation mode): SP list, tổng tiền lớn, QR thanh toán. Hỗ trợ phím tắt F1-F12. Toast khi thêm SP. Modal thanh toán: chọn phương thức, nhập tiền khách, tính tiền thừa. Khóa ca dialog."* | Mở ca → bán hàng → thanh toán → in hóa đơn → khóa ca: full flow <30s. 2 màn hình sync. QR code hiển thị. Phím tắt hoạt động. |
+| **P2.7** | **Order Module — API & UI** | Tạo `server/routers/order.ts`, `server/services/order.service.ts`, `server/services/shipping.service.ts`. UI: `app/orders/page.tsx`, `app/orders/[id]/page.tsx`, `components/orders/OrderTable.tsx`, `components/orders/OrderDetail.tsx`. | *"Xây dựng API quản lý đơn hàng: GET /api/orders (filter theo channel, status, time, staff), GET /api/orders/:id (chi tiết + tracking history), PUT /api/orders/:id/status (cập nhật trạng thái), POST /api/orders/:id/cancel, POST /api/orders/:id/refund. Trạng thái: pending → confirmed → preparing → shipping → delivered → completed / cancelled / returned. Shipping info: GHN, GHTK, Shopee Express. UI từ mockups 06-orders.html: danh sách + filter + chi tiết. Màu trạng thái."* | Tạo đơn online → xác nhận → giao hàng → hoàn thành flow. Filter đúng. Xuất Excel. Theo dõi tracking number. |
+| **P2.8** | **CRM Module — API & UI** | Tạo `server/routers/customer.ts`, `server/services/customer.service.ts`, `server/services/loyalty.service.ts`. UI: `app/crm/page.tsx`, `app/crm/[id]/page.tsx`, `components/crm/CustomerTable.tsx`, `components/crm/CustomerDetail.tsx`, `components/crm/MergeDialog.tsx`. | *"Xây dựng API customers CRUD (SĐT unique). Groups. Loyalty points (earn/redeem/adjust với cấu hình tỷ lệ). Customer ranking (Silver/Gold/VIP/Diamond, auto upgrade). Lịch sử mua hàng. Công nợ phải thu (ghi nhận thanh toán). Merge khách hàng. UI từ mockups 05-crm.html: danh sách + chi tiết (tabs: info, history, points, debts). Tích điểm tự động khi tạo hóa đơn. Tìm kiếm SĐT real-time."* | Thêm khách → tạo hóa đơn → điểm tự động cộng. Tra cứu SĐT. Công nợ: ghi nợ → thanh toán → giảm nợ. Merge 2 khách trùng. |
+| **P2.9** | **Dashboard — API & UI** | Tạo `server/routers/dashboard.ts`, `server/services/dashboard.service.ts` (Redis cache). WebSocket: `server/ws/dashboard.ts`. UI: `app/dashboard/page.tsx`, `components/dashboard/StatCard.tsx`, `components/dashboard/RevenueChart.tsx`, `components/dashboard/TopProducts.tsx`. | *"Xây dựng dashboard API: GET /api/reports/dashboard: doanh thu hôm nay, đơn hàng, khách mới, SP đã bán. Biểu đồ doanh thu 7 ngày. Top 5 SP bán chạy. Top 3 nhân viên. Tồn kho cảnh báo. Đơn chưa xử lý. Biểu đồ tròn phương thức thanh toán. WebSocket /ws/dashboard cho real-time. UI từ mockups 01-dashboard.html. Caching Redis (5 phút)."* | Dashboard load <2s. Dữ liệu real-time cách đây <30s. Biểu đồ vẽ đúng. Click vào chart drill-down. |
+| **P2.10** | **Audit Log — API & UI** | Tạo `server/middleware/auditLog.ts`, `server/routers/auditLog.ts`. UI: `app/audit-log/page.tsx`, `components/audit/AuditTable.tsx`. | *"Xây dựng audit log system: middleware auto-log tất cả CRUD quan trọng (hóa đơn, SP, kho, KH, nhân viên, cấu hình). API GET /api/audit-logs với filter (user, time, action, module, entity). Append-only (không thể xóa/sửa). Lưu 90 ngày. Mỗi log: time, user, IP, action, old/new data. UI: danh sách + filter + chi tiết. Export Excel."* | Tạo hóa đơn → log xuất hiện. Filter đúng. Không thể xóa log. Export ra Excel. |
+
+---
+
+## GIAI ĐOẠN 3: PAYMENT HUB MVP (Tuần 4-8) — Song song với Giai đoạn 2
+
+### Mục tiêu: Xây dựng Payment Hub: Transaction Engine, VNPay, VietQR, Webhook
+
+```
+Tuần 4 ─── Tuần 5 ─── Tuần 6 ─── Tuần 7 ─── Tuần 8
+  │          │          │          │          │
+  ├─ P3.1    ├─ P3.3    ├─ P3.5    ├─ P3.7    └─ P3.8
+  ├─ P3.2    ├─ P3.4    └─ P3.6
+```
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P3.1** | **Transaction Engine — Core API** | Tạo `server/routes/transactions.ts` (REST), `server/services/transaction.service.ts`, `server/services/stateMachine.ts`, `server/middleware/apiAuth.ts` (HMAC-SHA256), `server/middleware/idempotency.ts`. Scheduled job: `server/jobs/expireTransactions.ts`. | *"Xây dựng core transaction API (REST): POST /api/v1/transactions — tạo giao dịch với merchant_txn_id, amount, currency, description, return_url, webhook_url, customer info. Validate: amount > 0, URL hợp lệ, merchant tồn tại, API key hợp lệ. Idempotency key. Tự động sinh txn_code (TXN-YYYYMMDD-XXXXXX). Trả về transaction_id + payment_url. State machine: Created → Pending → Success/Failed/Expired → Refunded. Scheduled job expire sau timeout. GET /api/v1/transactions/:id, GET /api/v1/transactions/merchant/:merchant_txn_id. Auth: API Key + HMAC-SHA256 signature header. Rate limit 100 req/min. Response <500ms."* | Tạo GD → trả về ID + URL. Query GD theo ID + merchant_txn_id. Idempotency: request trùng trả response cũ. State transitions đúng. Expire tự động sau timeout. |
+| **P3.2** | **Transaction UI — Danh sách & Chi tiết** | Tạo `app/transactions/page.tsx`, `app/transactions/[id]/page.tsx`, `components/ph/TransactionTable.tsx`, `components/ph/TransactionDetail.tsx`, `components/ph/TransactionLog.tsx`, `components/ph/RawDataViewer.tsx`. | *"Tạo UI từ mockups-paymenthub: Danh sách giao dịch (bảng: mã GD, thời gian, số tiền, phương thức, trạng thái màu, đối tác, nguồn). Filter: thời gian, trạng thái, đối tác, merchant, khoảng tiền, mã GD. Chi tiết GD: thông tin cơ bản, thanh toán, khách hàng, log giao dịch, dữ liệu raw. Nút Hoàn tiền (nếu Success), Tra soát (nếu lỗi). Phân trang. Xuất Excel. Màu trạng thái: xanh-Success, đỏ-Failed, vàng-Pending, xám-Expired."* | Danh sách load <2s. Filter hoạt động. Chi tiết GD hiển thị đúng. Log giao dịch. Raw data request/response xem được. |
+| **P3.3** | **VNPay Connector** | Tạo `services/connectors/vnpay/index.ts`, `services/connectors/vnpay/vnpay.util.ts` (signature, params). Route handler: `server/routes/vnpay-ipn.ts`, `server/routes/vnpay-redirect.ts`. | *"Xây dựng VNPay connector implement interface: createTransaction, processResult (IPN + Redirect), refund, verifySignature. Tạo payment URL với VNPay params (vnp_TmnCode, vnp_Amount, vnp_ReturnUrl, vnp_IpAddr...). Tạo chữ ký SHA256. Xử lý IPN: verify signature, kiểm tra response code, cập nhật trạng thái GD, response 200 OK ngay. Xử lý Redirect: verify params, chuyển hướng đến return_url. HashSecret lưu encrypted trong DB. Tích hợp với Transaction Engine qua route engine. Test sandbox."* | Tạo GD → redirect VNPay sandbox. IPN: nhận + verify + update status <2s. Refund qua API VNPay. Test case: success, failed, invalid signature. |
+| **P3.4** | **VietQR Generator** | Tạo `services/qr/vietqr.ts`, `server/routes/qr.ts`. Store: `prisma/qr_codes` model. | *"Xây dựng module sinh VietQR: POST /api/v1/qr/generate. Input: transaction_id, size (200/300/500), format (base64/url/raw). Sinh QR theo chuẩn EMVCo-VietQR (Napas). Dùng thư viện qrcode. Nội dung QR: bank account, amount, description. QR có timeout (có thể cấu hình). Tự động refresh khi QR hết hạn. Cache trong Redis. Lưu qr_codes table. Hiệu năng sinh QR <1 giây."* | Sinh QR thành công. App ngân hàng quét được. Base64 + URL + raw data trả về. QR hết hạn tự động refresh. |
+| **P3.5** | **Partner Config UI** | Tạo `app/partners/page.tsx`, `app/partners/[id]/page.tsx`, `components/ph/PartnerCard.tsx`, `components/ph/PartnerForm.tsx`, `components/ph/TestConnectionButton.tsx`. | *"Tạo UI từ mockups-paymenthub: Danh sách đối tác (dạng card/bảng: tên, loại connector, trạng thái Active/Inactive/Error, môi trường Sandbox/Production). Form cấu hình: loại Connector (dropdown), API Key, Secret Key, Merchant Code, Endpoint (Sandbox/Production), callback URL, webhook URL, timeout, retry policy. Nút 'Test kết nối' gửi request test. Log lịch sử thay đổi cấu hình. Cho phép vô hiệu hóa/kích hoạt."* | Thêm VNPay partner → test kết nối → kích hoạt. Log thay đổi. Trạng thái hiển thị đúng. |
+| **P3.6** | **Webhook Engine** | Tạo `services/webhook/sender.ts`, `services/webhook/queue.ts` (BullMQ), `server/routes/webhook-config.ts`, `app/webhooks/page.tsx`, `components/ph/WebhookTable.tsx`, `components/ph/WebhookForm.tsx`, `components/ph/WebhookLogTable.tsx`. | *"Xây dựng webhook engine: gửi HTTP POST với JSON body + HMAC-SHA256 signature header X-Signature. Events: payment.success, payment.failed, payment.expired, refund.completed. Retry tối đa 5 lần (exponential backoff: 1ph, 5ph, 15ph, 1h, 6h). Queue (BullMQ) cho async send. Lưu webhook_logs. Dashboard theo dõi: số lần gửi, success, failed, response time. Cho phép replay thủ công. Webhook config CRUD (URL, secret, events, active/inactive). Test ping."* | Webhook gửi đến BizOne thành công. Retry khi thất bại. Replay từ lịch sử. Test ping. Log chi tiết request/response. |
+| **P3.7** | **Payment Hub Dashboard** | Tạo `app/dashboard/page.tsx`, `components/ph/DashboardStats.tsx`, `components/ph/RevenueChart.tsx`, `components/ph/PaymentMethodPie.tsx`, `components/ph/RecentTransactions.tsx`. WebSocket: `server/ws/dashboard.ts`. | *"Tạo UI từ mockups-paymenthub: Top bar real-time (tổng GD hôm nay, tổng tiền, GD thành công, GD thất bại). Biểu đồ 7 ngày (line: số GD + tổng tiền). Biểu đồ tròn phương thức thanh toán. Tỷ lệ thành công/thất bại (pie). 10 GD gần nhất. Cảnh báo: GD lỗi nhiều, webhook fail. WebSocket cập nhật real-time. Cho phép chọn khoảng thời gian. Load <3 giây."* | Dashboard load <3s. WebSocket cập nhật real-time. Biểu đồ render đúng. Dữ liệu cách đây <30s. |
+| **P3.8** | **Route Engine — Partner Selection** | Tạo `services/routing/routeEngine.ts`, `services/routing/routeMap.ts`, `server/routes/route-config.ts`. | *"Xây dựng route engine tự động chọn đối tác dựa trên payment_method từ transaction. Map: 'vnpay_qr' → VNPay connector, 'vnpay_atm' → VNPay, 'momo_qr' → MoMo, 'zalopay_qr' → ZaloPay, 'vietqr' → VietQR. Fallback nếu đối tác lỗi. Cấu hình ưu tiên đối tác theo merchant. Graceful degradation: một đối tác lỗi không ảnh hưởng đối tác khác."* | Tạo GD với method='vnpay_qr' → route đến VNPay. Tắt VNPay → GD với method='vietqr' vẫn hoạt động. |
+
+---
+
+## GIAI ĐOẠN 4: BIZONE MỞ RỘNG (Tuần 9-12)
+
+### Mục tiêu: Staff, Reports, Suppliers, Marketing, POS nâng cao
+
+```
+Tuần 9 ─── Tuần 10 ─── Tuần 11 ─── Tuần 12
+  │          │           │           │
+  ├─ P4.1    ├─ P4.3     ├─ P4.5     ├─ P4.7
+  ├─ P4.2    ├─ P4.4     ├─ P4.6     └─ P4.8
+```
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P4.1** | **Staff Module — API & UI** | Tạo `server/routers/staff.ts`, `server/services/shift.service.ts`, `server/services/attendance.service.ts`, `server/services/commission.service.ts`. UI: `app/staff/page.tsx`, `app/staff/shifts/page.tsx`, `app/staff/attendance/page.tsx`, `components/staff/StaffTable.tsx`, `components/staff/ShiftCalendar.tsx`, `components/staff/CommissionRuleForm.tsx`. | *"Xây dựng API: users CRUD (thêm nhân viên, phân quyền RBAC chi tiết). Shifts (tạo ca, phân ca, calendar). Attendance (check-in/out, bảng chấm công, tính đi trễ/về sớm). Commissions (quy tắc: % doanh số, % lợi nhuận, fixed/SP). Tính hoa hồng tự động cuối tháng. Doanh số nhân viên. Audit log UI. UI từ mockups 08-staff-settings.html."* | Thêm nhân viên → phân quyền → check-in → bán hàng → hoa hồng tự động tính. Audit log xem được. |
+| **P4.2** | **Reports Module — API & UI** | Tạo `server/routers/reports.ts`, `server/services/report.service.ts`, `server/queue/reportExport.ts`. UI: `app/reports/page.tsx`, `components/reports/RevenueReport.tsx`, `components/reports/ProfitReport.tsx`, `components/reports/ProductPerformance.tsx`, `components/reports/StaffPerformance.tsx`. | *"Xây dựng API reports: doanh thu (filter: time, branch, staff, category. So sánh cùng kỳ). Lợi nhuận (doanh thu - giá vốn, biên lợi nhuận). Hàng bán chạy/chậm (top 10). Hiệu quả khuyến mãi (trước/sau/trong KM). Hiệu quả nhân viên (doanh số, số đơn, giá trị TB/đơn). Báo cáo tồn kho (giá trị, sắp hết, quá hạn). Export PDF/Excel async (queue). UI từ mockups 07-reports.html."* | Report load <3s. Export Excel/PDF <5s. So sánh cùng kỳ đúng. Filter hoạt động. |
+| **P4.3** | **Supplier Module — API & UI** | Tạo `server/routers/supplier.ts`, `server/routers/purchaseOrder.ts`, `server/services/purchaseOrder.service.ts`. UI: `app/suppliers/page.tsx`, `app/suppliers/[id]/page.tsx`, `app/purchase-orders/page.tsx`, `components/suppliers/SupplierTable.tsx`, `components/suppliers/POForm.tsx`. | *"Xây dựng API suppliers CRUD. Purchase orders (tạo, nhập kho, theo dõi trạng thái: pending/partial/received/cancelled). Supplier debts (công nợ phải trả, ghi nhận thanh toán). So sánh giá nhập giữa các NCC. Lịch sử giao dịch. UI: danh sách + form + chi tiết + đơn nhập hàng."* | Tạo PO → nhập kho → tự động tạo phiếu nhập. Công nợ supplier. So sánh giá nhập. |
+| **P4.4** | **Marketing Module — API & UI** | Tạo `server/routers/coupon.ts`, `server/routers/flashSale.ts`, `server/routers/promotion.ts`, `server/services/promotion.service.ts`. UI: `app/marketing/page.tsx`, `components/marketing/CouponForm.tsx`, `components/marketing/FlashSaleForm.tsx`, `components/marketing/PromotionList.tsx`. | *"Xây dựng API: Coupons CRUD (type: percent/fixed/free_shipping, conditions, usage limits, applicable channels). Vouchers (gán cho khách cụ thể). Flash sales (khung giờ, SP + giá flash, quantity limit, auto start/end). Buy X Get Y (tự động POS). Promotion combos. Campaigns (SMS/Email/Zalo). UI: danh sách + form + lịch sử sử dụng + báo cáo hiệu quả."* | Tạo coupon → áp dụng POS → giảm giá đúng. Flash sale: đúng giờ tự động giảm giá. Buy X Get Y: thêm SP tặng tự động. |
+| **P4.5** | **POS Advanced Features** | Bổ sung `server/routers/pos.ts` (đổi trả, tách gộp), `services/payment/paymentHubClient.ts` (gọi Payment Hub API). UI mới: `components/pos/ReturnForm.tsx`, `components/pos/SplitInvoiceModal.tsx`, `components/pos/PreOrderForm.tsx`, `components/pos/PairingScreen.tsx`. In: `services/printing/printer.ts` (WebUSB/Bluetooth). | *"Bổ sung POS: Thanh toán thẻ (cổng thanh toán qua Payment Hub). QR thanh toán (liên kết Payment Hub API sinh QR). Đổi trả hàng (tìm hóa đơn gốc, chọn SP trả/đổi, tính chênh lệch, hoàn tiền). Tách/gộp hóa đơn. Đặt cọc pre-order. POS 2 màn hình production-ready (BroadcastChannel + WebSocket, PIN pairing). In hóa đơn qua WebUSB/Bluetooth."* | Thanh toán QR → Payment Hub tạo GD → QR hiển thị → khách quét. Đổi trả: chọn SP → tính tiền → hoàn. Tách hóa đơn: 1 → 2 hóa đơn. 2 màn hình ghép cặp bằng PIN. |
+| **P4.6** | **Multi-Store Support** | Sửa `middleware.ts` (branch switching), `server/middleware/branchScope.ts`. UI: `components/branch/BranchSwitcher.tsx`. Báo cáo tổng hợp: `server/services/report.service.ts` (aggregate query). | *"Thêm multi-store: Branches CRUD. User gán nhiều branch. Switch branch trong sidebar. Dữ liệu phân tách theo branch_id. Báo cáo theo branch hoặc tổng hợp. Inventory riêng theo warehouse (gắn với branch). Chuyển kho giữa các branch. Cấu hình riêng theo branch."* | User A thấy branch A. Switch branch → dữ liệu thay đổi. Báo cáo tổng hợp nhiều branch. |
+| **P4.7** | **Thông báo — Hệ thống + Email + SMS** | Tạo `server/services/notification.service.ts`, `server/services/email.service.ts`, `server/services/sms.service.ts`, `server/routers/notification.ts`, `server/jobs/notificationQueue.ts`. UI: `app/notifications/page.tsx`, `components/notifications/NotificationCenter.tsx`, `components/notifications/TemplateForm.tsx`. | *"Xây dựng notification system: Notification Center (in-app + WebSocket). Email (SMTP template). SMS (SMS gateway). Events: đơn mới, tồn kho thấp, kiểm kê chênh lệch, công nợ quá hạn, đồng bộ lỗi, báo cáo định kỳ, nhắc ca. Notification templates CRUD + variables. Cấu hình notification preferences. Web Push Notification. Lưu 30 ngày. Đánh dấu đã đọc/chưa đọc."* | Tạo đơn online → notif hiện trên dashboard. Cấu hình template → gửi email đúng nội dung. WebSocket real-time. |
+| **P4.8** | **Kế toán & Tài chính — API & UI** | Tạo `server/routers/accounting.ts`, `server/services/cashFund.service.ts`, `server/services/ledger.service.ts`. UI: `app/accounting/page.tsx`, `app/accounting/cash-funds/page.tsx`, `components/accounting/CashFundForm.tsx`, `components/accounting/LedgerTable.tsx`. | *"Xây dựng API: Cash funds (quỹ tiền mặt, nhiều quỹ). Fund transactions (biến động quỹ, số dư). Thu/chi (categories tree, ghi nhận, sổ quỹ). Công nợ tổng hợp (phải thu + phải trả). Báo cáo lời lỗ cơ bản. Báo cáo dòng tiền. Đối soát thanh toán. UI: sổ quỹ dạng sổ, filter thời gian, category."* | Ghi thu → quỹ tăng. Ghi chi → quỹ giảm. Sổ quỹ đúng số dư. Báo cáo lời lỗ: doanh thu - chi phí = lợi nhuận. |
+
+---
+
+## GIAI ĐOẠN 5: PAYMENT HUB MỞ RỘNG (Tuần 9-12) — Song song với Giai đoạn 4
+
+### Mục tiêu: MoMo/ZaloPay, Refund, Reconciliation, Reports
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P5.1** | **MoMo Connector** | Tạo `services/connectors/momo/index.ts` (createTransaction, processResult, refund, verifySignature). Route handler: `server/routes/momo-webhook.ts`. Update route engine: `services/routing/routeMap.ts`. | *"Xây dựng MoMo connector: createTransaction (tạo MoMo QR/payment URL), processResult (webhook từ MoMo), refund, verifySignature. MoMo API: secret key, access key, partner code. Tạo signature HMAC-SHA256. Xử lý webhook: verify signature, update status, retry nếu thất bại. MoMo QR: sinh QR qua API MoMo. Tích hợp route engine. Test sandbox."* | Tạo GD → QR Momo. Webhook MoMo → update status. Refund qua MoMo. Test sandbox. |
+| **P5.2** | **ZaloPay Connector** | Tạo `services/connectors/zalopay/index.ts` (createTransaction, processResult, refund, verifySignature). Route handler: `server/routes/zalopay-callback.ts`. Update route engine. | *"Xây dựng ZaloPay connector: createTransaction (tạo ZaloPay order + QR), processResult (callback GET từ ZaloPay), refund, verifySignature (HMAC). ZaloPay API: app_id, key1, key2. Tạo order: amount, description, callback_url. Callback: verify mac, update status. Refund API. Tích hợp route engine. Test sandbox."* | Tạo GD → ZaloPay order. Callback xử lý. Refund thành công. |
+| **P5.3** | **Refund Module — API & UI** | Tạo `server/routes/refund.ts`, `server/services/refund.service.ts`. UI: `components/ph/RefundForm.tsx` (gắn trong TransactionDetail). | *"Xây dựng refund API: POST /api/v1/transactions/{id}/refund (full/partial). Validate: GD phải Success, đối tác hỗ trợ refund, thời gian cho phép, số tiền <= gốc. Gửi request refund qua connector. Cập nhật trạng thái (Refunded/PartiallyRefunded). Gửi webhook refund.completed. Multiple partial refund (accumulated). Lịch sử refund. UI: form hoàn tiền với lý do bắt buộc, kiểm tra điều kiện."* | Hoàn tiền full → GD chuyển Refunded. Hoàn tiền partial 2 lần → tổng không vượt quá gốc. Lịch sử refund hiển thị. Webhook gửi thành công. |
+| **P5.4** | **Reconciliation Module — API & UI** | Tạo `services/reconciliation/engine.ts`, `server/jobs/dailyReconciliation.ts`, `server/routes/reconciliation.ts`. UI: `app/reconciliation/page.tsx`, `components/ph/ReconciliationTable.tsx`, `components/ph/ReconciliationDetail.tsx`. | *"Xây dựng reconciliation engine: scheduled job hàng ngày (00:00) lấy báo cáo từ đối tác. So khớp: matched (cả 2 bên + đúng tiền), unmatched_paymenthub (chỉ có ở Payment Hub), unmatched_partner (chỉ có ở đối tác), amount_mismatch (sai tiền). Tạo báo cáo đối soát. Cảnh báo nếu có chênh lệch. UI: danh sách reconciliation runs, chi tiết từng GD lệch, kết quả. Xuất Excel/PDF. Lưu lịch sử."* | Chạy đối soát → matched/unmatched chính xác. Cảnh báo khi có lệch. Export báo cáo. |
+| **P5.5** | **Payment Hub Reports** | Tạo `server/routes/reports.ts`, `server/services/report.service.ts`. UI: `app/reports/page.tsx`, `components/ph/TransactionReport.tsx`, `components/ph/RevenueReport.tsx`, `components/ph/ReconciliationReport.tsx`. | *"Xây dựng báo cáo Payment Hub: Báo cáo giao dịch (filter: time, status, partner, method, merchant. Tổng GD, tổng tiền, phí). Báo cáo doanh thu (theo đối tác + phương thức, so sánh cùng kỳ, biểu đồ tăng trưởng). Báo cáo đối soát (kết quả theo ngày, tổng GD khớp/lệch, chi tiết). Export Excel/PDF/CSV. UI từ mockups."* | Lọc + tổng hợp đúng. So sánh cùng kỳ. Export file. |
+| **P5.6** | **Dispute Module — API & UI** | Tạo `server/routes/dispute.ts`, `server/services/dispute.service.ts`. UI: `components/ph/DisputeForm.tsx`, `components/ph/DisputeHistory.tsx`. | *"Xây dựng dispute/tra soát: Nút 'Tra soát' trong chi tiết GD (khi trạng thái lỗi). Form: nội dung, lý do (bắt buộc). Ghi nhận với status 'Đang xử lý'. Tự động gửi đến đối tác nếu có API. Theo dõi trạng thái (Đang xử lý / Đã giải quyết). Multiple disputes cho 1 GD. Đính kèm file (chứng từ). Thông báo khi có kết quả. UI: form + lịch sử."* | Tạo dispute → hiển thị. Đính kèm file. Gửi đến đối tác. Cập nhật kết quả. Thông báo. |
+
+---
+
+## GIAI ĐOẠN 6: BIZONE NÂNG CAO (Tuần 13-16)
+
+### Mục tiêu: Omni Channel, Accounting nâng cao, PWA Mobile, Tối ưu
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P6.1** | **Omni Channel — Website** | Tạo project `store.bizone.vn` (NextJS riêng). Pages: `app/page.tsx` (danh mục), `app/products/[slug]/page.tsx`, `app/cart/page.tsx`, `app/checkout/page.tsx`, `app/orders/page.tsx`. API sync client: `lib/bizone-sync.ts` (gọi BizOne API). Payment: `lib/paymentHubClient.ts`. | *"Xây dựng website bán hàng BizOne: Tên miền [store].bizone.vn. Danh mục SP + tìm kiếm. Giỏ hàng + thanh toán online (qua Payment Hub: VNPay/Momo). Đăng ký/đăng nhập KH. Theo dõi đơn hàng. Tích điểm. Đồng bộ tự động với BizOne (sản phẩm, tồn kho, đơn hàng)."* | Website hiển thị SP từ BizOne. Đặt hàng → Payment Hub thanh toán. Đơn đồng bộ về BizOne. Tồn kho tự động cập nhật. |
+| **P6.2** | **Omni Channel — Shopee/Lazada Connector** | Tạo `services/omni/shopee/` (auth, productSync, orderSync), `services/omni/lazada/`. Queue: `server/queue/omniSync.ts`. UI: `app/omni-channel/page.tsx`, `components/omni/ChannelCard.tsx`, `components/omni/SyncHistory.tsx`. | *"Xây dựng connector kết nối Shopee API: OAuth xác thực. Đồng bộ sản phẩm (push sản phẩm lên Shopee, cập nhật giá/tồn kho). Đồng bộ đơn hàng (pull đơn từ Shopee về, tạo order trong BizOne). Map danh mục (BizOne ↔ Shopee). Webhook handler. Queue xử lý async. Retry khi lỗi. Log đồng bộ. UI kết nối: OAuth flow, trạng thái, lịch sử sync. Tương tự cho Lazada API."* | Auth Shopee → chọn SP sync → SP xuất hiện trên Shopee. Đơn Shopee → tự động tạo trong BizOn. Tồn kho sync <30s. |
+| **P6.3** | **Omni Channel — TikTok Shop + Facebook/Instagram** | Tạo `services/omni/tiktok/`, `services/omni/facebook/`, `services/omni/zalo/`. UI mở rộng từ P6.2: thêm channel cards. | *"Kết nối TikTok Shop API: xác thực, đồng bộ SP, đơn hàng, tồn kho. Facebook/Instagram: Commerce API, đăng bán SP, nhận đơn. Zalo OA: Mini App bán hàng. UI quản lý kết nối tập trung."* | Kết nối TikTok → SP sync. Đơn từ TikTok → BizOne. |
+| **P6.4** | **PWA Mobile App** | Tạo `public/manifest.json`, service worker: `public/sw.js`. Components mobile: `components/mobile/BottomNav.tsx`, `app/mobile/dashboard/page.tsx`, `app/mobile/orders/page.tsx`. Hook: `hooks/usePushNotifications.ts`. | *"Xây dựng PWA cho chủ cửa hàng: Dashboard (doanh thu, đơn hàng, cảnh báo). Xem báo cáo. Xem đơn hàng. Nhận thông báo. Bottom navigation. Responsive <768px. Service worker cho offline. manifest.json. Push notification. Install prompt."* | Lighthouse PWA score >80. Install prompt. Offline: xem dashboard cached. Push notification nhận được. |
+| **P6.5** | **Performance Optimization** | Tạo script `scripts/database-indexing.sql` (review + optimize). Cấu hình Redis cache: `lib/cache.ts` (product list, dashboard). Optimization: next.config.js (ISR, code splitting), components lazy loading. | *"Tối ưu hiệu năng: Database indexing review + query optimization (EXPLAIN). Redis cache strategy: product list cache 5 phút, dashboard aggregate cache, session cache. Pagination bắt buộc cho mọi danh sách (max 100/trang). Lazy loading images. NextJS: server components, ISR cho trang tĩnh. Bundle size optimization (code splitting). API response P95 <200ms."* | Lighthouse >90. API P95 <200ms. Dashboard load <2s. Search <300ms. Bundle size <200KB JS. |
+| **P6.6** | **Security Hardening** | Cấu hình `middleware.ts` (CORS, Helmet headers, rate-limit). Upload validation: `lib/upload.ts`. Encryption: `lib/crypto.ts` (AES-256). Auth hardening: `lib/auth.ts` (brute force protection). | *"Bảo mật: SQL injection prevention (ORM). XSS protection (sanitize output). CORS whitelist. Helmet headers. Rate limiting Redis (100 req/min general, 300 POS, 10 auth). File upload validation (type, size: 10MB ảnh, 50MB Excel). HTTPS enforced. Audit log cho mọi CRUD. Mã hóa dữ liệu nhạy cảm (AES-256 cho secrets). Brute force protection (auth: 5 lần sai → lock 15 phút)."* | Penetration test: SQLi, XSS, CSRF không phát hiện. Rate limit: vượt → 429. File upload: đúng loại/kích thước cho phép. |
+
+---
+
+## GIAI ĐOẠN 7: PAYMENT HUB NÂNG CAO (Tuần 13-16) — Song song với Giai đoạn 6
+
+### Mục tiêu: Connector plugin architecture, Audit, Notification, Scale
+
+| ID | Thành phần | Công việc cần thực hiện | Prompt cho AI Agent | Kiểm thử / Kết quả |
+|----|-----------|------------------------|---------------------|--------------------|
+| **P7.1** | **Connector Plugin Architecture** | Tạo `services/connectors/interface.ts` (IConnector), `services/connectors/loader.ts` (dynamic scan + load), `services/connectors/sandbox.ts`. Refactor VNPay/MoMo/ZaloPay connectors implement IConnector. UI: `app/connectors/page.tsx`, `components/ph/ConnectorUpload.tsx`. | *"Xây dựng kiến trúc Connector plugin: Interface chuẩn IConnector { createTransaction, processResult, refund, verifySignature, getStatus, generateQR }. Plugin loader: scan connectors directory, load plugins dynamically. Connector sandbox: mỗi connector chạy độc lập, không ảnh hưởng core. Hot-plug: add/remove connector không restart. Config schema JSON. Upload connector UI (zip file). Tài liệu phát triển cho bên thứ ba."* | Upload connector mới → active → gọi được. Tắt connector → GD không route đến nó. Add connector không restart. |
+| **P7.2** | **Audit Log — Payment Hub** | Tạo `services/audit/logger.ts` (event-driven), `server/routes/audit.ts`. UI: `app/audit-log/page.tsx`, `components/ph/AuditTable.tsx`, `components/ph/RawDataModal.tsx`. | *"Xây dựng audit log payment hub: Transaction log (mọi sự kiện vòng đời GD, request/response API). System audit (thay đổi config, connector, webhook, user login, refund manual). Append-only. Lưu 90 ngày. UI: filter (time, action, user, entity). Xem raw data. Export."* | Tạo GD → log. Sửa partner config → log. Không thể xóa/sửa log. |
+| **P7.3** | **Notification System** | Tạo `services/notification/sender.ts`, `services/notification/events.ts`, `server/routes/notification.ts`. Queue: `server/jobs/notificationQueue.ts`. UI: `app/notifications/page.tsx`, `components/ph/NotificationCenter.tsx`. | *"Xây dựng notification system Payment Hub: Notification Center (in-app + WebSocket). Email (SMTP). Events: GD thành công/thất bại, webhook fail, đối soát chênh lệch, hoàn tiền, kết nối lỗi, GD đáng ngờ. Real-time WebSocket. Cấu hình ngưỡng cảnh báo. Lưu 30 ngày. Đánh dấu đã đọc."* | GD thất bại → notif hiện. Webhook fail 5 lần → gửi email. Real-time. |
+| **P7.4** | **Scale & Performance** | Cấu hình BullMQ: multiple workers. DB partitioning: `scripts/partition-transactions.sql`. Redis cluster config: `lib/redis.ts`. Load test script: `scripts/load-test.ts` (k6/artillery). | *"Xử lý bất đồng bộ: BullMQ queues cho webhook, recon, email. Horizontal scaling support (multiple API instances + shared Redis + shared queue). Database: partitioning transactions table theo tháng, archiving old data. Redis: cache transaction list, rate limiting counters, idempotency keys. Load test: 1000 concurrent requests."* | 500 concurrent requests → P95 response <1s. Queue xử lý 10,000 webhook. Recon 10,000 GD <5 phút. |
+| **P7.5** | **Disaster Recovery & Monitoring** | Tạo backup script: `scripts/backup.sh` (DB + files). Healthcheck: `server/routes/health.ts`. APM: Sentry config `lib/sentry.ts`. Docker: healthcheck in docker-compose. | *"Backup: automated daily DB backup + 30-day retention. Monitoring: healthcheck endpoint /api/v1/health, uptime 99.9%. Sentry/APM integration. Alerting: PagerDuty/Email khi downtime. Backup restore test plan. Graceful degradation strategy."* | Healthcheck OK. Backup/restore test passes. Downtime <8.76h/năm (99.9%). |
+
+---
+
+## TỔNG QUAN GANTT CHART
+
+```
+Tuần:    1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+        ┌─────────────────────────────────────────────────────┐
+P1      │█████  █████  █████                                   │ Nền tảng
+P2      │                    █████  █████  █████  █████  █████ │ BizOne Core
+P3      │                    █████  █████  █████  █████       │ Payment Hub MVP
+P4      │                                      █████  █████  █████  █████ │ BizOne Mở rộng
+P5      │                                      █████  █████  █████  █████ │ Payment Hub Mở rộng
+P6      │                                                        █████  █████  █████  █████ │ BizOne Nâng cao
+P7      │                                                        █████  █████  █████  █████ │ Payment Hub Nâng cao
+        └─────────────────────────────────────────────────────┘
+```
+
+## ĐỘI NGŨ ĐỀ XUẤT
+
+| Vai trò | Số lượng | Phụ trách |
+|---------|---------|-----------|
+| **Backend Developer** | 2 | BizOne API + Payment Hub API |
+| **Frontend Developer** | 2 | BizOne UI + Payment Hub UI |
+| **Full-stack Developer** | 1 | Omni Channel, connectors, integrations |
+| **DevOps** | 1 | Docker, CI/CD, deployment, monitoring |
+| **QA Engineer** | 1 | Test planning, automation, regression |
+| **Product Owner** | 1 | Requirement clarification, acceptance |
+
+## PHỤ THUỘC & ĐIỀU KIỆN TIÊN QUYẾT
+
+1. **Giai đoạn 1** là prerequisite cho tất cả (phải hoàn thành trước khi bắt đầu GĐ 2+3)
+2. **Giai đoạn 2 & 3** có thể chạy song song (BizOne Core MVP + Payment Hub MVP)
+3. **Giai đoạn 4 & 5** chạy song song, cần GĐ 2+3 hoàn thành
+4. **Giai đoạn 6 & 7** chạy song song, cần GĐ 4+5 hoàn thành
+5. **POS 2 màn hình nâng cao (P4.5)** cần Webhook Engine (P3.6) để tích hợp thanh toán
+6. **Omni Channel (P6.2-P6.3)** cần staff module (P4.1) cho phân quyền
+7. **Payment Hub Connector plugin (P7.1)** cần P3.1-P3.6 hoàn thành

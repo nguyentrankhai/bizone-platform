@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Hub - Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #2563EB;
+  --primary-light: #DBEAFE;
+  --success: #10B981;
+  --success-light: #D1FAE5;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEE2E2;
+  --info: #3B82F6;
+  --info-light: #DBEAFE;
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  --sidebar-w: 240px;
+  --header-h: 60px;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; font-size: 14px; color: var(--gray-800); background: var(--gray-50); }
+
+/* Layout */
+.app { display: flex; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w); background: #1E293B; color: #fff;
+  display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
+}
+.sidebar-logo {
+  height: var(--header-h); display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,.08);
+  font-weight: 700; font-size: 16px; letter-spacing: .3px;
+}
+.sidebar-logo .icon { width: 32px; height: 32px; background: var(--primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.sidebar-nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+  color: rgba(255,255,255,.65); cursor: pointer; transition: all .15s;
+  font-size: 13.5px; font-weight: 500; border-left: 3px solid transparent; text-decoration: none;
+}
+.nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.nav-item.active { background: rgba(37,99,235,.15); color: #60A5FA; border-left-color: var(--primary); }
+.nav-item .nav-icon { width: 20px; text-align: center; font-size: 16px; }
+.nav-caption { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.35); padding: 16px 20px 6px; text-transform: uppercase; letter-spacing: .8px; }
+
+/* Header */
+.main { margin-left: var(--sidebar-w); flex: 1; }
+.header {
+  height: var(--header-h); background: #fff; border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; position: sticky; top: 0; z-index: 40;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left h1 { font-size: 16px; font-weight: 600; color: var(--gray-900); }
+.header-breadcrumb { font-size: 13px; color: var(--gray-500); }
+.header-breadcrumb span { color: var(--primary); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.search-box {
+  display: flex; align-items: center; background: var(--gray-100); border-radius: 8px;
+  padding: 0 12px; height: 36px; width: 240px;
+}
+.search-box input { border: none; background: none; outline: none; font-size: 13px; color: var(--gray-700); width: 100%; }
+.search-box .icon { color: var(--gray-400); margin-right: 8px; }
+.notif-btn { position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; background: var(--gray-100); font-size: 16px; }
+.notif-btn .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: var(--error); border-radius: 50%; border: 2px solid #fff; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; cursor: pointer; }
+
+/* Content */
+.content { padding: 24px; }
+
+/* Page screens */
+.page { display: none; }
+.page.active { display: block; }
+
+/* Cards */
+.card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); box-shadow: var(--shadow); }
+.card-header { padding: 16px 20px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
+.card-header h3 { font-size: 15px; font-weight: 600; }
+.card-body { padding: 20px; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 18px 20px; box-shadow: var(--shadow); }
+.stat-card .label { font-size: 13px; color: var(--gray-500); margin-bottom: 4px; }
+.stat-card .value { font-size: 26px; font-weight: 700; color: var(--gray-900); }
+.stat-card .sub { font-size: 12px; margin-top: 4px; }
+.stat-card .sub.up { color: var(--success); }
+.stat-card .sub.down { color: var(--error); }
+.stat-card .stat-icon { float: right; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+
+/* Badge / Status */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
+  border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid transparent;
+}
+.badge-success { background: var(--success-light); color: #065F46; border-color: #A7F3D0; }
+.badge-error { background: var(--error-light); color: #991B1B; border-color: #FECACA; }
+.badge-warning { background: var(--warning-light); color: #92400E; border-color: #FDE68A; }
+.badge-info { background: var(--info-light); color: #1E40AF; border-color: #BFDBFE; }
+.badge-gray { background: var(--gray-100); color: var(--gray-600); border-color: var(--gray-200); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-success { background: var(--success); }
+.dot-error { background: var(--error); }
+.dot-warning { background: var(--warning); }
+.dot-gray { background: var(--gray-400); }
+.dot-info { background: var(--info); }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table th { text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; border-bottom: 2px solid var(--gray-200); white-space: nowrap; }
+table td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+table tr:hover { background: var(--gray-50); }
+table .amount { font-weight: 600; font-family: 'Inter', monospace; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+  border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; transition: all .15s; text-decoration: none;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #1D4ED8; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #059669; }
+.btn-error { background: var(--error); color: #fff; }
+.btn-error:hover { background: #DC2626; }
+.btn-outline { background: #fff; color: var(--gray-700); border-color: var(--gray-300); }
+.btn-outline:hover { background: var(--gray-50); border-color: var(--gray-400); }
+.btn-ghost { background: transparent; color: var(--gray-600); }
+.btn-ghost:hover { background: var(--gray-100); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 6px; }
+
+/* Form */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--gray-700); margin-bottom: 4px; }
+.form-control { width: 100%; padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; font-family: inherit; color: var(--gray-800); background: #fff; }
+.form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+select.form-control { cursor: pointer; }
+textarea.form-control { resize: vertical; min-height: 80px; }
+
+/* Filter bar */
+.filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-bar .form-control { width: auto; min-width: 140px; }
+.filter-bar .btn { white-space: nowrap; }
+
+/* Grid layouts */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content: ''; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 2px; background: var(--gray-200); }
+.timeline-item { position: relative; padding-bottom: 16px; }
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-item::before { content: ''; position: absolute; left: -17px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--gray-300); border: 2px solid #fff; }
+.timeline-item.success::before { background: var(--success); }
+.timeline-item.error::before { background: var(--error); }
+.timeline-item.info::before { background: var(--info); }
+.timeline-item.warning::before { background: var(--warning); }
+.timeline-item .time { font-size: 12px; color: var(--gray-400); }
+.timeline-item .desc { font-size: 13px; color: var(--gray-700); margin-top: 2px; }
+
+/* Charts (CSS-based) */
+.chart-bar-group { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 8px 0; }
+.chart-bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.chart-bar { width: 100%; max-width: 32px; border-radius: 4px 4px 0 0; min-height: 4px; transition: height .3s; }
+.chart-bar-label { font-size: 11px; color: var(--gray-500); }
+.chart-bar-value { font-size: 10px; color: var(--gray-400); }
+
+.pie-chart { display: flex; align-items: center; gap: 20px; }
+.pie-visual { width: 140px; height: 140px; border-radius: 50%; position: relative; }
+.pie-legend { display: flex; flex-direction: column; gap: 8px; }
+.pie-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.pie-legend-item .color-box { width: 12px; height: 12px; border-radius: 3px; }
+
+/* Pagination */
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; font-size: 13px; color: var(--gray-500); }
+.pagination .pages { display: flex; gap: 4px; }
+.pagination .pages span { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+.pagination .pages span:hover { background: var(--gray-100); }
+.pagination .pages span.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Detail sections */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.detail-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 20px; }
+.detail-card h4 { font-size: 13px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+.detail-row { display: flex; padding: 6px 0; }
+.detail-row .label { width: 140px; color: var(--gray-500); font-size: 13px; flex-shrink: 0; }
+.detail-row .value { font-size: 13px; font-weight: 500; color: var(--gray-800); }
+
+/* Code block */
+.code-block { background: #1E293B; color: #E2E8F0; border-radius: 6px; padding: 14px 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; overflow-x: auto; margin: 4px 0; }
+.code-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.code-header span { font-size: 12px; color: var(--gray-400); }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 20px; }
+.tab { padding: 10px 20px; font-size: 13px; font-weight: 500; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .15s; }
+.tab:hover { color: var(--gray-700); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* Subnav for screen switching */
+.subnav { display: flex; gap: 4px; margin-bottom: 20px; }
+.subnav-item { padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--gray-500); cursor: pointer; border-radius: 6px; transition: all .15s; }
+.subnav-item:hover { background: var(--gray-100); color: var(--gray-700); }
+.subnav-item.active { background: var(--primary-light); color: var(--primary); }
+
+/* Misc */
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.flex { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 16px; }
+
+/* Responsive tweaks */
+@media (max-width: 1024px) {
+  .stats-row { grid-template-columns: repeat(2,1fr); }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar { width: 60px; }
+  .sidebar-logo span, .nav-item span:not(.nav-icon), .nav-caption { display: none; }
+  .sidebar-logo { justify-content: center; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .main { margin-left: 60px; }
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="icon">💳</div>
+      <span>Payment Hub</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-caption">Tổng quan</div>
+      <a class="nav-item active" data-page="dashboard" href="#"><span class="nav-icon">📊</span> Dashboard</a>
+
+      <div class="nav-caption">Quản lý</div>
+      <a class="nav-item" data-page="transactions" href="#"><span class="nav-icon">📋</span> Giao dịch</a>
+      <a class="nav-item" data-page="partners" href="#"><span class="nav-icon">🏢</span> Đối tác</a>
+      <a class="nav-item" data-page="connectors" href="#"><span class="nav-icon">🔌</span> Connector</a>
+      <a class="nav-item" data-page="webhooks" href="#"><span class="nav-icon">🔗</span> Webhook</a>
+      <a class="nav-item" data-page="reconciliation" href="#"><span class="nav-icon">📐</span> Đối soát</a>
+
+      <div class="nav-caption">Báo cáo</div>
+      <a class="nav-item" data-page="reports" href="#"><span class="nav-icon">📈</span> Báo cáo</a>
+      <a class="nav-item" data-page="audit" href="#"><span class="nav-icon">📝</span> Audit Log</a>
+
+      <div class="nav-caption">Hệ thống</div>
+      <a class="nav-item" data-page="settings" href="#"><span class="nav-icon">⚙️</span> Cài đặt</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- HEADER -->
+    <header class="header" id="appHeader">
+      <div class="header-left">
+        <h1 id="pageTitle">Dashboard</h1>
+        <div class="header-breadcrumb">Payment Hub / <span id="breadcrumb">Dashboard</span></div>
+      </div>
+      <div class="header-right">
+        <div class="search-box"><span class="icon">🔍</span><input type="text" placeholder="Tìm kiếm giao dịch, đối tác..."></div>
+        <div class="notif-btn">🔔<span class="badge"></span></div>
+        <div class="avatar">TA</div>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ==================== DASHBOARD ==================== -->
+      <div class="page active" id="page-dashboard">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#DBEAFE;color:#2563EB">💳</div>
+            <div class="label">Tổng GD hôm nay</div>
+            <div class="value">1,284</div>
+            <div class="sub up">↑ 12.3% so với hôm qua</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#D1FAE5;color:#10B981">💰</div>
+            <div class="label">Tổng số tiền</div>
+            <div class="value">₫186.5M</div>
+            <div class="sub up">↑ 8.7% so với hôm qua</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#DBEAFE;color:#2563EB">✅</div>
+            <div class="label">GD Thành công</div>
+            <div class="value">1,198</div>
+            <div class="sub up">Tỷ lệ 93.3%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#FEE2E2;color:#EF4444">❌</div>
+            <div class="label">GD Thất bại</div>
+            <div class="value">86</div>
+            <div class="sub down">↑ 3.2% so với hôm qua</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-3">
+          <!-- Chart 7 ngày -->
+          <div class="card">
+            <div class="card-header"><h3>Giao dịch 7 ngày qua</h3><div class="flex gap-2"><span class="badge badge-info">Hôm nay</span></div></div>
+            <div class="card-body">
+              <div class="chart-bar-group" style="height:180px">
+                <div class="chart-bar-item"><div class="chart-bar" style="height:70%;background:var(--primary)"></div><div class="chart-bar-label">T2</div><div class="chart-bar-value">₫142M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:55%;background:var(--primary)"></div><div class="chart-bar-label">T3</div><div class="chart-bar-value">₫98M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:80%;background:var(--primary)"></div><div class="chart-bar-label">T4</div><div class="chart-bar-value">₫165M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:65%;background:var(--primary)"></div><div class="chart-bar-label">T5</div><div class="chart-bar-value">₫120M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:90%;background:var(--primary)"></div><div class="chart-bar-label">T6</div><div class="chart-bar-value">₫210M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:75%;background:var(--primary)"></div><div class="chart-bar-label">T7</div><div class="chart-bar-value">₫155M</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:85%;background:var(--primary)"></div><div class="chart-bar-label">CN</div><div class="chart-bar-value">₫186M</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment method pie -->
+          <div class="card">
+            <div class="card-header"><h3>Phương thức thanh toán</h3></div>
+            <div class="card-body">
+              <div class="pie-chart">
+                <div class="pie-visual" style="background:conic-gradient(#2563EB 0% 40%, #10B981 40% 65%, #8B5CF6 65% 82%, #F59E0B 82% 93%, #EF4444 93% 100%)"></div>
+                <div class="pie-legend">
+                  <div class="pie-legend-item"><span class="color-box" style="background:#2563EB"></span> VNPay — 40%</div>
+                  <div class="pie-legend-item"><span class="color-box" style="background:#10B981"></span> MoMo — 25%</div>
+                  <div class="pie-legend-item"><span class="color-box" style="background:#8B5CF6"></span> VietQR — 17%</div>
+                  <div class="pie-legend-item"><span class="color-box" style="background:#F59E0B"></span> ZaloPay — 11%</div>
+                  <div class="pie-legend-item"><span class="color-box" style="background:#EF4444"></span> Khác — 7%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent + Alerts -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Giao dịch gần đây</h3><a class="btn btn-ghost btn-sm" href="#" onclick="switchPage('transactions')">Xem tất cả →</a></div>
+            <div class="card-body" style="padding:0">
+              <table>
+                <thead><tr><th>Mã GD</th><th>Thời gian</th><th>Số tiền</th><th>Trạng thái</th><th>Đối tác</th></tr></thead>
+                <tbody>
+                  <tr><td style="font-weight:600">TXN-20260612-001</td><td>14:30:22</td><td class="amount">₫1,500,000</td><td><span class="badge badge-success">● Success</span></td><td>VNPay</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-002</td><td>14:28:15</td><td class="amount">₫350,000</td><td><span class="badge badge-success">● Success</span></td><td>MoMo</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-003</td><td>14:25:44</td><td class="amount">₫2,100,000</td><td><span class="badge badge-error">● Failed</span></td><td>VNPay</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-004</td><td>14:22:10</td><td class="amount">₫890,000</td><td><span class="badge badge-warning">● Pending</span></td><td>ZaloPay</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-005</td><td>14:20:05</td><td class="amount">₫5,000,000</td><td><span class="badge badge-success">● Success</span></td><td>VietQR</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-006</td><td>14:18:33</td><td class="amount">₫120,000</td><td><span class="badge badge-success">● Success</span></td><td>MoMo</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-007</td><td>14:15:50</td><td class="amount">₫750,000</td><td><span class="badge badge-gray">● Expired</span></td><td>VNPay</td></tr>
+                  <tr><td style="font-weight:600">TXN-20260612-008</td><td>14:12:28</td><td class="amount">₫4,200,000</td><td><span class="badge badge-success">● Success</span></td><td>VNPay</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h3>Cảnh báo & Thông báo</h3></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:#FEF2F2;border-radius:8px;border-left:3px solid var(--error)">
+                  <span style="font-size:16px">⚠️</span>
+                  <div><div style="font-weight:600;font-size:13px">Webhook thất bại</div><div style="font-size:12px;color:var(--gray-500)">Webhook đến BizOne thất bại sau 5 lần retry — TXN-20260612-003</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">2 phút trước</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:#FEFCE8;border-radius:8px;border-left:3px solid var(--warning)">
+                  <span style="font-size:16px">📊</span>
+                  <div><div style="font-weight:600;font-size:13px">Đối soát chênh lệch</div><div style="font-size:12px;color:var(--gray-500)">Đối soát ngày 11/06: 3 GD lệch, tổng ₫1,200,000</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">1 giờ trước</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:#FEF2F2;border-radius:8px;border-left:3px solid var(--error)">
+                  <span style="font-size:16px">🔌</span>
+                  <div><div style="font-weight:600;font-size:13px">Kết nối đối tác lỗi</div><div style="font-size:12px;color:var(--gray-500)">Kết nối VNPay thất bại: timeout — Đã tự động retry</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">3 giờ trước</div></div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:#EFF6FF;border-radius:8px;border-left:3px solid var(--info)">
+                  <span style="font-size:16px">✅</span>
+                  <div><div style="font-weight:600;font-size:13px">Hoàn tiền hoàn tất</div><div style="font-size:12px;color:var(--gray-500)">Hoàn tiền ₫500,000 cho GD TXN-20260611-099 thành công</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">5 giờ trước</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top merchants -->
+        <div class="card mt-3">
+          <div class="card-header"><h3>Top Merchant theo doanh số</h3></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>#</th><th>Merchant</th><th>Mã</th><th>Số GD</th><th>Doanh thu</th><th>Tỷ lệ thành công</th></tr></thead>
+              <tbody>
+                <tr><td><span class="badge" style="background:#FEF3C7;color:#92400E;border:none">🥇</span></td><td style="font-weight:600">BizOne POS - HCM</td><td>BIZONE-HCM</td><td>486</td><td class="amount">₫72.3M</td><td><span class="badge badge-success">96.8%</span></td></tr>
+                <tr><td><span class="badge" style="background:#F3F4F6;color:#374151;border:none">🥈</span></td><td style="font-weight:600">BizOne POS - HN</td><td>BIZONE-HN</td><td>352</td><td class="amount">₫54.1M</td><td><span class="badge badge-success">94.2%</span></td></tr>
+                <tr><td><span class="badge" style="background:#FEF3C7;color:#92400E;border:none">🥉</span></td><td style="font-weight:600">BizOne Online</td><td>BIZONE-ONL</td><td>298</td><td class="amount">₫42.8M</td><td><span class="badge badge-warning">91.5%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== TRANSACTIONS LIST ==================== -->
+      <div class="page" id="page-transactions">
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option>Hôm nay</option><option>Hôm qua</option><option selected>7 ngày</option><option>Tháng này</option><option>Tùy chọn</option></select>
+            <select class="form-control"><option>Tất cả trạng thái</option><option>Success</option><option>Failed</option><option>Pending</option><option>Expired</option><option>Refunded</option></select>
+            <select class="form-control"><option>Tất cả đối tác</option><option>VNPay</option><option>MoMo</option><option>ZaloPay</option><option>VietQR</option></select>
+            <select class="form-control"><option>Tất cả Merchant</option><option>BizOne POS</option><option>BizOne Online</option></select>
+            <input class="form-control" placeholder="Mã GD / Mã đơn hàng" style="min-width:160px">
+            <button class="btn btn-primary">🔍 Tìm</button>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm">📥 Export</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Mã GD</th><th>Thời gian</th><th>Merchant</th><th>Số tiền</th><th>Phương thức</th><th>Đối tác</th><th>Trạng thái</th><th style="text-align:center">Thao tác</th></tr></thead>
+              <tbody>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-001</td>
+                  <td>12/06 14:30</td><td>BizOne POS</td>
+                  <td class="amount">₫1,500,000</td><td>QR Code</td><td>VNPay</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" style="color:var(--error)">Tra soát</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-002</td>
+                  <td>12/06 14:28</td><td>BizOne Online</td>
+                  <td class="amount">₫350,000</td><td>ATM/Visa</td><td>VNPay</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-003</td>
+                  <td>12/06 14:25</td><td>BizOne POS</td>
+                  <td class="amount">₫2,100,000</td><td>QR Code</td><td>VNPay</td>
+                  <td><span class="badge badge-error"><span class="dot dot-error"></span> Failed</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" style="color:var(--error)">Tra soát</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-004</td>
+                  <td>12/06 14:22</td><td>BizOne Online</td>
+                  <td class="amount">₫890,000</td><td>Ví MoMo</td><td>MoMo</td>
+                  <td><span class="badge badge-warning"><span class="dot dot-warning"></span> Pending</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-005</td>
+                  <td>12/06 14:20</td><td>BizOne POS</td>
+                  <td class="amount">₫5,000,000</td><td>VietQR</td><td>VietQR</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</a></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-006</td>
+                  <td>12/06 14:18</td><td>BizOne POS</td>
+                  <td class="amount">₫120,000</td><td>MoMo QR</td><td>MoMo</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-007</td>
+                  <td>12/06 14:15</td><td>BizOne Online</td>
+                  <td class="amount">₫750,000</td><td>QR Code</td><td>VNPay</td>
+                  <td><span class="badge badge-gray"><span class="dot dot-gray"></span> Expired</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-008</td>
+                  <td>12/06 14:12</td><td>BizOne POS</td>
+                  <td class="amount">₫4,200,000</td><td>QR Code</td><td>VNPay</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-009</td>
+                  <td>12/06 14:10</td><td>BizOne POS</td>
+                  <td class="amount">₫650,000</td><td>ZaloPay QR</td><td>ZaloPay</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr onclick="switchPage('txn-detail')" style="cursor:pointer">
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-010</td>
+                  <td>12/06 14:08</td><td>BizOne Online</td>
+                  <td class="amount">₫1,200,000</td><td>ATM/Visa</td><td>VNPay</td>
+                  <td><span class="badge badge-error"><span class="dot dot-error"></span> Failed</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" style="color:var(--error)">Tra soát</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pagination">
+          <span>Hiển thị 1-10 / 1,284 giao dịch</span>
+          <div class="pages">
+            <span>‹</span><span class="active">1</span><span>2</span><span>3</span><span>...</span><span>129</span><span>›</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== TRANSACTION DETAIL ==================== -->
+      <div class="page" id="page-txn-detail">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('transactions')">◀ Quay lại</button>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm" onclick="switchPage('refund-form')">💰 Hoàn tiền</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--error);border-color:var(--error)" onclick="switchPage('dispute-form')">🔍 Tra soát</button>
+          </div>
+        </div>
+
+        <div class="flex-between mb-2">
+          <div>
+            <h2 style="font-size:18px;font-weight:700;color:var(--gray-900)">TXN-20260612-001</h2>
+            <div style="font-size:13px;color:var(--gray-500);margin-top:2px">Giao dịch được tạo lúc 12/06/2026 14:29:45</div>
+          </div>
+          <div><span class="badge badge-success" style="font-size:14px;padding:6px 16px"><span class="dot dot-success"></span> Success</span></div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h4>Thông tin giao dịch</h4>
+            <div class="detail-row"><span class="label">Số tiền</span><span class="value" style="font-size:20px;font-weight:700;color:var(--primary)">₫1,500,000</span></div>
+            <div class="detail-row"><span class="label">Mô tả</span><span class="value">Thanh toán đơn hàng #123</span></div>
+            <div class="detail-row"><span class="label">Mã đơn hàng</span><span class="value">ORDER-123</span></div>
+            <div class="detail-row"><span class="label">Merchant</span><span class="value">BizOne POS - HCM (BIZONE-HCM)</span></div>
+            <div class="detail-row"><span class="label">Mã GD Merchant</span><span class="value">MCH-20260612-001</span></div>
+          </div>
+          <div class="detail-card">
+            <h4>Thông tin thanh toán</h4>
+            <div class="detail-row"><span class="label">Phương thức</span><span class="value">QR Code (VietQR)</span></div>
+            <div class="detail-row"><span class="label">Đối tác</span><span class="value">VNPay</span></div>
+            <div class="detail-row"><span class="label">Mã GD đối tác</span><span class="value" style="font-family:monospace">VNPAY-1234567890</span></div>
+            <div class="detail-row"><span class="label">Thời gian thanh toán</span><span class="value">12/06/2026 14:30:22</span></div>
+            <div class="detail-row"><span class="label">IP khách hàng</span><span class="value" style="font-family:monospace">192.168.1.100</span></div>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-card">
+            <h4>Thông tin khách hàng</h4>
+            <div class="detail-row"><span class="label">Tên</span><span class="value">Nguyễn Văn A</span></div>
+            <div class="detail-row"><span class="label">Email</span><span class="value">anguyen@example.com</span></div>
+            <div class="detail-row"><span class="label">SĐT</span><span class="value">090 123 4567</span></div>
+          </div>
+          <div class="detail-card">
+            <h4>Hoàn tiền</h4>
+            <div class="detail-row"><span class="label">Đã hoàn</span><span class="value" style="color:var(--error)">₫0</span></div>
+            <div class="detail-row"><span class="label">Có thể hoàn</span><span class="value">₫1,500,000</span></div>
+            <div class="detail-row"><span class="label">Số lần hoàn</span><span class="value">0</span></div>
+            <div style="margin-top:8px"><button class="btn btn-success btn-sm" onclick="switchPage('refund-form')">💰 Thực hiện hoàn tiền</button></div>
+          </div>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-header"><h3>Log giao dịch</h3></div>
+          <div class="card-body">
+            <div class="timeline">
+              <div class="timeline-item success">
+                <div class="time">14:30:22</div>
+                <div class="desc"><strong>Payment Success</strong> — VNPay xác nhận thanh toán thành công</div>
+              </div>
+              <div class="timeline-item info">
+                <div class="time">14:30:20</div>
+                <div class="desc"><strong>Redirect from VNPay</strong> — Khách hàng quay lại sau khi thanh toán</div>
+              </div>
+              <div class="timeline-item warning">
+                <div class="time">14:29:50</div>
+                <div class="desc"><strong>Customer redirected</strong> — Chuyển hướng khách hàng đến cổng VNPay</div>
+              </div>
+              <div class="timeline-item info">
+                <div class="time">14:29:48</div>
+                <div class="desc"><strong>QR Generated</strong> — Sinh VietQR Code thành công</div>
+              </div>
+              <div class="timeline-item info">
+                <div class="time">14:29:45</div>
+                <div class="desc"><strong>Transaction Created</strong> — Giao dịch được tạo với trạng thái Created</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Dữ liệu raw (Request/Response)</h3></div>
+          <div class="card-body">
+            <div style="margin-bottom:12px">
+              <div class="flex gap-2" style="margin-bottom:8px">
+                <button class="btn btn-primary btn-sm">Request to VNPay</button>
+                <button class="btn btn-outline btn-sm">Response from VNPay</button>
+                <button class="btn btn-outline btn-sm">Webhook to BizOne</button>
+              </div>
+              <div class="code-header"><span>POST /api/v1/transactions</span><button class="btn btn-ghost btn-xs">📋 Copy</button></div>
+              <div class="code-block">{
+  "merchant_txn_id": "ORDER-123",
+  "amount": 1500000,
+  "currency": "VND",
+  "description": "Thanh toán đơn hàng #123",
+  "payment_method": "qr",
+  "return_url": "https://bizone.app/payment/return",
+  "webhook_url": "https://bizone.app/webhook/payment",
+  "customer": {
+    "name": "Nguyễn Văn A",
+    "email": "anguyen@example.com",
+    "phone": "0901234567"
+  }
+}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== PARTNERS LIST ==================== -->
+      <div class="page" id="page-partners">
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option>Tất cả trạng thái</option><option>Hoạt động</option><option>Ngưng</option><option>Lỗi kết nối</option></select>
+            <select class="form-control"><option>Tất cả môi trường</option><option>Sandbox</option><option>Production</option></select>
+          </div>
+          <button class="btn btn-primary" onclick="switchPage('partner-config')">+ Thêm đối tác</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Tên đối tác</th><th>Connector</th><th>Môi trường</th><th>Trạng thái</th><th>Test kết nối</th><th>Ngày cập nhật</th><th style="text-align:center">Thao tác</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:600">VNPay - Production</td>
+                  <td><span class="badge badge-info">VNPay</span></td>
+                  <td><span class="badge badge-success">Production</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Hoạt động</span></td>
+                  <td><span style="font-size:12px;color:var(--gray-400)">12/06 14:00 — OK</span></td>
+                  <td>12/06/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('partner-config')">Sửa</button><button class="btn btn-ghost btn-xs">Vô hiệu</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">VNPay - Sandbox</td>
+                  <td><span class="badge badge-info">VNPay</span></td>
+                  <td><span class="badge badge-warning">Sandbox</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Hoạt động</span></td>
+                  <td><span style="font-size:12px;color:var(--gray-400)">12/06 13:30 — OK</span></td>
+                  <td>12/06/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('partner-config')">Sửa</button><button class="btn btn-ghost btn-xs">Vô hiệu</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">MoMo - Production</td>
+                  <td><span class="badge badge-info">MoMo</span></td>
+                  <td><span class="badge badge-success">Production</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Hoạt động</span></td>
+                  <td><span style="font-size:12px;color:var(--gray-400)">12/06 14:15 — OK</span></td>
+                  <td>12/06/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('partner-config')">Sửa</button><button class="btn btn-ghost btn-xs">Vô hiệu</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">ZaloPay - Production</td>
+                  <td><span class="badge badge-info">ZaloPay</span></td>
+                  <td><span class="badge badge-success">Production</span></td>
+                  <td><span class="badge badge-error"><span class="dot dot-error"></span> Lỗi kết nối</span></td>
+                  <td><span style="font-size:12px;color:var(--error)">12/06 10:00 — Timeout</span></td>
+                  <td>11/06/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('partner-config')">Sửa</button><button class="btn btn-ghost btn-xs">Test lại</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">VietQR - Production</td>
+                  <td><span class="badge badge-info">VietQR</span></td>
+                  <td><span class="badge badge-success">Production</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Hoạt động</span></td>
+                  <td><span style="font-size:12px;color:var(--gray-400)">12/06 12:00 — OK</span></td>
+                  <td>10/06/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('partner-config')">Sửa</button><button class="btn btn-ghost btn-xs">Vô hiệu</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== PARTNER CONFIG ==================== -->
+      <div class="page" id="page-partner-config">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('partners')">◀ Quay lại</button>
+            <h2 style="font-size:18px;font-weight:700">Cấu hình đối tác</h2>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline">Hủy</button>
+            <button class="btn btn-primary">💾 Lưu cấu hình</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin cơ bản</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Loại Connector</label>
+                <select class="form-control"><option>VNPay</option><option>MoMo</option><option>ZaloPay</option><option>VietQR</option><option>Custom</option></select>
+              </div>
+              <div class="form-group">
+                <label>Tên hiển thị</label>
+                <input class="form-control" value="VNPay - Production">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Merchant Code</label>
+                  <input class="form-control" value="BIZONE_VNPAY_01">
+                </div>
+                <div class="form-group">
+                  <label>Môi trường</label>
+                  <select class="form-control"><option>Sandbox</option><option selected>Production</option></select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>API Key</label>
+                <input class="form-control" value="vnpay_api_key_xxxxxxxxxxxxx" type="password">
+              </div>
+              <div class="form-group">
+                <label>Secret Key</label>
+                <input class="form-control" value="vnpay_secret_key_xxxxxxxxxx" type="password">
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Cấu hình kết nối</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Endpoint (Production)</label>
+                <input class="form-control" value="https://pay.vnpay.vn/api/v1">
+              </div>
+              <div class="form-group">
+                <label>Endpoint (Sandbox)</label>
+                <input class="form-control" value="https://sandbox.vnpay.vn/api/v1">
+              </div>
+              <div class="form-group">
+                <label>Callback URL</label>
+                <input class="form-control" value="https://paymenthub.bizone.vn/callback/vnpay">
+              </div>
+              <div class="form-group">
+                <label>Webhook URL (nhận IPN)</label>
+                <input class="form-control" value="https://paymenthub.bizone.vn/webhook/vnpay">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Timeout (ms)</label>
+                  <input class="form-control" value="30000" type="number">
+                </div>
+                <div class="form-group">
+                  <label>Retry tối đa</label>
+                  <input class="form-control" value="3" type="number">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-2">
+          <div class="card-body flex gap-3" style="align-items:center">
+            <button class="btn btn-outline" style="border-color:var(--warning);color:var(--warning)">🔌 Test kết nối</button>
+            <span style="font-size:12px;color:var(--gray-400)">Chưa test kết nối gần đây</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CONNECTORS LIST ==================== -->
+      <div class="page" id="page-connectors">
+        <div class="flex-between mb-2">
+          <span style="font-size:13px;color:var(--gray-500)">Quản lý các Connector plugin kết nối đối tác thanh toán</span>
+          <button class="btn btn-primary" onclick="switchPage('connector-config')">⬆️ Upload Connector</button>
+        </div>
+        <div class="grid-3">
+          <div class="card" style="cursor:pointer" onclick="switchPage('connector-config')">
+            <div class="card-body">
+              <div class="flex-between">
+                <div><span class="badge badge-success" style="font-size:11px;padding:2px 8px">● Đã cài</span></div>
+                <span style="font-size:20px">🏦</span>
+              </div>
+              <h3 style="margin:8px 0 4px;font-size:15px">VNPay Connector</h3>
+              <div style="font-size:12px;color:var(--gray-500)">v2.1.0 — Hỗ trợ tạo GD, IPN, Refund</div>
+              <div class="flex gap-2" style="margin-top:10px">
+                <span class="btn btn-sm btn-success">Kích hoạt</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="switchPage('connector-config')">
+            <div class="card-body">
+              <div class="flex-between">
+                <div><span class="badge badge-success" style="font-size:11px;padding:2px 8px">● Đã cài</span></div>
+                <span style="font-size:20px">💜</span>
+              </div>
+              <h3 style="margin:8px 0 4px;font-size:15px">MoMo Connector</h3>
+              <div style="font-size:12px;color:var(--gray-500)">v1.3.0 — Hỗ trợ tạo GD, Webhook, Refund</div>
+              <div class="flex gap-2" style="margin-top:10px">
+                <span class="btn btn-sm btn-success">Kích hoạt</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="switchPage('connector-config')">
+            <div class="card-body">
+              <div class="flex-between">
+                <div><span class="badge badge-success" style="font-size:11px;padding:2px 8px">● Đã cài</span></div>
+                <span style="font-size:20px">🟢</span>
+              </div>
+              <h3 style="margin:8px 0 4px;font-size:15px">ZaloPay Connector</h3>
+              <div style="font-size:12px;color:var(--gray-500)">v1.0.0 — Hỗ trợ tạo GD, Callback</div>
+              <div class="flex gap-2" style="margin-top:10px">
+                <span class="btn btn-sm btn-outline">Vô hiệu</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="switchPage('connector-config')">
+            <div class="card-body">
+              <div class="flex-between">
+                <div><span class="badge badge-success" style="font-size:11px;padding:2px 8px">● Đã cài</span></div>
+                <span style="font-size:20px">🏧</span>
+              </div>
+              <h3 style="margin:8px 0 4px;font-size:15px">VietQR Connector</h3>
+              <div style="font-size:12px;color:var(--gray-500)">v1.1.0 — Sinh VietQR theo chuẩn EMVCo</div>
+              <div class="flex gap-2" style="margin-top:10px">
+                <span class="btn btn-sm btn-success">Kích hoạt</span>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="border:2px dashed var(--gray-300);background:var(--gray-50);cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:140px" onclick="switchPage('connector-config')">
+            <div class="text-center">
+              <div style="font-size:28px;color:var(--gray-400)">+</div>
+              <div style="font-size:13px;color:var(--gray-500);margin-top:4px">Thêm Connector mới</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CONNECTOR CONFIG ==================== -->
+      <div class="page" id="page-connector-config">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('connectors')">◀ Quay lại</button>
+            <h2 style="font-size:18px;font-weight:700">Cấu hình Connector</h2>
+          </div>
+          <div class="flex gap-2">
+            <span class="badge badge-success" style="font-size:12px"><span class="dot dot-success"></span> Đã kích hoạt</span>
+            <button class="btn btn-primary">💾 Lưu</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin Connector</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Mã Connector</label>
+                <input class="form-control" value="vnpay_connector" disabled>
+              </div>
+              <div class="form-group">
+                <label>Tên hiển thị</label>
+                <input class="form-control" value="VNPay Connector">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Phiên bản</label>
+                  <input class="form-control" value="2.1.0" disabled>
+                </div>
+                <div class="form-group">
+                  <label>Trạng thái</label>
+                  <input class="form-control" value="Đã cài - Kích hoạt" disabled>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Mô tả</label>
+                <textarea class="form-control" rows="2">Connector tích hợp VNPay: tạo giao dịch, xử lý IPN, hoàn tiền</textarea>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Tham số cấu hình</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Base URL</label>
+                <input class="form-control" value="https://pay.vnpay.vn">
+              </div>
+              <div class="form-group">
+                <label>API Version</label>
+                <input class="form-control" value="v1">
+              </div>
+              <div class="form-group">
+                <label>Timeout (ms)</label>
+                <input class="form-control" value="30000" type="number">
+              </div>
+              <div class="form-group">
+                <label>Retry Policy (JSON)</label>
+                <textarea class="form-control" rows="3">{"maxRetries": 3, "backoffMs": 1000, "exponential": true}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== WEBHOOKS ==================== -->
+      <div class="page" id="page-webhooks">
+        <div class="subnav">
+          <span class="subnav-item active" onclick="switchPage('webhooks')">Danh sách Webhook</span>
+          <span class="subnav-item" onclick="switchPage('webhook-history')">Lịch sử gửi</span>
+        </div>
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option>Tất cả trạng thái</option><option>Hoạt động</option><option>Ngưng</option></select>
+          </div>
+          <button class="btn btn-primary" onclick="switchPage('webhook-detail')">+ Thêm endpoint</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>URL Endpoint</th><th>Sự kiện</th><th>Trạng thái</th><th>Số lần gửi</th><th>Thành công</th><th>Thất bại</th><th>Ngày tạo</th><th style="text-align:center">Thao tác</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/payment</td>
+                  <td><span class="badge badge-info">payment.success</span> <span class="badge badge-info">payment.failed</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Active</span></td>
+                  <td>12,458</td><td>12,102</td><td style="color:var(--error)">356</td>
+                  <td>01/01/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('webhook-detail')">Sửa</button><button class="btn btn-ghost btn-xs">Xóa</button></td>
+                </tr>
+                <tr>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/refund</td>
+                  <td><span class="badge badge-info">refund.completed</span></td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Active</span></td>
+                  <td>234</td><td>228</td><td style="color:var(--error)">6</td>
+                  <td>15/03/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('webhook-detail')">Sửa</button><button class="btn btn-ghost btn-xs">Xóa</button></td>
+                </tr>
+                <tr>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/alert</td>
+                  <td><span class="badge badge-info">payment.expired</span></td>
+                  <td><span class="badge badge-gray"><span class="dot dot-gray"></span> Inactive</span></td>
+                  <td>0</td><td>0</td><td>0</td>
+                  <td>20/05/2026</td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs" onclick="switchPage('webhook-detail')">Sửa</button><button class="btn btn-ghost btn-xs">Xóa</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== WEBHOOK DETAIL ==================== -->
+      <div class="page" id="page-webhook-detail">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('webhooks')">◀ Quay lại</button>
+            <h2 style="font-size:18px;font-weight:700">Cấu hình Webhook</h2>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline" onclick="switchPage('webhook-history')">📋 Lịch sử gửi</button>
+            <button class="btn btn-primary">💾 Lưu</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin Endpoint</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>URL Endpoint</label>
+                <input class="form-control" value="https://bizone.app/webhook/payment">
+              </div>
+              <div class="form-group">
+                <label>Secret Key</label>
+                <input class="form-control" value="whsec_xxxxxxxxxxxxxxxxxxxxx" type="password">
+              </div>
+              <div class="form-group">
+                <label>Trạng thái</label>
+                <select class="form-control"><option selected>Active</option><option>Inactive</option></select>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Sự kiện</h3></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" checked><span style="font-size:13px">payment.success — Thanh toán thành công</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" checked><span style="font-size:13px">payment.failed — Thanh toán thất bại</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox"><span style="font-size:13px">payment.expired — Giao dịch hết hạn</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" checked><span style="font-size:13px">refund.completed — Hoàn tiền hoàn tất</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-2">
+          <div class="card-header"><h3>Cấu hình Retry & Timeout</h3></div>
+          <div class="card-body">
+            <div class="form-row-3">
+              <div class="form-group">
+                <label>Số lần retry tối đa</label>
+                <input class="form-control" value="5" type="number">
+              </div>
+              <div class="form-group">
+                <label>Timeout (ms)</label>
+                <input class="form-control" value="30000" type="number">
+              </div>
+              <div class="form-group">
+                <label>Exponential Backoff</label>
+                <select class="form-control"><option selected>Bật</option><option>Tắt</option></select>
+              </div>
+            </div>
+            <div style="font-size:12px;color:var(--gray-500);margin-top:4px">Khoảng cách retry: 1ph → 5ph → 15ph → 1h → 6h</div>
+          </div>
+        </div>
+        <div class="card mt-2">
+          <div class="card-header"><h3>Test kết nối</h3></div>
+          <div class="card-body flex gap-3" style="align-items:center">
+            <button class="btn btn-outline" style="border-color:var(--info);color:var(--info)">📡 Gửi Ping Test</button>
+            <span style="font-size:12px;color:var(--gray-400)">Gửi webhook test để kiểm tra kết nối đến BizOne</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== WEBHOOK HISTORY ==================== -->
+      <div class="page" id="page-webhook-history">
+        <div class="flex-between mb-2">
+          <div><button class="btn btn-ghost" onclick="switchPage('webhooks')">◀ Quay lại Webhooks</button></div>
+          <div class="filter-bar">
+            <select class="form-control"><option>Tất cả trạng thái</option><option selected>Thành công</option><option>Thất bại</option></select>
+            <select class="form-control"><option>Tất cả sự kiện</option><option>payment.success</option><option>payment.failed</option><option>refund.completed</option></select>
+            <input class="form-control" placeholder="Endpoint URL" style="min-width:200px">
+            <button class="btn btn-primary">🔍 Lọc</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Thời gian</th><th>Endpoint</th><th>Sự kiện</th><th>HTTP Status</th><th>Duration</th><th>Attempt</th><th>Trạng thái</th><th style="text-align:center">Thao tác</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>12/06 14:30:22</td>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/payment</td>
+                  <td><span class="badge badge-info">payment.success</span></td>
+                  <td>200</td>
+                  <td>320ms</td>
+                  <td>1/5</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">📋 Raw</button><button class="btn btn-ghost btn-xs">🔄 Replay</button></td>
+                </tr>
+                <tr>
+                  <td>12/06 14:25:10</td>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/payment</td>
+                  <td><span class="badge badge-error">payment.failed</span></td>
+                  <td>200</td>
+                  <td>280ms</td>
+                  <td>1/5</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">📋 Raw</button><button class="btn btn-ghost btn-xs">🔄 Replay</button></td>
+                </tr>
+                <tr>
+                  <td>12/06 14:20:00</td>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/payment</td>
+                  <td><span class="badge badge-info">payment.success</span></td>
+                  <td>500</td>
+                  <td>5,100ms</td>
+                  <td>5/5</td>
+                  <td><span class="badge badge-error"><span class="dot dot-error"></span> Failed</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">📋 Raw</button><button class="btn btn-ghost btn-xs" style="color:var(--warning)">🔄 Replay</button></td>
+                </tr>
+                <tr>
+                  <td>12/06 14:15:05</td>
+                  <td style="font-family:monospace;font-size:12px">https://bizone.app/webhook/payment</td>
+                  <td><span class="badge badge-info">payment.success</span></td>
+                  <td>200</td>
+                  <td>150ms</td>
+                  <td>1/5</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Success</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">📋 Raw</button><button class="btn btn-ghost btn-xs">🔄 Replay</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pagination"><span>Hiển thị 1-4 / 12,692 bản ghi</span><div class="pages"><span>‹</span><span class="active">1</span><span>2</span><span>3</span><span>...</span><span>3173</span><span>›</span></div></div>
+      </div>
+
+      <!-- ==================== RECONCILIATION ==================== -->
+      <div class="page" id="page-reconciliation">
+        <div class="subnav">
+          <span class="subnav-item active">Đối soát tự động</span>
+          <span class="subnav-item" onclick="switchPage('reports')">Báo cáo đối soát</span>
+        </div>
+        <div class="stats-row mb-2" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card"><div class="label">Tổng GD khớp</div><div class="value" style="color:var(--success)">9,842</div><div class="sub up">Hôm qua: 12/06</div></div>
+          <div class="stat-card"><div class="label">GD lệch (PH thiếu)</div><div class="value" style="color:var(--warning)">23</div><div class="sub down">Cần xử lý</div></div>
+          <div class="stat-card"><div class="label">GD lệch (Đối tác thiếu)</div><div class="value" style="color:var(--warning)">15</div><div class="sub down">Cần xử lý</div></div>
+          <div class="stat-card"><div class="label">Tổng chênh lệch</div><div class="value" style="color:var(--error)">₫1,200,000</div><div class="sub down">Cần tra soát</div></div>
+        </div>
+
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <input class="form-control" value="12/06/2026" style="min-width:120px">
+            <select class="form-control"><option>VNPay</option><option>MoMo</option><option>ZaloPay</option></select>
+            <button class="btn btn-primary">🔍 Xem</button>
+          </div>
+          <button class="btn btn-outline btn-sm">📥 Xuất báo cáo</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Chi tiết giao dịch lệch — VNPay — 12/06/2026</h3></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Mã GD Payment Hub</th><th>Mã GD Đối tác</th><th>Kiểu lệch</th><th>Số tiền (PH)</th><th>Số tiền (ĐT)</th><th>Chênh lệch</th><th>Trạng thái</th><th style="text-align:center">Thao tác</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-003</td>
+                  <td style="font-family:monospace">—</td>
+                  <td><span class="badge badge-warning">Unmatched PH</span></td>
+                  <td class="amount">₫2,100,000</td>
+                  <td>—</td>
+                  <td class="amount" style="color:var(--error)">₫2,100,000</td>
+                  <td><span class="badge badge-warning"><span class="dot dot-warning"></span> Open</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" onclick="switchPage('dispute-form')">Tra soát</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-007</td>
+                  <td style="font-family:monospace">—</td>
+                  <td><span class="badge badge-warning">Unmatched PH</span></td>
+                  <td class="amount">₫750,000</td>
+                  <td>—</td>
+                  <td class="amount" style="color:var(--error)">₫750,000</td>
+                  <td><span class="badge badge-success"><span class="dot dot-success"></span> Resolved</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button></td>
+                </tr>
+                <tr>
+                  <td>—</td>
+                  <td style="font-family:monospace">VNPAY-9876543210</td>
+                  <td><span class="badge badge-error">Unmatched Partner</span></td>
+                  <td>—</td>
+                  <td class="amount">₫500,000</td>
+                  <td class="amount" style="color:var(--error)">₫500,000</td>
+                  <td><span class="badge badge-warning"><span class="dot dot-warning"></span> Open</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" onclick="switchPage('dispute-form')">Tra soát</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600;color:var(--primary)">TXN-20260612-015</td>
+                  <td style="font-family:monospace">VNPAY-1234567890</td>
+                  <td><span class="badge badge-error">Amount Mismatch</span></td>
+                  <td class="amount">₫1,200,000</td>
+                  <td class="amount">₫1,150,000</td>
+                  <td class="amount" style="color:var(--error)">₫50,000</td>
+                  <td><span class="badge badge-warning"><span class="dot dot-warning"></span> Open</span></td>
+                  <td class="text-center"><button class="btn btn-ghost btn-xs">Chi tiết</button><button class="btn btn-ghost btn-xs" onclick="switchPage('dispute-form')">Tra soát</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== REPORTS ==================== -->
+      <div class="page" id="page-reports">
+        <div class="subnav">
+          <span class="subnav-item active" onclick="switchPage('reports')">Báo cáo giao dịch</span>
+          <span class="subnav-item" onclick="switchPage('report-revenue')">Báo cáo doanh thu</span>
+          <span class="subnav-item" onclick="switchPage('report-recon')">Báo cáo đối soát</span>
+        </div>
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option selected>7 ngày qua</option><option>Tháng này</option><option>Tháng trước</option><option>Tùy chọn</option></select>
+            <select class="form-control"><option>Tất cả trạng thái</option><option>Success</option><option>Failed</option></select>
+            <select class="form-control"><option>Tất cả đối tác</option><option>VNPay</option><option>MoMo</option></select>
+            <select class="form-control"><option>Tất cả Merchant</option><option>BizOne POS</option></select>
+            <button class="btn btn-primary">🔍 Xem báo cáo</button>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm">📥 Excel</button>
+            <button class="btn btn-outline btn-sm">📄 PDF</button>
+          </div>
+        </div>
+
+        <div class="stats-row mb-2" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-card"><div class="label">Tổng GD</div><div class="value" style="font-size:22px">1,284</div></div>
+          <div class="stat-card"><div class="label">Thành công</div><div class="value" style="font-size:22px;color:var(--success)">1,198</div></div>
+          <div class="stat-card"><div class="label">Thất bại</div><div class="value" style="font-size:22px;color:var(--error)">86</div></div>
+          <div class="stat-card"><div class="label">Tổng tiền</div><div class="value" style="font-size:22px">₫186.5M</div></div>
+          <div class="stat-card"><div class="label">Phí GD</div><div class="value" style="font-size:22px">₫2.8M</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Biểu đồ giao dịch theo ngày</h3></div>
+          <div class="card-body">
+            <div class="chart-bar-group" style="height:200px">
+              <div class="chart-bar-item"><div class="chart-bar" style="height:70%;background:var(--success)"></div><div class="chart-bar-label">T2</div><div class="chart-bar-value">1,120</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:55%;background:var(--success)"></div><div class="chart-bar-label">T3</div><div class="chart-bar-value">890</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:80%;background:var(--success)"></div><div class="chart-bar-label">T4</div><div class="chart-bar-value">1,340</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:65%;background:var(--success)"></div><div class="chart-bar-label">T5</div><div class="chart-bar-value">1,050</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:90%;background:var(--success)"></div><div class="chart-bar-label">T6</div><div class="chart-bar-value">1,560</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:75%;background:var(--success)"></div><div class="chart-bar-label">T7</div><div class="chart-bar-value">1,200</div></div>
+              <div class="chart-bar-item"><div class="chart-bar" style="height:85%;background:var(--success)"></div><div class="chart-bar-label">CN</div><div class="chart-bar-value">1,284</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-2">
+          <div class="card-header"><h3>Chi tiết giao dịch</h3></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Ngày</th><th>Số GD</th><th>Thành công</th><th>Thất bại</th><th>Tổng tiền</th><th>Phí</th><th>Tỷ lệ</th></tr></thead>
+              <tbody>
+                <tr><td>12/06/2026</td><td>1,284</td><td style="color:var(--success);font-weight:600">1,198</td><td style="color:var(--error)">86</td><td class="amount">₫186,500,000</td><td>₫2,797,500</td><td><span class="badge badge-success">93.3%</span></td></tr>
+                <tr><td>11/06/2026</td><td>1,156</td><td style="color:var(--success);font-weight:600">1,089</td><td style="color:var(--error)">67</td><td class="amount">₫165,200,000</td><td>₫2,478,000</td><td><span class="badge badge-success">94.2%</span></td></tr>
+                <tr><td>10/06/2026</td><td>1,342</td><td style="color:var(--success);font-weight:600">1,267</td><td style="color:var(--error)">75</td><td class="amount">₫198,000,000</td><td>₫2,970,000</td><td><span class="badge badge-success">94.4%</span></td></tr>
+                <tr><td>09/06/2026</td><td>987</td><td style="color:var(--success);font-weight:600">912</td><td style="color:var(--error)">75</td><td class="amount">₫145,800,000</td><td>₫2,187,000</td><td><span class="badge badge-success">92.4%</span></td></tr>
+                <tr><td>08/06/2026</td><td>1,098</td><td style="color:var(--success);font-weight:600">1,034</td><td style="color:var(--error)">64</td><td class="amount">₫158,600,000</td><td>₫2,379,000</td><td><span class="badge badge-success">94.2%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== REPORT REVENUE ==================== -->
+      <div class="page" id="page-report-revenue">
+        <div class="subnav">
+          <span class="subnav-item" onclick="switchPage('reports')">Báo cáo giao dịch</span>
+          <span class="subnav-item active">Báo cáo doanh thu</span>
+          <span class="subnav-item" onclick="switchPage('report-recon')">Báo cáo đối soát</span>
+        </div>
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option selected>Tháng 06/2026</option><option>Tháng 05/2026</option><option>Tháng 04/2026</option></select>
+            <select class="form-control"><option>Tất cả đối tác</option><option>VNPay</option><option>MoMo</option></select>
+            <button class="btn btn-primary">🔍 Xem</button>
+          </div>
+          <div class="flex gap-2"><button class="btn btn-outline btn-sm">📥 Excel</button><button class="btn btn-outline btn-sm">📄 PDF</button></div>
+        </div>
+
+        <div class="grid-2 mb-3">
+          <div class="card">
+            <div class="card-header"><h3>Doanh thu theo đối tác</h3></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div><div class="flex-between"><span style="font-weight:600">VNPay</span><span class="amount" style="font-size:16px">₫2,850,000,000</span></div><div style="background:var(--gray-200);border-radius:4px;height:8px;margin-top:4px"><div style="width:48%;height:100%;background:var(--primary);border-radius:4px"></div></div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">48%</div></div>
+                <div><div class="flex-between"><span style="font-weight:600">MoMo</span><span class="amount" style="font-size:16px">₫1,520,000,000</span></div><div style="background:var(--gray-200);border-radius:4px;height:8px;margin-top:4px"><div style="width:26%;height:100%;background:var(--success);border-radius:4px"></div></div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">26%</div></div>
+                <div><div class="flex-between"><span style="font-weight:600">VietQR</span><span class="amount" style="font-size:16px">₫890,000,000</span></div><div style="background:var(--gray-200);border-radius:4px;height:8px;margin-top:4px"><div style="width:15%;height:100%;background:#8B5CF6;border-radius:4px"></div></div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">15%</div></div>
+                <div><div class="flex-between"><span style="font-weight:600">ZaloPay</span><span class="amount" style="font-size:16px">₫650,000,000</span></div><div style="background:var(--gray-200);border-radius:4px;height:8px;margin-top:4px"><div style="width:11%;height:100%;background:var(--warning);border-radius:4px"></div></div><div style="font-size:12px;color:var(--gray-500);margin-top:2px">11%</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Tăng trưởng theo tháng</h3></div>
+            <div class="card-body">
+              <div class="chart-bar-group" style="height:180px">
+                <div class="chart-bar-item"><div class="chart-bar" style="height:45%;background:var(--primary)"></div><div class="chart-bar-label">T1</div><div class="chart-bar-value">₫2.1B</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:52%;background:var(--primary)"></div><div class="chart-bar-label">T2</div><div class="chart-bar-value">₫2.5B</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:48%;background:var(--primary)"></div><div class="chart-bar-label">T3</div><div class="chart-bar-value">₫2.3B</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:62%;background:var(--primary)"></div><div class="chart-bar-label">T4</div><div class="chart-bar-value">₫3.0B</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:70%;background:var(--primary)"></div><div class="chart-bar-label">T5</div><div class="chart-bar-value">₫3.4B</div></div>
+                <div class="chart-bar-item"><div class="chart-bar" style="height:80%;background:var(--primary)"></div><div class="chart-bar-label">T6</div><div class="chart-bar-value">₫3.9B</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Doanh thu chi tiết</h3></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Đối tác</th><th>Số GD</th><th>Doanh thu</th><th>Phí giao dịch</th><th>Doanh thu thuần</th><th>Tỷ trọng</th><th>Tăng trưởng</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:600">VNPay</td><td>48,520</td><td class="amount">₫2,850,000,000</td><td>₫42,750,000</td><td class="amount">₫2,807,250,000</td><td>48%</td><td style="color:var(--success)">↑ 12.5%</td></tr>
+                <tr><td style="font-weight:600">MoMo</td><td>25,380</td><td class="amount">₫1,520,000,000</td><td>₫22,800,000</td><td class="amount">₫1,497,200,000</td><td>26%</td><td style="color:var(--success)">↑ 8.3%</td></tr>
+                <tr><td style="font-weight:600">VietQR</td><td>18,950</td><td class="amount">₫890,000,000</td><td>₫8,900,000</td><td class="amount">₫881,100,000</td><td>15%</td><td style="color:var(--success)">↑ 15.2%</td></tr>
+                <tr><td style="font-weight:600">ZaloPay</td><td>12,150</td><td class="amount">₫650,000,000</td><td>₫9,750,000</td><td class="amount">₫640,250,000</td><td>11%</td><td style="color:var(--error)">↓ 2.1%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== REPORT RECONCILIATION ==================== -->
+      <div class="page" id="page-report-recon">
+        <div class="subnav">
+          <span class="subnav-item" onclick="switchPage('reports')">Báo cáo giao dịch</span>
+          <span class="subnav-item" onclick="switchPage('report-revenue')">Báo cáo doanh thu</span>
+          <span class="subnav-item active">Báo cáo đối soát</span>
+        </div>
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <input class="form-control" value="12/06/2026" style="min-width:120px">
+            <select class="form-control"><option>Tất cả đối tác</option><option>VNPay</option><option>MoMo</option></select>
+            <button class="btn btn-primary">🔍 Xem</button>
+          </div>
+          <button class="btn btn-outline btn-sm">📥 Xuất Excel</button>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Ngày</th><th>Đối tác</th><th>GD Payment Hub</th><th>GD Đối tác</th><th>Khớp</th><th>Lệch PH</th><th>Lệch ĐT</th><th>Sai tiền</th><th>Chênh lệch</th><th>Trạng thái</th></tr></thead>
+              <tbody>
+                <tr><td>12/06</td><td>VNPay</td><td>2,456</td><td>2,448</td><td style="color:var(--success);font-weight:600">2,418</td><td>23</td><td>15</td><td>8</td><td class="amount" style="color:var(--error)">₫1,200,000</td><td><span class="badge badge-warning">Cần xử lý</span></td></tr>
+                <tr><td>12/06</td><td>MoMo</td><td>1,234</td><td>1,234</td><td style="color:var(--success);font-weight:600">1,232</td><td>2</td><td>2</td><td>0</td><td class="amount" style="color:var(--success)">₫0</td><td><span class="badge badge-success"><span class="dot dot-success"></span> Khớp</span></td></tr>
+                <tr><td>11/06</td><td>VNPay</td><td>2,389</td><td>2,385</td><td style="color:var(--success);font-weight:600">2,370</td><td>12</td><td>8</td><td>3</td><td class="amount" style="color:var(--error)">₫450,000</td><td><span class="badge badge-warning">Cần xử lý</span></td></tr>
+                <tr><td>11/06</td><td>MoMo</td><td>1,198</td><td>1,198</td><td style="color:var(--success);font-weight:600">1,198</td><td>0</td><td>0</td><td>0</td><td class="amount" style="color:var(--success)">₫0</td><td><span class="badge badge-success"><span class="dot dot-success"></span> Khớp</span></td></tr>
+                <tr><td>10/06</td><td>VNPay</td><td>2,567</td><td>2,567</td><td style="color:var(--success);font-weight:600">2,567</td><td>0</td><td>0</td><td>0</td><td class="amount" style="color:var(--success)">₫0</td><td><span class="badge badge-success"><span class="dot dot-success"></span> Khớp</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== AUDIT LOG ==================== -->
+      <div class="page" id="page-audit">
+        <div class="flex-between mb-2">
+          <div class="filter-bar">
+            <select class="form-control"><option selected>7 ngày qua</option><option>30 ngày</option><option>Tùy chọn</option></select>
+            <select class="form-control"><option>Tất cả hành động</option><option>Thay đổi cấu hình</option><option>Đăng nhập</option><option>Hoàn tiền</option><option>Tra soát</option></select>
+            <select class="form-control"><option>Tất cả người dùng</option><option>admin</option><option>operation</option></select>
+            <input class="form-control" placeholder="Từ khóa..." style="min-width:160px">
+            <button class="btn btn-primary">🔍 Lọc</button>
+          </div>
+          <button class="btn btn-outline btn-sm">📥 Export</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Thời gian</th><th>Người dùng</th><th>IP</th><th>Hành động</th><th>Entity</th><th>Mô tả</th><th>Dữ liệu cũ → Mới</th></tr></thead>
+              <tbody>
+                <tr><td style="white-space:nowrap">12/06 14:30:22</td><td>admin</td><td style="font-family:monospace;font-size:12px">192.168.1.1</td><td><span class="badge badge-info">UPDATE</span></td><td>PartnerConfig</td><td>Cập nhật cấu hình VNPay</td><td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--error)">timeout: 60000</span> → <span style="color:var(--success)">timeout: 30000</span></td></tr>
+                <tr><td style="white-space:nowrap">12/06 14:25:10</td><td>operation</td><td style="font-family:monospace;font-size:12px">10.0.0.25</td><td><span class="badge badge-error">REFUND</span></td><td>Transaction</td><td>Hoàn tiền TXN-20260612-003</td><td style="font-size:12px">Hoàn ₫500,000</td></tr>
+                <tr><td style="white-space:nowrap">12/06 14:20:00</td><td>system</td><td style="font-family:monospace;font-size:12px">—</td><td><span class="badge badge-success">LOGIN</span></td><td>User</td><td>Đăng nhập thành công</td><td style="font-size:12px">admin</td></tr>
+                <tr><td style="white-space:nowrap">12/06 14:15:05</td><td>admin</td><td style="font-family:monospace;font-size:12px">192.168.1.1</td><td><span class="badge badge-info">CREATE</span></td><td>WebhookConfig</td><td>Thêm webhook endpoint mới</td><td style="font-size:12px">URL: https://bizone.app/webhook/refund</td></tr>
+                <tr><td style="white-space:nowrap">12/06 14:10:30</td><td>system</td><td style="font-family:monospace;font-size:12px">—</td><td><span class="badge badge-success">SYNC</span></td><td>Reconciliation</td><td>Đối soát tự động hoàn tất</td><td style="font-size:12px">Khớp: 2,418, Lệch: 38</td></tr>
+                <tr><td style="white-space:nowrap">12/06 13:55:00</td><td>operation</td><td style="font-family:monospace;font-size:12px">10.0.0.25</td><td><span class="badge badge-warning">DISPUTE</span></td><td>Dispute</td><td>Tra soát giao dịch TXN-20260612-007</td><td style="font-size:12px">Lý do: GD lệch đối soát</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pagination"><span>Hiển thị 1-6 / 24,580 bản ghi</span><div class="pages"><span>‹</span><span class="active">1</span><span>2</span><span>3</span><span>...</span><span>4097</span><span>›</span></div></div>
+      </div>
+
+      <!-- ==================== REFUND FORM ==================== -->
+      <div class="page" id="page-refund-form">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('txn-detail')">◀ Quay lại</button>
+            <h2 style="font-size:18px;font-weight:700">Hoàn tiền</h2>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin giao dịch gốc</h3></div>
+            <div class="card-body">
+              <div class="detail-row"><span class="label">Mã GD</span><span class="value" style="color:var(--primary);font-weight:600">TXN-20260612-001</span></div>
+              <div class="detail-row"><span class="label">Số tiền gốc</span><span class="value" style="font-size:18px;font-weight:700">₫1,500,000</span></div>
+              <div class="detail-row"><span class="label">Đã hoàn</span><span class="value" style="color:var(--success)">₫0</span></div>
+              <div class="detail-row"><span class="label">Còn lại</span><span class="value" style="font-weight:600">₫1,500,000</span></div>
+              <div class="detail-row"><span class="label">Đối tác</span><span class="value">VNPay</span></div>
+              <div class="detail-row"><span class="label">Thời gian GD</span><span class="value">12/06/2026 14:30:22</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Thông tin hoàn tiền</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Loại hoàn tiền</label>
+                <select class="form-control" onchange="toggleRefundAmount(this.value)">
+                  <option value="full">Hoàn tiền toàn phần</option>
+                  <option value="partial">Hoàn tiền một phần</option>
+                </select>
+              </div>
+              <div class="form-group" id="refund-amount-group" style="display:none">
+                <label>Số tiền hoàn (tối đa ₫1,500,000)</label>
+                <input class="form-control" value="500,000" type="text" placeholder="Nhập số tiền cần hoàn">
+                <div style="font-size:12px;color:var(--gray-500);margin-top:4px">Tối đa ₫1,500,000 — Đối tác hỗ trợ hoàn tiền một phần: <span class="badge badge-success">Có</span></div>
+              </div>
+              <div class="form-group">
+                <label>Lý do hoàn tiền <span style="color:var(--error)">*</span></label>
+                <textarea class="form-control" rows="3" placeholder="Nhập lý do hoàn tiền (bắt buộc)"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Ghi chú nội bộ</label>
+                <textarea class="form-control" rows="2" placeholder="Ghi chú cho nhân viên vận hành"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-2" style="background:#FEF2F2;border-color:#FECACA">
+          <div class="card-body flex gap-3" style="align-items:center">
+            <span style="font-size:20px">⚠️</span>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:13px">Xác nhận hoàn tiền</div>
+              <div style="font-size:12px;color:var(--gray-600)">Hoàn tiền sẽ gửi request đến VNPay và không thể hoàn tác. Sau khi đối tác xác nhận, trạng thái giao dịch sẽ được cập nhật.</div>
+            </div>
+            <button class="btn btn-success">💰 Xác nhận hoàn tiền</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== DISPUTE FORM ==================== -->
+      <div class="page" id="page-dispute-form">
+        <div class="flex-between mb-2">
+          <div class="flex gap-2">
+            <button class="btn btn-ghost" onclick="switchPage('txn-detail')">◀ Quay lại</button>
+            <h2 style="font-size:18px;font-weight:700">Tra soát giao dịch</h2>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin giao dịch</h3></div>
+            <div class="card-body">
+              <div class="detail-row"><span class="label">Mã GD</span><span class="value" style="color:var(--primary);font-weight:600">TXN-20260612-003</span></div>
+              <div class="detail-row"><span class="label">Số tiền</span><span class="value" style="font-weight:600">₫2,100,000</span></div>
+              <div class="detail-row"><span class="label">Trạng thái</span><span class="badge badge-error">Failed</span></div>
+              <div class="detail-row"><span class="label">Đối tác</span><span class="value">VNPay</span></div>
+              <div class="detail-row"><span class="label">Mã GD đối tác</span><span class="value" style="font-family:monospace">—</span></div>
+              <div class="detail-row"><span class="label">Thời gian</span><span class="value">12/06/2026 14:25:44</span></div>
+              <div class="detail-row"><span class="label">Lỗi từ đối tác</span><span class="value" style="color:var(--error)">Số dư không đủ — "Insufficient balance"</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Yêu cầu tra soát</h3></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>Lý do tra soát <span style="color:var(--error)">*</span></label>
+                <select class="form-control">
+                  <option>Chọn lý do</option>
+                  <option>Giao dịch lỗi nhưng khách hàng đã bị trừ tiền</option>
+                  <option>Đối soát phát hiện giao dịch lệch</option>
+                  <option>Khách hàng khiếu nại giao dịch</option>
+                  <option>Nghi ngờ sai sót số tiền</option>
+                  <option>Khác</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Mô tả chi tiết <span style="color:var(--error)">*</span></label>
+                <textarea class="form-control" rows="4" placeholder="Mô tả chi tiết vấn đề cần tra soát..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Đính kèm file</label>
+                <div style="border:2px dashed var(--gray-300);border-radius:8px;padding:20px;text-align:center;cursor:pointer;background:var(--gray-50)">
+                  <div style="font-size:24px;color:var(--gray-400)">📎</div>
+                  <div style="font-size:13px;color:var(--gray-500);margin-top:4px">Kéo thả file vào đây hoặc <span style="color:var(--primary);cursor:pointer">Chọn file</span></div>
+                  <div style="font-size:11px;color:var(--gray-400);margin-top:2px">Chứng từ, hình ảnh (PNG, JPG, PDF) — tối đa 10MB</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-2">
+          <div class="card-body">
+            <div class="flex gap-3" style="align-items:center;justify-content:flex-end">
+              <button class="btn btn-outline" onclick="switchPage('txn-detail')">Hủy</button>
+              <button class="btn btn-primary">📨 Gửi yêu cầu tra soát</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== SETTINGS ==================== -->
+      <div class="page" id="page-settings">
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">Cài đặt hệ thống</h2>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><h3>Thông tin chung</h3></div>
+            <div class="card-body">
+              <div class="form-group"><label>Tên hệ thống</label><input class="form-control" value="BizOne Payment Hub"></div>
+              <div class="form-group"><label>Timezone</label><select class="form-control"><option>Asia/Ho_Chi_Minh (UTC+7)</option></select></div>
+              <div class="form-group"><label>Ngôn ngữ</label><select class="form-control"><option>Tiếng Việt</option><option>English</option></select></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Cảnh báo & Thông báo</h3></div>
+            <div class="card-body">
+              <div class="form-group"><label>Email nhận thông báo</label><input class="form-control" value="admin@bizone.vn" type="email"></div>
+              <div class="form-group"><label>Ngưỡng cảnh báo webhook</label><input class="form-control" value="3" type="number"><div style="font-size:12px;color:var(--gray-500);margin-top:4px">Gửi email khi webhook thất bại > N lần</div></div>
+              <div class="form-group"><label>Ngưỡng GD thất bại liên tiếp</label><input class="form-control" value="10" type="number"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-2">
+          <div class="card-header"><h3>Bảo mật</h3></div>
+          <div class="card-body">
+            <div class="form-row-3">
+              <div class="form-group"><label>Session timeout (phút)</label><input class="form-control" value="60" type="number"></div>
+              <div class="form-group"><label>Số lần đăng nhập sai tối đa</label><input class="form-control" value="5" type="number"></div>
+              <div class="form-group"><label>Yêu cầu IP whitelist</label><select class="form-control"><option>Có</option><option selected>Không</option></select></div>
+            </div>
+          </div>
+        </div>
+        <div class="text-right mt-2"><button class="btn btn-primary">💾 Lưu cài đặt</button></div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const pageTitles = {
+  'dashboard': 'Dashboard',
+  'transactions': 'Danh sách giao dịch',
+  'txn-detail': 'Chi tiết giao dịch',
+  'partners': 'Quản lý đối tác',
+  'partner-config': 'Cấu hình đối tác',
+  'connectors': 'Quản lý Connector',
+  'connector-config': 'Cấu hình Connector',
+  'webhooks': 'Quản lý Webhook',
+  'webhook-detail': 'Cấu hình Webhook',
+  'webhook-history': 'Lịch sử Webhook',
+  'reconciliation': 'Đối soát giao dịch',
+  'reports': 'Báo cáo giao dịch',
+  'report-revenue': 'Báo cáo doanh thu',
+  'report-recon': 'Báo cáo đối soát',
+  'audit': 'Audit Log',
+  'refund-form': 'Hoàn tiền',
+  'dispute-form': 'Tra soát giao dịch',
+  'settings': 'Cài đặt hệ thống'
+};
+
+function switchPage(pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-' + pageId);
+  if (page) page.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+  if (navItem) navItem.classList.add('active');
+  const title = pageTitles[pageId] || 'Dashboard';
+  document.getElementById('pageTitle').textContent = title;
+  document.getElementById('breadcrumb').textContent = title;
+  window.scrollTo(0,0);
+}
+
+function toggleRefundAmount(val) {
+  const grp = document.getElementById('refund-amount-group');
+  grp.style.display = val === 'partial' ? 'block' : 'none';
+}
+
+// Click handlers for nav items
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', function(e) {
+    e.preventDefault();
+    const page = this.dataset.page;
+    if (page) switchPage(page);
+  });
+});
+</script>
+
+</body>
+</html>

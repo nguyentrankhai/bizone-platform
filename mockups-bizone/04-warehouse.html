@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BizOne - Quản lý Kho</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;}
+.mockup-page{max-width:1400px;margin:0 auto;padding:40px 24px;}
+.section-title{font-size:28px;font-weight:700;margin-bottom:8px;color:#0f172a;}
+.section-sub{color:#64748b;font-size:15px;margin-bottom:32px;}
+.page-card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 24px rgba(0,0,0,.04);overflow:hidden;margin-bottom:48px;}
+.page-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid #e2e8f0;}
+.page-header h2{font-size:16px;font-weight:600;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;border:none;transition:.15s;}
+.btn-primary{background:#2563eb;color:#fff;}
+.btn-primary:hover{background:#1d4ed8;}
+.btn-outline{background:#fff;color:#475569;border:1px solid #e2e8f0;}
+.btn-outline:hover{background:#f8fafc;}
+.btn-success{background:#10b981;color:#fff;}
+.btn-danger{background:#ef4444;color:#fff;}
+.btn-warning{background:#f59e0b;color:#fff;}
+.btn-sm{padding:4px 10px;font-size:12px;}
+
+/* ========== INBOUND ========== */
+.inbound-body{padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.inbound-body .full{grid-column:1/-1;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:13px;font-weight:500;color:#475569;margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;transition:.15s;}
+.field input:focus,.field select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.field .hint{font-size:11px;color:#94a3b8;margin-top:4px;}
+
+.inbound-table{width:100%;border-collapse:collapse;}
+.inbound-table th{padding:10px 12px;font-size:12px;font-weight:600;color:#64748b;background:#f8fafc;border-bottom:1px solid #e2e8f0;text-align:left;}
+.inbound-table td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.inbound-table input[type=text],.inbound-table input[type=number]{width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:inherit;}
+.inbound-table input:focus{outline:none;border-color:#2563eb;}
+
+.summary-box{padding:16px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;}
+.summary-box .row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;}
+.summary-box .row.total{font-size:20px;font-weight:700;border-top:2px solid #e2e8f0;padding-top:10px;margin-top:6px;}
+
+/* ========== INVENTORY CHECK ========== */
+.check-body{padding:24px;}
+.check-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+.check-stats{display:flex;gap:16px;}
+.check-stat{padding:12px 20px;background:#f8fafc;border-radius:10px;text-align:center;}
+.check-stat .num{font-size:24px;font-weight:700;}
+.check-stat .num.green{color:#10b981;}
+.check-stat .num.red{color:#ef4444;}
+.check-stat .num.blue{color:#2563eb;}
+.check-stat .lbl{font-size:12px;color:#64748b;margin-top:2px;}
+
+.barcode-input{position:relative;max-width:400px;}
+.barcode-input input{width:100%;padding:12px 16px 12px 48px;border:2px solid #2563eb;border-radius:10px;font-size:16px;font-family:inherit;background:#fff;}
+.barcode-input input:focus{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.barcode-input .icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;color:#2563eb;}
+
+.check-table{width:100%;border-collapse:collapse;}
+.check-table th{padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;background:#f8fafc;border-bottom:1px solid #e2e8f0;text-align:left;}
+.check-table td{padding:10px 14px;font-size:13px;border-bottom:1px solid #f1f5f9;}
+.diff-ok{color:#10b981;font-weight:600;}
+.diff-err{color:#ef4444;font-weight:600;}
+
+/* ========== ALERTS ========== */
+.alerts-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:24px;}
+.alert-card{border-radius:12px;padding:20px;border:1px solid #e2e8f0;background:#fff;}
+.alert-card.danger{border-left:4px solid #ef4444;}
+.alert-card.warning{border-left:4px solid #f59e0b;}
+.alert-card.info{border-left:4px solid #3b82f6;}
+.alert-card .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.alert-card .head .type{font-size:12px;font-weight:600;text-transform:uppercase;}
+.alert-card .head .type.danger{color:#ef4444;}
+.alert-card .head .type.warning{color:#f59e0b;}
+.alert-card .head .type.info{color:#3b82f6;}
+.alert-card .title{font-size:15px;font-weight:600;margin-bottom:2px;}
+.alert-card .desc{font-size:13px;color:#64748b;margin-bottom:12px;}
+.alert-card .count{font-size:28px;font-weight:700;}
+
+@media(max-width:768px){.inbound-body{grid-template-columns:1fr;}.alerts-grid{grid-template-columns:1fr;}.check-stats{flex-wrap:wrap;}}
+</style>
+</head>
+<body>
+<div class="mockup-page">
+  <h1 class="section-title">🏭 08. Nhập kho</h1>
+  <p class="section-sub">Tạo phiếu nhập kho từ đơn nhập hàng hoặc nhập trực tiếp với quét mã vạch</p>
+  <div class="page-card">
+    <div class="page-header">
+      <h2>📥 Nhập kho</h2>
+      <div style="display:flex;gap:8px;">
+        <select style="padding:6px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;">
+          <option>Nhập trực tiếp</option><option>Từ đơn nhập hàng</option>
+        </select>
+      </div>
+    </div>
+    <div class="inbound-body">
+      <div>
+        <div class="field"><label>Chi nhánh / Kho nhập <span style="color:#ef4444;">*</span></label><select><option>Kho chính - Hà Nội</option><option>Kho phụ - HCM</option></select></div>
+        <div class="field"><label>Quét mã vạch sản phẩm</label>
+          <div style="display:flex;gap:8px;">
+            <input placeholder="Quét mã vạch hoặc tìm kiếm sản phẩm..." style="flex:1;">
+            <button class="btn btn-primary">🔍</button>
+          </div>
+          <div class="hint">Kết nối máy quét USB/Bluetooth, tự động focus</div>
+        </div>
+        <div style="max-height:300px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;">
+          <table class="inbound-table">
+            <thead><tr><th>Sản phẩm</th><th>SKU</th><th>Lô</th><th>HSD</th><th style="width:80px;">SL</th><th style="width:100px;">Đơn giá</th><th style="width:100px;">Thành tiền</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><span>👕</span> Áo Thun Nam Cotton</div></td><td style="color:#64748b;">AOTHUN-001</td><td><input placeholder="Lô"></td><td><input type="date"></td><td><input type="number" value="50"></td><td><input type="number" value="90000"></td><td style="font-weight:600;">4.500.000</td><td><button class="btn btn-outline btn-sm">✕</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><span>👚</span> Áo Sơ Mi Nữ</div></td><td style="color:#64748b;">SOMI-002</td><td><input placeholder="Lô"></td><td><input type="date"></td><td><input type="number" value="30"></td><td><input type="number" value="140000"></td><td style="font-weight:600;">4.200.000</td><td><button class="btn btn-outline btn-sm">✕</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><span>👖</span> Quần Jean Nam</div></td><td style="color:#64748b;">QUANJ-003</td><td><input placeholder="Lô"></td><td><input type="date"></td><td><input type="number" value="20"></td><td><input type="number" value="210000"></td><td style="font-weight:600;">4.200.000</td><td><button class="btn btn-outline btn-sm">✕</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="summary-box">
+          <div class="row"><span>Tổng số lượng</span><span style="font-weight:600;">100</span></div>
+          <div class="row"><span>Tổng số sản phẩm</span><span style="font-weight:600;">3</span></div>
+          <div class="row total"><span>Tổng giá trị phiếu nhập</span><span>12.900.000₫</span></div>
+        </div>
+        <div class="field" style="margin-top:16px;"><label>Ghi chú</label><textarea placeholder="Nhập ghi chú..." style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:13px;resize:vertical;min-height:60px;"></textarea></div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn btn-outline" style="flex:1;">Lưu nháp</button>
+          <button class="btn btn-success" style="flex:1;">✅ Xác nhận nhập kho</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h1 class="section-title" id="inventory">📋 09. Kiểm kê kho</h1>
+  <p class="section-sub">Kiểm kê và đối chiếu tồn kho thực tế với hệ thống, hỗ trợ quét mã vạch</p>
+  <div class="page-card">
+    <div class="page-header">
+      <h2>📋 Kiểm kê kho — Kho chính Hà Nội</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline">📥 Xuất danh sách</button>
+        <button class="btn btn-primary">+ Tạo phiếu kiểm kê</button>
+      </div>
+    </div>
+    <div class="check-body">
+      <div class="check-header">
+        <div class="check-stats">
+          <div class="check-stat"><div class="num blue">156</div><div class="lbl">Đã kiểm</div></div>
+          <div class="check-stat"><div class="num green">142</div><div class="lbl">Khớp</div></div>
+          <div class="check-stat"><div class="num red">14</div><div class="lbl">Chênh lệch</div></div>
+        </div>
+        <div class="barcode-input">
+          <span class="icon">📷</span>
+          <input placeholder="Quét mã vạch sản phẩm..." autofocus>
+        </div>
+      </div>
+      <table class="check-table">
+        <thead><tr><th>STT</th><th>Sản phẩm</th><th>SKU</th><th>Tồn hệ thống</th><th>Tồn thực tế</th><th>Chênh lệch</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><div style="display:flex;align-items:center;gap:8px;"><span>👕</span> Áo Thun Nam Cotton</div></td><td>AOTHUN-001</td><td>23</td><td><input value="23" style="width:60px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;text-align:center;font-family:inherit;"></td><td class="diff-ok">0</td><td></td></tr>
+          <tr><td>2</td><td><div style="display:flex;align-items:center;gap:8px;"><span>👚</span> Áo Sơ Mi Nữ</div></td><td>SOMI-002</td><td>15</td><td><input value="13" style="width:60px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;text-align:center;font-family:inherit;border-color:#ef4444;"></td><td class="diff-err">-2</td><td><input placeholder="Lý do..." style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;width:100%;"></td></tr>
+          <tr><td>3</td><td><div style="display:flex;align-items:center;gap:8px;"><span>👖</span> Quần Jean Nam</div></td><td>QUANJ-003</td><td>10</td><td><input value="12" style="width:60px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;text-align:center;font-family:inherit;border-color:#f59e0b;"></td><td class="diff-err">+2</td><td><input placeholder="Lý do..." style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;width:100%;"></td></tr>
+          <tr><td>4</td><td><div style="display:flex;align-items:center;gap:8px;"><span>📱</span> Ốp Lưng iPhone 15</div></td><td>OPLUNG-015</td><td>50</td><td><input value="50" style="width:60px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;text-align:center;font-family:inherit;"></td><td class="diff-ok">0</td><td></td></tr>
+          <tr><td>5</td><td><div style="display:flex;align-items:center;gap:8px;"><span>🧴</span> Dầu Gội Sunsilk</div></td><td>DAUGOI-001</td><td>3</td><td><input value="2" style="width:60px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;text-align:center;font-family:inherit;border-color:#ef4444;"></td><td class="diff-err">-1</td><td><input placeholder="Lý do..." style="padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;font-family:inherit;width:100%;" value="Thất lạc"></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+        <button class="btn btn-outline">Lưu nháp</button>
+        <button class="btn btn-primary">✅ Xác nhận kiểm kê</button>
+      </div>
+    </div>
+  </div>
+
+  <h1 class="section-title" id="alerts">⚠️ 10. Cảnh báo tồn kho</h1>
+  <p class="section-sub">Hệ thống tự động cảnh báo khi tồn kho dưới ngưỡng hoặc hàng sắp hết hạn</p>
+  <div class="page-card">
+    <div class="alerts-grid">
+      <div class="alert-card danger">
+        <div class="head"><span class="type danger">⚠️ Hết hàng</span></div>
+        <div class="title">Sản phẩm dưới ngưỡng tồn tối thiểu</div>
+        <div class="count">6</div>
+        <div class="desc">Sản phẩm cần nhập thêm ngay</div>
+        <button class="btn btn-danger btn-sm">Xem chi tiết</button>
+      </div>
+      <div class="alert-card warning">
+        <div class="head"><span class="type warning">⏰ Sắp hết hạn</span></div>
+        <div class="title">Hàng sắp hết hạn sử dụng</div>
+        <div class="count">4</div>
+        <div class="desc">Sản phẩm cần xử lý trong 30 ngày</div>
+        <button class="btn btn-warning btn-sm">Xem chi tiết</button>
+      </div>
+      <div class="alert-card info">
+        <div class="head"><span class="type info">📦 Tồn đọng</span></div>
+        <div class="title">Hàng tồn kho lâu ngày</div>
+        <div class="count">3</div>
+        <div class="desc">&gt; 90 ngày không có giao dịch</div>
+        <button class="btn btn-outline btn-sm">Xem chi tiết</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="text-align:center;padding:24px;color:#94a3b8;font-size:13px;">
+  <a href="index.html" style="color:#2563eb;">← Quay lại danh sách mockups</a> &nbsp;|&nbsp; BizOne UI Mockups
+</div>
+</body>
+</html>

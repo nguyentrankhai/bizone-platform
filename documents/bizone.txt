@@ -1,0 +1,116 @@
+1. Bán hàng (POS)
+Tạo hóa đơn nhanh bằng mã vạch hoặc tìm kiếm sản phẩm
+Hỗ trợ nhiều phương thức thanh toán:
+Tiền mặt
+Chuyển khoản
+Thẻ ngân hàng
+Ví điện tử
+QR Code
+In hóa đơn hoặc gửi hóa đơn điện tử
+Tách/gộp hóa đơn
+Đổi trả hàng
+Áp dụng khuyến mãi, voucher, mã giảm giá
+2. Quản lý sản phẩm
+Quản lý danh mục hàng hóa
+Quản lý SKU, mã vạch
+Quản lý nhiều đơn vị tính
+Quản lý thuộc tính sản phẩm:
+Màu sắc
+Kích cỡ
+Phiên bản
+Quản lý combo, gói sản phẩm
+Theo dõi giá vốn, giá bán
+3. Quản lý kho
+Nhập kho
+Xuất kho
+Chuyển kho giữa các chi nhánh
+Kiểm kê kho
+Theo dõi tồn kho theo thời gian thực
+Cảnh báo hết hàng hoặc tồn kho thấp
+Theo dõi lô hàng, hạn sử dụng (đối với thực phẩm, dược phẩm)
+4. Quản lý khách hàng (CRM)
+Lưu thông tin khách hàng
+Lịch sử mua hàng
+Phân nhóm khách hàng
+Tích điểm thành viên
+Xếp hạng khách hàng (Silver, Gold, VIP...)
+Gửi SMS, Email, Zalo chăm sóc khách hàng
+Theo dõi công nợ khách hàng
+5. Quản lý đơn hàng
+Đơn tại cửa hàng
+Đơn online
+Đơn giao hàng
+Theo dõi trạng thái đơn:
+Chờ xác nhận
+Đang giao
+Hoàn thành
+Hủy
+Quản lý đổi trả
+6. Quản lý nhân viên
+Phân quyền người dùng
+Quản lý ca làm việc
+Chấm công
+Theo dõi doanh số nhân viên
+Theo dõi hoa hồng bán hàng
+Nhật ký thao tác để kiểm soát gian lận
+7. Báo cáo và phân tích
+Doanh thu theo:
+Ngày
+Tuần
+Tháng
+Năm
+Lợi nhuận
+Hàng bán chạy
+Hàng bán chậm
+Hiệu quả khuyến mãi
+Hiệu quả nhân viên
+Báo cáo tồn kho
+Dashboard trực quan
+8. Quản lý nhà cung cấp
+Danh sách nhà cung cấp
+Đơn nhập hàng
+Công nợ nhà cung cấp
+Lịch sử giao dịch
+So sánh giá nhập
+9. Bán hàng đa kênh (Omnichannel)
+
+Các hệ thống hiện đại thường kết nối:
+
+Website bán hàng
+Sàn TMĐT:
+Shopee
+Lazada
+TikTok Shop
+Facebook
+Instagram
+Zalo
+Cửa hàng vật lý
+
+Tồn kho và đơn hàng được đồng bộ trên tất cả các kênh.
+
+10. Kế toán và tài chính
+Thu chi
+Quỹ tiền mặt
+Công nợ
+Kết nối phần mềm kế toán
+Xuất báo cáo tài chính cơ bản
+Đối soát thanh toán
+11. Marketing và khuyến mãi
+Mã giảm giá
+Voucher
+Flash sale
+Combo
+Mua X tặng Y
+Chương trình khách hàng thân thiết
+Chiến dịch SMS/Email Marketing
+12. Các tính năng nâng cao mới
+
+Nhiều phần mềm hiện nay còn bổ sung:
+
+Dự báo nhu cầu nhập hàng bằng AI
+Gợi ý sản phẩm bán kèm
+Phân tích hành vi khách hàng
+Nhận diện khách hàng thân thiết
+Chatbot bán hàng
+Tự động tạo báo cáo
+Ứng dụng di động cho chủ cửa hàng

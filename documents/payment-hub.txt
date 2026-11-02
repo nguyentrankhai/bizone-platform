@@ -1,0 +1,20 @@
+**Payment Hub**
+
+Là nền tảng trung gian xử lý thanh toán tập trung cho hệ thống BizOne.
+
+Chức năng chính:
+
+1. Quản lý giao dịch thanh toán tập trung.
+2. Cung cấp API tạo giao dịch thanh toán và sinh QR thanh toán.
+3. Hỗ trợ VietQR, Napas QR và các hình thức thanh toán điện tử.
+4. Kết nối và tích hợp các đối tác thanh toán như VNPay, MoMo, ZaloPay và các đối tác khác.
+5. Nhận và xử lý kết quả thanh toán từ đối tác theo thời gian thực.
+6. Gửi thông báo trạng thái thanh toán (Webhook/Callback) đến BizOne.
+7. Quản lý vòng đời giao dịch: Created, Pending, Success, Failed, Expired, Refunded.
+8. Hỗ trợ hoàn tiền (Refund) toàn phần hoặc một phần.
+9. Thực hiện đối soát giao dịch tự động và tra soát giao dịch.
+10. Cung cấp dashboard theo dõi giao dịch và báo cáo vận hành.
+11. Xuất báo cáo giao dịch, doanh thu và đối soát theo ngày.
+12. Quản lý nhật ký giao dịch và audit log.
+13. Đảm bảo bảo mật, xác thực và toàn vẹn dữ liệu giao dịch.
+14. Hỗ trợ mở rộng tích hợp thêm các đối tác thanh toán trong tương lai thông qua kiến trúc Connector.
