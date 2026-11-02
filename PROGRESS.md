@@ -28,8 +28,8 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) — chưa push |
-| P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) — chưa push |
+| P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) |
+| P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
 | P1.3 | BizOne Database Schema | ⬜ | — | |
 | P1.4 | Payment Hub Database Schema | ⬜ | — | |
 | P1.5 | Authentication System | ⬜ | — | Dùng Keycloak thay NextAuth/Lucia (đã dựng sẵn) |
@@ -151,7 +151,6 @@
   - Port 3000 đang bị container Metabase chiếm → chạy dev bằng `npx next dev -p 3010` hoặc `APP_PORT=3010 docker compose up`.
   - MariaDB/Redis local đã chạy ở 3306/6379 → compose map ra host 3307/6380.
   - Compose project ban đầu tên `bizone` trùng với stack Keycloak ở repo root (có nguy cơ xoá Keycloak khi `--remove-orphans`) → đổi thành `bizone-core`.
-  - Chưa push lên GitHub.
 
 ### P1.2 — Payment Hub Scaffolding
 

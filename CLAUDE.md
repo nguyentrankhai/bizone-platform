@@ -9,6 +9,62 @@ Hai hệ thống độc lập, triển khai song song, giao tiếp qua REST API 
 
 ---
 
+## Quy trình xây dựng & phát triển (BẮT BUỘC mỗi phiên)
+
+Mỗi phiên làm việc thực hiện **một task** trong `PLAN.md` theo đúng 6 bước sau, rồi dừng lại hỏi người dùng.
+
+### B1. Đọc `PROGRESS.md` — xác định việc cần làm
+
+- Xem bảng tổng quan và các bảng theo giai đoạn để biết task nào đã ✅, đang 🟡, bị ⛔.
+- Nếu có task 🟡 (dở dang từ phiên trước) → tiếp tục task đó trước.
+- Nếu không: chọn task ⬜ **có ID nhỏ nhất** mà các task phụ thuộc đã xong (xem mục *PHỤ THUỘC & ĐIỀU KIỆN TIÊN QUYẾT* cuối `PLAN.md`; Giai đoạn 1 phải xong trước GĐ 2+3, GĐ 2+3 trước GĐ 4+5, …).
+- Đọc phần **Vấn đề / lưu ý** và **Quyết định thiết kế** của các task đã xong — đó là ràng buộc cho task mới (ví dụ: dùng Keycloak thay NextAuth/Lucia; WebSocket chạy process riêng).
+- Báo cho người dùng biết task sẽ làm trong phiên này trước khi bắt đầu.
+
+### B2. Đọc `PLAN.md` — xác định phạm vi task
+
+- Đọc đúng dòng của task: **Công việc cần thực hiện**, **Prompt cho AI Agent**, **Kiểm thử / Kết quả**. Cột *Kiểm thử / Kết quả* là tiêu chí nghiệm thu.
+- Đọc tài liệu liên quan: `documents/SRS-*.md`, `documents/API-Design-*.md`, `documents/OpenAPI-*.yaml`, `database/schema*.sql`, `mockups-*/` (với task UI).
+- Nếu `PLAN.md` mâu thuẫn với quyết định đã ghi trong `PROGRESS.md`/`CLAUDE.md` → theo quyết định đã ghi, và nêu rõ khác biệt trong kết quả.
+- Code NextJS 16: đọc `source/<app>/node_modules/next/dist/docs/` cho API liên quan trước khi viết.
+
+### B3. Xây dựng & kiểm thử
+
+- Đánh dấu task 🟡 trong `PROGRESS.md` khi bắt đầu.
+- Chỉ làm trong phạm vi task; không làm trước việc của task sau.
+- Kiểm thử bắt buộc trước khi coi là xong:
+  - `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run build` trong app bị ảnh hưởng.
+  - Chạy thật từng tiêu chí ở cột *Kiểm thử / Kết quả* (dev server, Docker, API, UI qua trình duyệt) — không chỉ dựa vào type check.
+  - Thử thêm trường hợp lỗi chính (input sai, dịch vụ phụ thuộc down…).
+- Dọn dẹp sau kiểm thử: dừng dev server, `docker compose down -v` các stack test, xoá dữ liệu test đã tạo. **Không** đụng container Keycloak/Metabase/MariaDB/Redis/MinIO đang chạy sẵn và không dùng `--remove-orphans`.
+- Nếu một tiêu chí không đạt được: đánh dấu ⛔ hoặc giữ 🟡, ghi rõ lý do, không báo là xong.
+
+### B4. Ghi kết quả vào `PROGRESS.md`
+
+- Cập nhật dòng của task (trạng thái, commit, ghi chú), bảng **Tổng quan** (số ✅/🟡/⬜) và **Cập nhật lần cuối**.
+- Thêm mục `### Px.y — <tên task>` trong **Kết quả chi tiết**, theo đúng mẫu của P1.1/P1.2:
+  - **Hoàn thành** (ngày) · **Commit** · **Vị trí**
+  - **Đã làm**
+  - **Kiểm thử**: bảng *Tiêu chí (PLAN) | Kết quả* — mỗi tiêu chí trong PLAN một dòng, ghi kết quả thực tế
+  - **Khác biệt so với plan**, **Quyết định thiết kế**, **Vấn đề / lưu ý** (việc để lại cho task sau)
+- Cập nhật mục *Cấu trúc dự án* / *Chạy …* trong `CLAUDE.md` và `README.md` nếu cấu trúc, lệnh hoặc port thay đổi.
+
+### B5. Commit & push GitHub
+
+- Kiểm tra trước khi commit: `git status`, chỉ stage file của task; **không** commit `.env.local`, `.env.development`, `dist/`, `.next/`, `node_modules/`; `.env.example` chỉ chứa placeholder.
+- Commit message theo Conventional Commits, nêu ID task: `feat: <mô tả> (P1.3)`, `docs: …`, `chore: …`; thân commit giải thích *tại sao*.
+- Mã commit chỉ có sau khi commit → tạo thêm commit nhỏ `docs: record Px.y commit hash in PROGRESS.md` để điền mã vào `PROGRESS.md`.
+- `git push origin main` (remote: `git@github.com:nguyentrankhai/bizone-platform.git`). Nếu push bị chặn, báo người dùng chạy lệnh thủ công.
+
+### B6. Kiểm tra quota & hỏi người dùng
+
+- Kiểm tra quota bằng tool `get_usage` (Claude desktop app): báo **% đã dùng** và **thời điểm reset** của giới hạn 5 giờ và giới hạn tuần, cùng % context của phiên hiện tại.
+- Tóm tắt: task vừa xong, kết quả kiểm thử, commit đã push, task tiếp theo dự kiến (theo B1).
+- **Dừng lại và hỏi** người dùng có tiếp tục task tiếp theo không. Không tự động bắt đầu task mới.
+- Gợi ý: nếu giới hạn 5 giờ đã dùng > 80% hoặc context > 70%, đề xuất dừng hoặc mở phiên mới thay vì làm tiếp.
+
+---
+
 ## Kiến trúc tổng thể
 
 ```
@@ -110,7 +166,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (Metabase), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
 
-**Quy trình**: sau mỗi task trong PLAN, cập nhật `PROGRESS.md` (trạng thái, commit, kết quả kiểm thử, lưu ý).
+**Quy trình**: xem mục *Quy trình xây dựng & phát triển* ở đầu file (B1–B6).
 
 ---
 
