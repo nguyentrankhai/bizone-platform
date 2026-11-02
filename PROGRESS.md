@@ -24,6 +24,34 @@
 
 ---
 
+## Theo dõi vấn đề
+
+### Còn mở
+
+| # | Vấn đề | Nguồn | Xử lý ở |
+|---|--------|-------|---------|
+| 1 | WebSocket Payment Hub (`:4001/ws`) chưa xác thực — không publish dữ liệu giao dịch thật trước khi có kiểm tra token | P1.2 | P1.5 |
+| 2 | Token Exchange v1 deprecated trong Keycloak 26; v2 chỉ đổi token trong cùng realm → chọn lại cách BizOne gọi Payment Hub | Nâng cấp Keycloak | P1.5 |
+| 3 | Job webhook chứa `secret` trong Redis → đổi sang `webhookConfigId`, đọc secret từ DB | P1.2 | P3.6 |
+| 4 | Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma | P1.2 | P1.4 |
+| 5 | `paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci` khi dựng schema | Kiểm tra 2026-11-03 | P1.4 |
+| 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
+
+### Đã giải quyết
+
+| Ngày | Vấn đề | Cách giải quyết |
+|------|--------|-----------------|
+| 2026-11-02 | Compose project BizOne trùng tên `bizone` với stack Keycloak (nguy cơ xoá Keycloak khi `--remove-orphans`) | Đổi thành `bizone-core` (P1.1) |
+| 2026-11-02 | Worker in stack trace mỗi lần Redis reconnect; có thể treo khi tắt | Log 1 dòng/lần, tự thoát sau 8s khi SIGTERM (P1.2) |
+| 2026-11-03 | DB dev `bizonedb` lệch so với `schema.sql` (do lần chạy Prisma khác 2026-06-15) | Sao lưu → `prisma migrate reset` + seed; khớp schema, có lịch sử migration (P1.3) |
+| 2026-11-03 | MariaDB local 10.3 hết hỗ trợ, thiếu tính năng mới, buộc Keycloak dừng ở 23 | Nâng MariaDB lên 10.11.19, dữ liệu khớp 100% |
+| 2026-11-03 | Keycloak 23.0.7 cũ | Nâng lên 26.8.1, 4 realm tự migrate, user/client giữ nguyên |
+| 2026-11-03 | Server MariaDB mặc định `latin1` | Server 10.11 mặc định `utf8mb4_unicode_ci`; `bizonedb` đã đổi sang `utf8mb4` |
+| 2026-11-03 | `updated_at` không còn `ON UPDATE CURRENT_TIMESTAMP` ở mức DB | Chấp nhận: Prisma tự cập nhật qua `@updatedAt`; SQL thuần tự set |
+| 2026-11-03 | Port 3000 bị Metabase chiếm | Metabase không thuộc dự án (người dùng đã dừng); BizOne dùng port 3000 |
+
+---
+
 ## Giai đoạn 1 — Nền tảng (Tuần 1–3)
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
@@ -31,8 +59,8 @@
 | P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) |
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
 | P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local đã reset theo schema (2026-11-03) |
-| P1.4 | Payment Hub Database Schema | ⬜ | — | |
-| P1.5 | Authentication System | ⬜ | — | Dùng Keycloak thay NextAuth/Lucia (đã dựng sẵn) |
+| P1.4 | Payment Hub Database Schema | ⬜ | — | Xử lý vấn đề mở #4, #5 |
+| P1.5 | Authentication System | ⬜ | — | Dùng Keycloak 26.8.1 thay NextAuth/Lucia (đã dựng sẵn); xử lý vấn đề mở #1, #2 |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
 | P1.7 | Shared UI Component Library | ⬜ | — | |
 | P1.8 | Payment Hub Admin Layout | ⬜ | — | |
@@ -117,7 +145,7 @@
 | Ngày | Công việc | Commit |
 |------|-----------|--------|
 | 2026-11-02 | Đặc tả OpenAPI 3.0 (BizOne, Payment Hub), OAuth2/Keycloak spec, README song ngữ | `df7a323` |
-| 2026-11-02 | Dựng Keycloak 23 (Docker, port 8080) với 3 realm: `bizone`, `payment-hub`, `partners` | `5eefade` |
+| 2026-11-02 | Dựng Keycloak 23 (Docker, port 8080) với 3 realm: `bizone`, `payment-hub`, `partners` _(đã nâng lên 26.8.1 ngày 2026-11-03)_ | `5eefade` |
 | 2026-11-02 | `.gitignore`, `.env.example`; credentials dev trong `.env.development` (gitignored) | `a7ce8cf` |
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 
@@ -149,9 +177,9 @@
   - NextJS 16 thay vì 14 (plan ghi "14+"). Next 16 có thay đổi API — đọc `node_modules/next/dist/docs/` trước khi code.
   - `eslint.config.mjs` (flat config) thay cho `.eslintrc.json`; `next.config.ts` thay cho `next.config.js`.
 - **Vấn đề / lưu ý:**
-  - Port 3000 lúc đó bị container Metabase chiếm nên kiểm thử chạy ở 3010. _(Đã hết: Metabase không dùng nữa, BizOne chạy port 3000 — xem P1.3.)_
+  - ✅ Port 3000 lúc đó bị container Metabase chiếm nên kiểm thử chạy ở 3010. _(Đã giải quyết 2026-11-03: Metabase không dùng nữa, BizOne chạy port 3000.)_
   - MariaDB/Redis local đã chạy ở 3306/6379 → compose map ra host 3307/6380.
-  - Compose project ban đầu tên `bizone` trùng với stack Keycloak ở repo root (có nguy cơ xoá Keycloak khi `--remove-orphans`) → đổi thành `bizone-core`.
+  - ✅ Compose project ban đầu tên `bizone` trùng với stack Keycloak ở repo root (có nguy cơ xoá Keycloak khi `--remove-orphans`) → đã đổi thành `bizone-core`.
 
 ### P1.2 — Payment Hub Scaffolding
 
@@ -182,10 +210,10 @@
 
 - **Quyết định thiết kế:**
   - Next.js Route Handlers không giữ được kết nối WebSocket (theo docs Next 16) → WebSocket chạy process riêng, giao tiếp với app qua Redis pub/sub. P3.7 (`server/ws/dashboard.ts`) sẽ gắn vào process này.
-  - Dùng driver `mariadb` trực tiếp cho health check; P1.4 sẽ thêm Prisma (adapter MariaDB dùng cùng driver).
+  - Dùng driver `mariadb` trực tiếp cho health check; P1.4 sẽ thêm Prisma (adapter MariaDB dùng cùng driver). _(Vấn đề mở #4)_
 - **Vấn đề / lưu ý:**
-  - ⚠️ WebSocket chưa xác thực — phải thêm kiểm tra token Keycloak (P1.5) trước khi publish dữ liệu giao dịch thật.
-  - Job webhook đang chứa `secret` trong Redis; P3.6 nên đổi sang lưu `webhookConfigId` và đọc secret từ DB.
+  - ⚠️ WebSocket chưa xác thực — phải thêm kiểm tra token Keycloak (P1.5) trước khi publish dữ liệu giao dịch thật. _(Vấn đề mở #1)_
+  - Job webhook đang chứa `secret` trong Redis; P3.6 nên đổi sang lưu `webhookConfigId` và đọc secret từ DB. _(Vấn đề mở #3)_
   - BullMQ 6 / ioredis 6 mới hơn bản phổ biến: connection truyền dạng `{ url, maxRetriesPerRequest: null }`.
   - Compose map host port: db 3308, Redis 6381 (tránh 3306/6379 local và 3307/6380 của BizOne Core).
 
@@ -246,6 +274,6 @@ Ngoài plan, theo yêu cầu người dùng.
   - Kiểm tra: container `healthy`; OIDC discovery 3 realm OK; đăng nhập admin OK; số user giữ nguyên (bizone 3, payment-hub 2, partners 0); client credentials `bizone-api` và `payhub-api` cấp token OK; sai secret → 401.
 - **Tài liệu cập nhật:** `CLAUDE.md`, `README.md`, `documents/env.txt`, `documents/OAuth2-Keycloak-Spec.md` (v1.1.0: compose production theo Keycloak 26, cảnh báo token exchange), `documents/API-Design-PaymentHub.md`, header `database/schema*.sql`.
 - **Lưu ý:**
-  - ⚠️ Token Exchange v1 (`token-exchange`) vẫn bật nhưng đã deprecated; Standard Token Exchange v2 chỉ đổi token trong cùng realm → P1.5 phải chọn lại cách BizOne gọi Payment Hub (spec §5.2).
-  - Rollback còn sẵn: container `mariadbtest-10.3` + volume gốc. Xoá khi chắc chắn không cần (người dùng quyết định).
+  - ⚠️ Token Exchange v1 (`token-exchange`) vẫn bật nhưng đã deprecated; Standard Token Exchange v2 chỉ đổi token trong cùng realm → P1.5 phải chọn lại cách BizOne gọi Payment Hub (spec §5.2). _(Vấn đề mở #2)_
+  - Rollback còn sẵn: container `mariadbtest-10.3` + volume gốc. Xoá khi chắc chắn không cần (người dùng quyết định). _(Vấn đề mở #6)_
   - Bản dump và đếm số dòng nằm trong thư mục tạm của phiên (không lưu lâu dài).
