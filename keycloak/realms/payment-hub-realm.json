@@ -1,0 +1,98 @@
+{
+  "realm": "payment-hub",
+  "displayName": "BizOne Payment Hub",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 86400,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      {
+        "name": "payhub-admin",
+        "description": "Toàn quyền: cấu hình PSP, xem/xử lý giao dịch, quản lý merchants",
+        "composite": false
+      },
+      {
+        "name": "payhub-viewer",
+        "description": "Chỉ xem dashboard và giao dịch",
+        "composite": false
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "payhub-api",
+      "name": "Payment Hub API Server",
+      "description": "Service account cho PayHub backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "payhub-api-secret-change-in-prod",
+      "redirectUris": [],
+      "webOrigins": []
+    },
+    {
+      "clientId": "payhub-admin-console",
+      "name": "Payment Hub Admin Console",
+      "description": "Admin web UI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4000/*",
+        "https://admin-payment.bizone.vn/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4000",
+        "https://admin-payment.bizone.vn"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": ["openid", "profile", "email"]
+    }
+  ],
+  "users": [
+    {
+      "username": "payhub.admin@bizone.vn",
+      "email": "payhub.admin@bizone.vn",
+      "emailVerified": true,
+      "firstName": "PayHub",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "PayHub@2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["payhub-admin"]
+    },
+    {
+      "username": "payhub.viewer@bizone.vn",
+      "email": "payhub.viewer@bizone.vn",
+      "emailVerified": true,
+      "firstName": "PayHub",
+      "lastName": "Viewer",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Viewer@2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["payhub-viewer"]
+    }
+  ]
+}

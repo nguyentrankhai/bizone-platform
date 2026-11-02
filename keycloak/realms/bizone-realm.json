@@ -1,0 +1,337 @@
+{
+  "realm": "bizone",
+  "displayName": "BizOne Platform",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 15,
+  "accessTokenLifespan": 900,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 604800,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "sslRequired": "external",
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "vi"],
+  "defaultLocale": "vi",
+  "roles": {
+    "realm": [
+      {
+        "name": "bizone-admin",
+        "description": "Quản trị tenant: toàn quyền",
+        "composite": false
+      },
+      {
+        "name": "bizone-manager",
+        "description": "Quản lý: xem báo cáo, cấu hình, không xóa dữ liệu",
+        "composite": false
+      },
+      {
+        "name": "bizone-seller",
+        "description": "Thu ngân: POS, xem sản phẩm và khách hàng",
+        "composite": false
+      },
+      {
+        "name": "bizone-warehouse",
+        "description": "Thủ kho: nhập xuất kho, xem sản phẩm",
+        "composite": false
+      },
+      {
+        "name": "bizone-viewer",
+        "description": "Chỉ xem báo cáo và dashboard",
+        "composite": false
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bizone-frontend",
+      "name": "BizOne Frontend (NextJS)",
+      "description": "BizOne Web App - Public Client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://app.bizone.vn/*",
+        "https://staging-app.bizone.vn/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "https://app.bizone.vn",
+        "https://staging-app.bizone.vn"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "use.refresh.tokens": "true",
+        "access.token.lifespan": "900",
+        "client.session.idle.timeout": "28800"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "bizone.pos",
+        "bizone.products",
+        "bizone.inventory",
+        "bizone.customers",
+        "bizone.orders",
+        "bizone.reports",
+        "bizone.staff",
+        "bizone.omni",
+        "bizone.webhooks"
+      ]
+    },
+    {
+      "clientId": "bizone-api",
+      "name": "BizOne API Server (Confidential)",
+      "description": "Internal service account for BizOne backend",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "secret": "bizone-api-secret-change-in-prod",
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "use.refresh.tokens": "true"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    },
+    {
+      "clientId": "bizone-public",
+      "name": "BizOne Public API (Third-party)",
+      "description": "Cho phép ứng dụng bên thứ ba truy cập BizOne API",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": true,
+      "secret": "bizone-public-secret-change-in-prod",
+      "redirectUris": [
+        "http://localhost:*/*",
+        "https://*.example.com/*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "3600",
+        "client.session.idle.timeout": "2592000"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "bizone.pos",
+        "bizone.products",
+        "bizone.inventory",
+        "bizone.customers",
+        "bizone.orders",
+        "bizone.reports",
+        "bizone.omni",
+        "bizone.webhooks"
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "bizone.pos",
+      "description": "POS: đọc và tạo hóa đơn",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập dữ liệu bán hàng tại quầy"
+      }
+    },
+    {
+      "name": "bizone.products",
+      "description": "Sản phẩm: đọc và quản lý",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập danh sách sản phẩm"
+      }
+    },
+    {
+      "name": "bizone.inventory",
+      "description": "Kho hàng: đọc và cập nhật tồn kho",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập dữ liệu kho hàng"
+      }
+    },
+    {
+      "name": "bizone.customers",
+      "description": "Khách hàng: đọc và quản lý",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập thông tin khách hàng"
+      }
+    },
+    {
+      "name": "bizone.orders",
+      "description": "Đơn hàng: đọc và cập nhật",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập danh sách đơn hàng"
+      }
+    },
+    {
+      "name": "bizone.reports",
+      "description": "Báo cáo: chỉ đọc",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Đọc báo cáo và thống kê"
+      }
+    },
+    {
+      "name": "bizone.staff",
+      "description": "Nhân viên: quản lý",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập thông tin nhân viên"
+      }
+    },
+    {
+      "name": "bizone.omni",
+      "description": "Đa kênh: đồng bộ sản phẩm và đơn hàng",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Đồng bộ dữ liệu đa kênh"
+      }
+    },
+    {
+      "name": "bizone.webhooks",
+      "description": "Webhooks: quản lý subscriptions",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Quản lý webhook notifications"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@bizone.vn",
+      "email": "admin@bizone.vn",
+      "emailVerified": true,
+      "firstName": "Super",
+      "lastName": "Admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["bizone-admin"],
+      "attributes": {
+        "tenant_id": ["tenant_demo"],
+        "branch_ids": ["[1]"]
+      }
+    },
+    {
+      "username": "demo.seller@bizone.vn",
+      "email": "demo.seller@bizone.vn",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Seller",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Seller@2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["bizone-seller"],
+      "attributes": {
+        "tenant_id": ["tenant_demo"],
+        "branch_ids": ["[1]"]
+      }
+    },
+    {
+      "username": "demo.manager@bizone.vn",
+      "email": "demo.manager@bizone.vn",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Manager",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Manager@2026!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["bizone-manager"],
+      "attributes": {
+        "tenant_id": ["tenant_demo"],
+        "branch_ids": ["[1,2]"]
+      }
+    }
+  ],
+  "protocolMappers": [],
+  "requiredActions": [
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    }
+  ]
+}

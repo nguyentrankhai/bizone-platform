@@ -1,0 +1,95 @@
+{
+  "realm": "partners",
+  "displayName": "BizOne Partner Integrations",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 2592000,
+  "ssoSessionMaxLifespan": 2592000,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      {
+        "name": "partner-app",
+        "description": "Third-party application accessing BizOne on behalf of a merchant",
+        "composite": false
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "shopee-connector",
+      "name": "Shopee Omni Channel Connector",
+      "description": "Kết nối Shopee - đồng bộ sản phẩm và đơn hàng",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "consentRequired": true,
+      "secret": "shopee-connector-secret-change-in-prod",
+      "redirectUris": [
+        "http://localhost:3000/api/omni/callbacks/shopee",
+        "https://app.bizone.vn/api/omni/callbacks/shopee"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "3600",
+        "client.session.idle.timeout": "2592000"
+      },
+      "defaultClientScopes": ["openid", "profile"],
+      "optionalClientScopes": ["bizone.omni", "bizone.products", "bizone.orders"]
+    },
+    {
+      "clientId": "lazada-connector",
+      "name": "Lazada Omni Channel Connector",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "consentRequired": true,
+      "secret": "lazada-connector-secret-change-in-prod",
+      "redirectUris": [
+        "http://localhost:3000/api/omni/callbacks/lazada",
+        "https://app.bizone.vn/api/omni/callbacks/lazada"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "access.token.lifespan": "3600"
+      },
+      "defaultClientScopes": ["openid", "profile"],
+      "optionalClientScopes": ["bizone.omni", "bizone.products", "bizone.orders"]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "bizone.omni",
+      "description": "Đồng bộ sản phẩm và đơn hàng đa kênh",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Đồng bộ sản phẩm và đơn hàng giữa cửa hàng và sàn TMĐT"
+      }
+    },
+    {
+      "name": "bizone.products",
+      "description": "Đọc và cập nhật sản phẩm",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập danh sách sản phẩm của cửa hàng"
+      }
+    },
+    {
+      "name": "bizone.orders",
+      "description": "Đọc và cập nhật đơn hàng",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "Truy cập và cập nhật đơn hàng từ sàn TMĐT"
+      }
+    }
+  ],
+  "users": []
+}
