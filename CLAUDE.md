@@ -36,7 +36,7 @@ Mỗi phiên làm việc thực hiện **một task** trong `PLAN.md` theo đún
   - `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run build` trong app bị ảnh hưởng.
   - Chạy thật từng tiêu chí ở cột *Kiểm thử / Kết quả* (dev server, Docker, API, UI qua trình duyệt) — không chỉ dựa vào type check.
   - Thử thêm trường hợp lỗi chính (input sai, dịch vụ phụ thuộc down…).
-- Dọn dẹp sau kiểm thử: dừng dev server, `docker compose down -v` các stack test, xoá dữ liệu test đã tạo. **Không** đụng container Keycloak/Metabase/MariaDB/Redis/MinIO đang chạy sẵn và không dùng `--remove-orphans`.
+- Dọn dẹp sau kiểm thử: dừng dev server, `docker compose down -v` các stack test, xoá dữ liệu test đã tạo. **Không** đụng container Keycloak/MariaDB/Redis/MinIO đang chạy sẵn và không dùng `--remove-orphans`.
 - Nếu một tiêu chí không đạt được: đánh dấu ⛔ hoặc giữ 🟡, ghi rõ lý do, không báo là xong.
 
 ### B4. Ghi kết quả vào `PROGRESS.md`
@@ -149,7 +149,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 | Lệnh | Mô tả |
 |------|-------|
-| `npm run dev` | Dev server (mặc định port 3000 — đang bị Metabase chiếm, dùng `npx next dev -p 3010`) |
+| `npm run dev` | Dev server port 3000 (DB dev: `bizonedb` trên MariaDB local 3306) |
 | `npm run build` / `npm start` | Build & chạy production |
 | `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
 | `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
@@ -170,7 +170,17 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 
-**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (Metabase), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
+**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
+
+**Metabase**: không thuộc dự án (không có trong BRD/SRS/PLAN). Báo cáo được xây trong app (P2.9, P4.2, P5.5). Container `metabase` trên máy đã dừng — không khởi động lại, không phụ thuộc vào nó.
+
+**Phiên bản MariaDB**:
+- **Đích: 10.11 LTS** (production, Docker compose của 2 app). Không hạ tài liệu xuống 10.3.
+- **Dev local: 10.3** (container `mariadbtest`, cổng 3306, dùng chung với dự án khác — không nâng cấp/sửa container này). Đã kiểm chứng Prisma schema, seed, truy vấn và `/api/health` chạy đúng trên 10.3.
+- **Quy tắc code**: phải chạy được trên cả 10.3 và 10.11 cho tới khi dev local lên ≥ 10.6. Không dùng tính năng chỉ có từ 10.5+: `INSERT … RETURNING` (10.5), `SKIP LOCKED` / `JSON_TABLE` (10.6), kiểu `UUID` (10.7), `INET6` (10.5). Kiểm thử task có SQL đặc thù trên cả hai phiên bản (10.11 qua `docker compose up -d db`).
+- 10.3 hết hỗ trợ từ 2023 và buộc Keycloak dừng ở 23.0.7 (Keycloak ≥ 26 cần MariaDB ≥ 10.4).
+- Server 10.3 mặc định charset `latin1`: sau `prisma migrate reset` chạy lại `ALTER DATABASE bizonedb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` (bảng do Prisma tạo đã là utf8mb4).
+- Cột `updated_at`: dùng `@updatedAt` của Prisma (không có `ON UPDATE CURRENT_TIMESTAMP` ở DB) — SQL thuần phải tự set `updated_at`.
 
 **Quy trình**: xem mục *Quy trình xây dựng & phát triển* ở đầu file (B1–B6).
 
@@ -183,7 +193,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | Framework | NextJS 16 App Router (React 19, Turbopack, `cacheComponents`) |
 | API | tRPC (BizOne) / REST (Payment Hub) |
 | ORM | Prisma |
-| DB | MariaDB 10.11 |
+| DB | MariaDB 10.11 (đích production + Docker compose); dev local hiện là 10.3 — xem *Phiên bản MariaDB* |
 | Cache/Queue | Redis + BullMQ |
 | Auth | Keycloak 23 (OIDC) — realms `bizone`, `payment-hub`, `partners`; access token 15 phút + refresh 7 ngày. Xem `documents/OAuth2-Keycloak-Spec.md` |
 | Storage | MinIO/S3 |

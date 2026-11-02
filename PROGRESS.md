@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-02
+**Cập nhật lần cuối:** 2026-11-03
 
 ---
 
@@ -30,7 +30,7 @@
 |----|------|------------|--------|---------|
 | P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) |
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
-| P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local chưa đồng bộ (chờ quyết định) |
+| P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local đã reset theo schema (2026-11-03) |
 | P1.4 | Payment Hub Database Schema | ⬜ | — | |
 | P1.5 | Authentication System | ⬜ | — | Dùng Keycloak thay NextAuth/Lucia (đã dựng sẵn) |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
@@ -148,7 +148,7 @@
   - NextJS 16 thay vì 14 (plan ghi "14+"). Next 16 có thay đổi API — đọc `node_modules/next/dist/docs/` trước khi code.
   - `eslint.config.mjs` (flat config) thay cho `.eslintrc.json`; `next.config.ts` thay cho `next.config.js`.
 - **Vấn đề / lưu ý:**
-  - Port 3000 đang bị container Metabase chiếm → chạy dev bằng `npx next dev -p 3010` hoặc `APP_PORT=3010 docker compose up`.
+  - Port 3000 lúc đó bị container Metabase chiếm nên kiểm thử chạy ở 3010. _(Đã hết: Metabase không dùng nữa, BizOne chạy port 3000 — xem P1.3.)_
   - MariaDB/Redis local đã chạy ở 3306/6379 → compose map ra host 3307/6380.
   - Compose project ban đầu tên `bizone` trùng với stack Keycloak ở repo root (có nguy cơ xoá Keycloak khi `--remove-orphans`) → đổi thành `bizone-core`.
 
@@ -223,8 +223,8 @@
 - **Quyết định thiết kế:**
   - Sinh schema bằng introspection + đổi tên tự động (thay vì viết tay) để chắc chắn khớp 100% với `schema.sql`; đã kiểm chứng bằng `migrate diff`.
   - Không commit client đã sinh; build/typecheck tự `prisma generate`.
-- **Vấn đề / lưu ý:**
-  - ⚠️ **DB dev local (`bizonedb`, MariaDB 10.3, cổng 3306) KHÔNG được đổi.** DB này do một lần chạy Prisma khác (2026-06-15, không có trong repo) tạo ra và đã lệch so với `schema.sql`: `user_roles` có thêm cột `id` + `branch_id` nullable, thiếu bảng `order_channel_mapping`, tên FK khác, vài enum khác; có 1 user + 1 user_role. `db push` vào DB này sẽ xoá cột `user_roles.id`. Cần người dùng quyết định: reset DB dev theo schema mới (`db push --force-reset` + `db:seed`) hay giữ nguyên.
-  - MariaDB local là 10.3 trong khi plan/compose dùng 10.11; toàn bộ kiểm thử chạy trên 10.11.
-  - Cột `updated_at` khi tạo bằng Prisma (`db push`/migration) không còn `ON UPDATE CURRENT_TIMESTAMP` ở mức DB; Prisma tự cập nhật qua `@updatedAt`, nhưng câu SQL thuần cần tự set `updated_at`.
-  - Container Metabase (port 3000) đã dừng (exit 137) lúc 16:36 UTC trong lúc chạy Docker stack của P1.2 — nghi do thiếu bộ nhớ Docker Desktop; chưa khởi động lại.
+- **Vấn đề / lưu ý — đã xử lý (2026-11-03)** theo quyết định của người dùng:
+  1. ✅ **DB dev local đã đồng bộ.** `bizonedb` (MariaDB 10.3, cổng 3306) trước đó do một lần chạy Prisma khác (2026-06-15) tạo, lệch so với `schema.sql` (thừa `user_roles.id`, thiếu `order_channel_mapping`, khác tên FK/enum; có 1 user `admin`). Đã sao lưu (`mysqldump`), rồi `prisma migrate reset` (người dùng xác nhận) + `npm run db:seed`. Kết quả: 70 bảng, `_prisma_migrations` ghi `0_init`, `migrate status` "up to date", `migrate diff` rỗng. Đổi charset mặc định của DB sang `utf8mb4_unicode_ci` (server 10.3 mặc định `latin1`). Dùng `migrate reset` thay `db push --force-reset` để DB có lịch sử migration — `db:migrate` về sau mới chạy được.
+  2. ✅ **MariaDB 10.3 vs 10.11 — có khác biệt quan trọng, giữ tài liệu ở 10.11.** Kiểm thử trên 10.3: 10/10 truy vấn Prisma, seed, `/api/health` (port 3000) đều đạt → không ảnh hưởng công việc hiện tại. Nhưng: 10.3 hết hỗ trợ từ 2023 (không vá bảo mật); buộc Keycloak dừng ở 23.0.7 (≥ 26 cần MariaDB ≥ 10.4); thiếu `INSERT … RETURNING`, `SKIP LOCKED`, `JSON_TABLE`, kiểu `UUID`. Quyết định: đích production/Docker = 10.11; dev local 10.3 được chấp nhận với quy tắc code chạy được trên cả hai (ghi trong `CLAUDE.md`).
+  3. ✅ **`updated_at`**: chấp nhận cập nhật qua `@updatedAt` của Prisma; SQL thuần phải tự set.
+  4. ✅ **Metabase**: người dùng tự dừng (không phải do thiếu bộ nhớ như ghi trước đó). Dự án không cần — không có trong BRD/SRS/PLAN, báo cáo xây trong app (P2.9, P4.2, P5.5); thêm Metabase sẽ trùng chức năng và cho một công cụ ngoài đọc thẳng dữ liệu nhiều tenant. Port 3000 giờ trống → BizOne chạy đúng port mặc định 3000 (khớp redirect URI Keycloak).
