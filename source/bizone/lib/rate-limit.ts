@@ -1,14 +1,4 @@
-import Redis from "ioredis";
-
-let _redis: Redis | null = null;
-
-function getRedis(): Redis {
-  if (!_redis) {
-    _redis = new Redis(process.env.REDIS_URL ?? "redis://:123456@localhost:6379");
-    _redis.on("error", () => {}); // suppress unhandled errors
-  }
-  return _redis;
-}
+import { getRedis } from "@/lib/redis";
 
 export interface RateLimitResult {
   allowed: boolean;

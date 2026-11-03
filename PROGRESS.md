@@ -69,7 +69,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P2.1 | Product Module — API | ⬜ | — | |
+| P2.1 | Product Module — API | 🟡 | — | Đang làm |
 | P2.2 | Product Module — UI | ⬜ | — | |
 | P2.3 | Inventory Module — API | ⬜ | — | |
 | P2.4 | Inventory Module — UI | ⬜ | — | |

@@ -1,10 +1,12 @@
 import { router } from "@/server/trpc";
-
-// Routers will be added here as modules are built (P2.x+)
-// e.g. import { productRouter } from "./product";
+import { productRouter } from "./product";
+import { categoryRouter } from "./category";
+import { productSearchRouter } from "./productSearch";
 
 export const appRouter = router({
-  // placeholder — populated from P2.1 onward
+  product: productRouter,
+  category: categoryRouter,
+  productSearch: productSearchRouter,
 });
 
 export type AppRouter = typeof appRouter;
