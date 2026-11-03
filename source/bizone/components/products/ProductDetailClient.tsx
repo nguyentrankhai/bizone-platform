@@ -24,7 +24,6 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
     if (!id || isNaN(id)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setError("ID sản phẩm không hợp lệ");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

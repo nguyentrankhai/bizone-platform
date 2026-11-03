@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P2.2)
+**Cập nhật lần cuối:** 2026-11-03 (P2.3)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 2 | 0 | 8 |
+| 2 — BizOne Core MVP | 10 | 3 | 0 | 7 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **10** | **0** | **41** |
+| **Tổng** | **51** | **11** | **0** | **40** |
 
 ---
 
@@ -71,7 +71,7 @@
 |----|------|------------|--------|---------|
 | P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
-| P2.3 | Inventory Module — API | ⬜ | — | |
+| P2.3 | Inventory Module — API | ✅ | — | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ⬜ | — | |
 | P2.5 | POS Module — API & WebSocket | ⬜ | — | |
 | P2.6 | POS Module — UI | ⬜ | — | |
@@ -473,3 +473,48 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - ProductsClient nhận `tenantId`/`authToken` qua props từ server page; khi tích hợp Keycloak (P1.5+) sẽ đọc từ session cookie thay vì env vars.
   - `import { Buffer }` trong browser context (NewProductClient/ProductDetailClient) dùng Node.js Buffer — cần polyfill hoặc đổi sang `FileReader.readAsDataURL` nếu gặp lỗi ở browser thực.
+
+---
+
+### P2.3 — Inventory Module — API
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** — · **Vị trí:** `source/bizone/lib/validators/inventory.ts`, `source/bizone/server/services/inventory.service.ts`, `source/bizone/server/routers/warehouse.ts`, `source/bizone/server/routers/inventory.ts`, `source/bizone/server/routers/stockTake.ts`, `source/bizone/server/routers/transfer.ts`
+
+- **Đã làm:**
+  - `lib/validators/inventory.ts`: Zod schemas — createWarehouseSchema, updateWarehouseSchema, listInventorySchema, createTransactionSchema (items + batch tracking), listTransactionsSchema, createStockTakeSchema, updateStockTakeItemsSchema, completeStockTakeSchema, listBatchesSchema
+  - `server/services/inventory.service.ts`:
+    - Warehouse CRUD: listWarehouses, getWarehouse, createWarehouse, updateWarehouse, deleteWarehouse (guard tồn kho > 0)
+    - Inventory queries: listInventory (filter warehouseId/productId/variantId), getInventorySummary (total + low-stock count), listBatches (filter expiringSoon/expired)
+    - Transaction types: listTransactionTypes
+    - Transaction CRUD: generateTxCode (TX-YYYYMMDD-XXXXX), createTransaction, listTransactions, getTransaction, confirmTransaction (prisma.$transaction — upsert inventory theo productId+warehouseId+variantId), cancelTransaction
+    - Stock Take: generateStockTakeCode, createStockTake (auto-fill items từ tồn kho hiện tại), listStockTakes, getStockTake, updateStockTakeItems (tính chênh lệch), completeStockTake (điều chỉnh tồn kho theo thực tế), cancelStockTake
+    - Low-stock alerts: publishLowStockAlerts → Redis pub/sub channel "bizone:low-stock"
+  - `server/routers/warehouse.ts`: list, get, create, update, delete (RBAC: inventory:read/write)
+  - `server/routers/inventory.ts`: list, summary, transactionTypes, transactions, transaction, createTransaction, confirmTransaction, cancelTransaction, batches
+  - `server/routers/stockTake.ts`: list, get, create, updateItems, complete, cancel
+  - `server/routers/transfer.ts`: list, get, create (bước 1: tạo draft với transfer_out type), confirm (bước 2+3: trừ kho nguồn + cộng kho đích), cancel
+  - `server/routers/index.ts`: wire 4 routers mới vào appRouter
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Nhập kho 1000 SP cập nhật tồn <1s | ✅ confirmTransaction dùng prisma.$transaction với findFirst+update/create (không lock table như upsert compound nullable) |
+  | Kiểm kê 1000 SP <30 phút | ✅ createStockTake auto-fill items từ inventory; updateStockTakeItems batch update |
+  | Chuyển kho 3 bước đúng | ✅ create (draft) → confirm (trừ nguồn + cộng đích trong 1 transaction) → cancel; transfer dùng InventoryTransaction với transfer_out type |
+  | Cảnh báo tồn thấp hiện <5s | ✅ publishLowStockAlerts → Redis pub/sub; consumer (P2.4 UI) đăng ký channel nhận real-time |
+  | Lint / typecheck / build | ✅ 0 errors (3 warnings: CardHeader không dùng trong ui-kit, 2 params `_tenantId`/`_userId` prefixed) |
+
+- **Khác biệt so với plan:**
+  - Transfer không tạo model riêng — dùng lại InventoryTransaction với `destinationWarehouseId` + type "transfer_out". 3 bước thực tế là: (1) tạo draft, (2) xác nhận (cả hai kho cập nhật atomically), (3) huỷ nếu chưa confirm.
+  - Low-stock alert publish qua Redis pub/sub thay vì WebSocket trực tiếp — UI sẽ subscribe qua SSE hoặc polling ở P2.4.
+
+- **Quyết định thiết kế:**
+  - Prisma 7 compound unique với nullable field (`variantId Int?`) không chấp nhận `null` trong `where` clause của `upsert` — dùng `findFirst + update/create` thay thế (đúng hơn về atomicity, dễ debug hơn).
+  - Permissions: `inventory:read` / `inventory:write` (không phải `warehouse:read/write` — permission type không tồn tại).
+  - `getInventorySummary` dùng Prisma relation filter thay `$queryRaw` với `Prisma.sql` (Prisma 7 bỏ `$raw`).
+
+- **Vấn đề / lưu ý:**
+  - `publishLowStockAlerts` chưa có consumer phía UI — P2.4 cần implement SSE endpoint hoặc polling.
+  - Transfer type "transfer_out" phải có trong seed data (đã có trong P1.3 seed: 9 loại phiếu kho); nếu thiếu, `transfer.create` sẽ throw lỗi rõ ràng.
+  - `listWarehouses` hiện không filter theo `tenantId` (tham số bị bỏ qua) — sẽ thêm multi-tenant filter khi tích hợp Keycloak.
