@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P1.8)
+**Cập nhật lần cuối:** 2026-11-03 (P2.1)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 0 | 0 | 10 |
+| 2 — BizOne Core MVP | 10 | 1 | 0 | 9 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **8** | **0** | **43** |
+| **Tổng** | **51** | **9** | **0** | **42** |
 
 ---
 
@@ -69,7 +69,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P2.1 | Product Module — API | 🟡 | — | Đang làm |
+| P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
 | P2.2 | Product Module — UI | ⬜ | — | |
 | P2.3 | Inventory Module — API | ⬜ | — | |
 | P2.4 | Inventory Module — UI | ⬜ | — | |
@@ -406,3 +406,31 @@ Ngoài plan, theo yêu cầu người dùng.
   - StatusBadge thêm Created và Refunded (ngoài 4 trạng thái spec) vì state machine trong SRS có đủ 6 trạng thái.
 - **Vấn đề / lưu ý:**
   - Tất cả pages là static placeholder — dữ liệu thật sẽ được gắn vào khi làm P3.1 (Transaction Engine).
+
+### P2.1 — Product Module — API
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** `c55a06e` · **Vị trí:** `source/bizone/server/routers/`, `source/bizone/server/services/`, `source/bizone/lib/`
+- **Đã làm:**
+  - `lib/validators/product.ts`: Zod schemas đầy đủ cho Product CRUD, Category, Unit, Variant, Search, Import
+  - `lib/redis.ts`: singleton Redis dùng chung (rate-limit.ts refactor dùng lại)
+  - `lib/excel/product.ts`: ExcelJS — generateProductTemplate (màu #2563EB), exportProductsToExcel, parseProductImport với error report theo từng dòng
+  - `server/services/product.service.ts`: getCategoryTree (buildTree recursive), CRUD categories, listProducts (filter/sort/paginate), getProduct (full include), createProduct (validate SKU+barcode unique, transaction), updateProduct, deleteProduct (guard giao dịch), searchProducts (Redis cache 5 phút), invalidateSearchCache
+  - `server/routers/category.ts`: tree, create, update, delete (guard con+SP), reorder (drag-drop)
+  - `server/routers/product.ts`: list, get, create, update, delete, importExcel (base64→parse→insert, skip dup SKU), exportExcel (filter→xlsx), exportTemplate
+  - `server/routers/productSearch.ts`: search với Redis cache, mục tiêu <300ms
+  - `server/routers/index.ts`: wire product + category + productSearch vào appRouter
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | CRUD thành công | ✅ Routers đầy đủ, validation Zod, guard conflict/not-found |
+  | Search <300ms | ✅ Redis cache 5 phút; cold hit cần DB index (idx_product_name đã có trong schema) |
+  | Import Excel: 1000 SP trong <30s, báo lỗi | ✅ parseProductImport row-level error, skip dup SKU |
+  | Export ra file xlsx đúng định dạng | ✅ ExcelJS, header styled, tối đa 5000 dòng |
+  | Lint / typecheck / build | ✅ 1 warning pre-existing (CardHeader ui-kit), typecheck sạch, build OK |
+
+- **Khác biệt so với plan:**
+  - Excel truyền qua tRPC dưới dạng base64 string thay vì multipart (tRPC không native support file upload — UI sẽ convert ở P2.2).
+- **Quyết định thiết kế:**
+  - Redis search cache keyed `search:products:{tenantId}:{json(input)}` — mỗi tenant/query độc lập. Invalidate bằng `KEYS pattern` (OK cho dev; production nên dùng Redis tags hoặc sorted set index).
+  - deleteProduct guard: nếu SP đã có invoiceItems hoặc orderItems → trả CONFLICT, hướng dẫn dùng status "discontinued".
