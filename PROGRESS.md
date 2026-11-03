@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P1.7)
+**Cập nhật lần cuối:** 2026-11-03 (P1.8)
 
 ---
 
@@ -13,14 +13,14 @@
 
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
-| 1 — Nền tảng | 8 | 7 | 0 | 1 |
+| 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 0 | 0 | 10 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **7** | **0** | **44** |
+| **Tổng** | **51** | **8** | **0** | **43** |
 
 ---
 
@@ -63,7 +63,7 @@
 | P1.5 | Authentication System | ✅ | `4a5f17f` | JWKS verify qua jose; middleware JWT+tenant; vấn đề #1 (WS auth) xử lý P1.5; vấn đề #2 (Token Exchange) → dùng client_credentials trực tiếp |
 | P1.6 | API Core Infrastructure | ✅ | `221a42d` | tRPC 11.23 + middleware chain (auth/tenant/rbac/rate-limit); idempotency Redis; REST helpers cho Payment Hub |
 | P1.7 | Shared UI Component Library | ✅ | `a7285a9` | Sidebar, TopBar, AppLayout, StatCard, DataTable, Modal, Toast, Input, Select, NumericKeypad; trang demo /ui-kit |
-| P1.8 | Payment Hub Admin Layout | ⬜ | — | |
+| P1.8 | Payment Hub Admin Layout | ✅ | `b520eb1` | PHSidebar (dark), PHHeader (breadcrumb), StatusBadge (6 trạng thái), 9 module pages |
 
 ## Giai đoạn 2 — BizOne Core MVP (Tuần 4–8)
 
@@ -361,3 +361,48 @@ Ngoài plan, theo yêu cầu người dùng.
     ```
   - Sau khi Keycloak sửa xong cần test thực tế: `curl -X POST .../token` với client_credentials; gọi `/api/health` với token hợp lệ → 200; token hết hạn → 401; X-Tenant-ID sai → 403.
   - `jwks-rsa` đã cài nhưng không dùng — có thể `npm uninstall jwks-rsa` ở bizone (P1.6 hoặc cleanup).
+
+### P1.7 — Shared UI Component Library
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** `a7285a9` · **Vị trí:** `source/bizone/components/`
+- **Đã làm:**
+  - `components/layout/`: `Sidebar.tsx` (collapsible, active state, section separator), `TopBar.tsx` (search + branch selector + notif + avatar), `AppLayout.tsx` (flex h-screen wrapper)
+  - `components/ui/`: `StatCard.tsx` (value + trend ↑↓ + icon), `Card.tsx` (header/body/action slot), `DataTable.tsx` (generic T, sort toggle 3 trạng thái, search, phân trang), `Modal.tsx` (4 size, backdrop click, ESC key, footer slot), `Toast.tsx` (context + useToast hook, 4 loại, auto-dismiss 4s)
+  - `components/forms/`: `Input.tsx` (forwardRef, label, error, hint, leftIcon, rightIcon), `Select.tsx` (forwardRef, options, placeholder, ChevronDown overlay), `NumericKeypad.tsx` (3×4 grid, h-14 buttons ≥44px POS spec, Delete icon)
+  - `app/ui-kit/page.tsx`: trang demo đầy đủ với 35 sản phẩm mẫu, tất cả component và trạng thái
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Sidebar có các mục nav đúng spec | ✅ 12 mục có icon, section separator, active state, collapse toggle |
+  | DataTable sort + search + phân trang | ✅ 35 dòng, sort 3 chiều, search theo tên/SKU, 10 dòng/trang |
+  | Modal mở/đóng (backdrop + ESC) | ✅ |
+  | Toast 4 loại tự tắt sau 4s | ✅ |
+  | NumericKeypad ≥44×44px | ✅ h-14 = 56px |
+  | Form fields với error / hint / icon | ✅ Tất cả trạng thái |
+  | Lint / typecheck / build | ✅ Build tạo /ui-kit static route |
+
+### P1.8 — Payment Hub Admin Layout
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** `b520eb1` · **Vị trí:** `source/payment-hub/components/ph/`, `app/*/`
+- **Đã làm:**
+  - `PHSidebar.tsx`: sidebar tối (slate-900), 9 nav items chia 4 nhóm (TỔNG QUAN / QUẢN LÝ / BÁO CÁO / HỆ THỐNG), collapse toggle, active highlight màu blue-600/20
+  - `PHHeader.tsx`: breadcrumb tự động từ pathname, search input, bell notification, avatar
+  - `PHLayout.tsx`: wrapper `flex h-screen` gồm Sidebar + Header + main scrollable
+  - `StatusBadge.tsx`: 6 trạng thái giao dịch — Success (emerald), Failed (red), Pending (amber), Expired (gray), Created (blue), Refunded (purple)
+  - Pages: `/dashboard` (stat cards + bảng GD gần đây), `/transactions` (bảng 20 GD + filter), `/merchants`, `/connectors` (4 connector cards), `/webhooks`, `/reconciliation`, `/reports` (6 loại báo cáo), `/audit-log`, `/settings` (3 nhóm cấu hình)
+  - `/` redirect về `/dashboard`
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Sidebar navigation đúng | ✅ 9 mục, 4 nhóm section, active state theo pathname, collapse toggle |
+  | Các page load đúng route | ✅ 9/9 routes, breadcrumb tự cập nhật |
+  | Màu trạng thái hiển thị chính xác | ✅ green=Success, red=Failed, amber=Pending, gray=Expired, blue=Created, purple=Refunded |
+  | Lint / typecheck / build | ✅ 14/14 static routes, lint sạch, typecheck sạch |
+
+- **Quyết định thiết kế:**
+  - Sidebar dùng màu slate-900 theo mockup (dark) trong khi BizOne sidebar dùng màu trắng/sáng — hai hệ thống có visual identity riêng biệt.
+  - StatusBadge thêm Created và Refunded (ngoài 4 trạng thái spec) vì state machine trong SRS có đủ 6 trạng thái.
+- **Vấn đề / lưu ý:**
+  - Tất cả pages là static placeholder — dữ liệu thật sẽ được gắn vào khi làm P3.1 (Transaction Engine).
