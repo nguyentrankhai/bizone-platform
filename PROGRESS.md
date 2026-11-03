@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P1.6)
+**Cập nhật lần cuối:** 2026-11-03 (P1.7)
 
 ---
 
@@ -13,14 +13,14 @@
 
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
-| 1 — Nền tảng | 8 | 6 | 0 | 2 |
+| 1 — Nền tảng | 8 | 7 | 0 | 1 |
 | 2 — BizOne Core MVP | 10 | 0 | 0 | 10 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **6** | **0** | **45** |
+| **Tổng** | **51** | **7** | **0** | **44** |
 
 ---
 
@@ -62,7 +62,7 @@
 | P1.4 | Payment Hub Database Schema | ✅ | `c88f056` | Xử lý vấn đề mở #4, #5 |
 | P1.5 | Authentication System | ✅ | `4a5f17f` | JWKS verify qua jose; middleware JWT+tenant; vấn đề #1 (WS auth) xử lý P1.5; vấn đề #2 (Token Exchange) → dùng client_credentials trực tiếp |
 | P1.6 | API Core Infrastructure | ✅ | `221a42d` | tRPC 11.23 + middleware chain (auth/tenant/rbac/rate-limit); idempotency Redis; REST helpers cho Payment Hub |
-| P1.7 | Shared UI Component Library | ⬜ | — | |
+| P1.7 | Shared UI Component Library | ✅ | `a7285a9` | Sidebar, TopBar, AppLayout, StatCard, DataTable, Modal, Toast, Input, Select, NumericKeypad; trang demo /ui-kit |
 | P1.8 | Payment Hub Admin Layout | ⬜ | — | |
 
 ## Giai đoạn 2 — BizOne Core MVP (Tuần 4–8)
