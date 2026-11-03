@@ -79,7 +79,7 @@
 | P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
-| P2.4 | Inventory Module — UI | ✅ | — | Xem [kết quả P2.4](#p24--inventory-module--ui) |
+| P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ⬜ | — | |
 | P2.6 | POS Module — UI | ⬜ | — | |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
@@ -531,7 +531,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.4 — Inventory Module — UI
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/app/warehouse/`, `source/bizone/components/inventory/`, `source/bizone/hooks/useLowStockAlerts.ts`, `source/bizone/app/api/inventory/alerts/route.ts`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `f41f1a0` · **Vị trí:** `source/bizone/app/warehouse/`, `source/bizone/components/inventory/`, `source/bizone/hooks/useLowStockAlerts.ts`, `source/bizone/app/api/inventory/alerts/route.ts`
 
 - **Đã làm:**
   - **Trang** (theo `mockups-bizone/04-warehouse.html`):
