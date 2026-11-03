@@ -30,16 +30,26 @@ async function upsertInventory(
     });
   } else {
     await trx.inventory.create({
-      data: { productId, warehouseId, variantId: variantId ?? null, quantity: delta, minQuantity: 0 },
+      data: {
+        productId,
+        warehouseId,
+        variantId: variantId ?? null,
+        quantity: delta,
+        minQuantity: 0,
+      },
     });
   }
 }
 
 function conflict(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "CONFLICT", message: msg })), { bizoneCode: "CONFLICT" });
+  return Object.assign(new Error(JSON.stringify({ code: "CONFLICT", message: msg })), {
+    bizoneCode: "CONFLICT",
+  });
 }
 function notFound(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "NOT_FOUND", message: msg })), { bizoneCode: "NOT_FOUND" });
+  return Object.assign(new Error(JSON.stringify({ code: "NOT_FOUND", message: msg })), {
+    bizoneCode: "NOT_FOUND",
+  });
 }
 
 // ─── Warehouse ───────────────────────────────────────────────────────────────
@@ -81,9 +91,13 @@ export async function updateWarehouse(id: number, data: UpdateWarehouseInput) {
 
 export async function deleteWarehouse(id: number) {
   const prisma = getPrisma();
-  const wh = await prisma.warehouse.findUnique({ where: { id }, include: { _count: { select: { inventory: true } } } });
+  const wh = await prisma.warehouse.findUnique({
+    where: { id },
+    include: { _count: { select: { inventory: true } } },
+  });
   if (!wh) throw notFound(`Kho #${id} không tồn tại`);
-  if (wh._count.inventory > 0) throw conflict("Không thể xóa kho còn tồn kho. Vui lòng chuyển tồn về 0 trước.");
+  if (wh._count.inventory > 0)
+    throw conflict("Không thể xóa kho còn tồn kho. Vui lòng chuyển tồn về 0 trước.");
   return prisma.warehouse.delete({ where: { id } });
 }
 
@@ -91,17 +105,46 @@ export async function deleteWarehouse(id: number) {
 
 export async function listInventory(input: ListInventoryInput) {
   const prisma = getPrisma();
-  const where = {
+  const q = input.search?.trim();
+  const where: Prisma.InventoryWhereInput = {
     ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
     ...(input.productId ? { productId: input.productId } : {}),
-    ...(input.lowStock ? { product: { minStock: { gt: 0 } } } : {}),
+    ...(q
+      ? {
+          product: {
+            OR: [{ name: { contains: q } }, { sku: { contains: q } }, { barcode: { contains: q } }],
+          },
+        }
+      : {}),
   };
+
+  // quantity <= product.minStock compares two tables, which Prisma cannot express in `where`.
+  // Resolve the matching ids first so that count and pagination stay correct.
+  if (input.lowStock) {
+    const candidates = await prisma.inventory.findMany({
+      where: { AND: [where, { product: { minStock: { gt: 0 } } }] },
+      select: { id: true, quantity: true, product: { select: { minStock: true } } },
+    });
+    where.id = {
+      in: candidates.filter((c) => Number(c.quantity) <= c.product.minStock).map((c) => c.id),
+    };
+  }
 
   const [items, total] = await prisma.$transaction([
     prisma.inventory.findMany({
       where,
       include: {
-        product: { select: { id: true, name: true, sku: true, unit: true, minStock: true, status: true } },
+        product: {
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            barcode: true,
+            unit: true,
+            minStock: true,
+            status: true,
+          },
+        },
         warehouse: { select: { id: true, name: true, code: true } },
         variant: { select: { id: true, sku: true } },
       },
@@ -112,15 +155,40 @@ export async function listInventory(input: ListInventoryInput) {
     prisma.inventory.count({ where }),
   ]);
 
-  // Filter low-stock in memory for minStock comparison
-  const filtered = input.lowStock
-    ? items.filter((inv) => Number(inv.quantity) <= (inv.product.minStock ?? 0))
-    : items;
-
   return {
-    items: filtered,
-    meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) },
+    items,
+    meta: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.ceil(total / input.pageSize),
+    },
   };
+}
+
+/** Tổng số lượng tồn theo từng kho — dữ liệu cho biểu đồ tồn kho */
+export async function getStockByWarehouse() {
+  const prisma = getPrisma();
+  const [groups, warehouses] = await prisma.$transaction([
+    prisma.inventory.groupBy({
+      by: ["warehouseId"],
+      _sum: { quantity: true },
+      _count: { _all: true },
+      orderBy: { warehouseId: "asc" },
+    }),
+    prisma.warehouse.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+  return warehouses.map((wh) => {
+    const g = groups.find((x) => x.warehouseId === wh.id);
+    return {
+      ...wh,
+      totalQuantity: Number(g?._sum?.quantity ?? 0),
+      itemCount: typeof g?._count === "object" ? (g._count._all ?? 0) : 0,
+    };
+  });
 }
 
 export async function getInventorySummary(warehouseId?: number) {
@@ -166,6 +234,9 @@ export async function listTransactions(input: ListTransactionsInput) {
   const prisma = getPrisma();
   const where = {
     ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+    ...(input.destinationWarehouseId
+      ? { destinationWarehouseId: input.destinationWarehouseId }
+      : {}),
     ...(input.transactionTypeId ? { transactionTypeId: input.transactionTypeId } : {}),
     ...(input.status ? { status: input.status as "draft" | "confirmed" | "cancelled" } : {}),
     ...(input.dateFrom || input.dateTo
@@ -196,7 +267,12 @@ export async function listTransactions(input: ListTransactionsInput) {
 
   return {
     items,
-    meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) },
+    meta: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.ceil(total / input.pageSize),
+    },
   };
 }
 
@@ -221,13 +297,56 @@ export async function getTransaction(id: number) {
   return tx;
 }
 
-export async function createTransaction(input: CreateTransactionInput, userId: number) {
+export async function createTransaction(input: CreateTransactionInput, userId: number | null) {
   const prisma = getPrisma();
-  const txType = await prisma.inventoryTransactionType.findUnique({ where: { id: input.transactionTypeId } });
+  const txType = await prisma.inventoryTransactionType.findUnique({
+    where: { id: input.transactionTypeId },
+  });
   if (!txType) throw notFound(`Loại phiếu #${input.transactionTypeId} không tồn tại`);
 
   const wh = await prisma.warehouse.findUnique({ where: { id: input.warehouseId } });
   if (!wh) throw notFound(`Kho #${input.warehouseId} không tồn tại`);
+
+  if (input.destinationWarehouseId) {
+    if (input.destinationWarehouseId === input.warehouseId)
+      throw conflict("Kho đích phải khác kho nguồn");
+    const dest = await prisma.warehouse.findUnique({ where: { id: input.destinationWarehouseId } });
+    if (!dest) throw notFound(`Kho #${input.destinationWarehouseId} không tồn tại`);
+  }
+
+  // Lô/HSD: phiếu nhập tạo lô mới (số lượng 0, cộng khi xác nhận); phiếu xuất phải chọn lô đã có
+  const batchIds: (number | null)[] = [];
+  for (const item of input.items) {
+    if (!item.batchCode) {
+      batchIds.push(null);
+      continue;
+    }
+    const existing = await prisma.inventoryBatch.findFirst({
+      where: {
+        productId: item.productId,
+        warehouseId: input.warehouseId,
+        batchCode: item.batchCode,
+      },
+    });
+    if (existing) {
+      batchIds.push(existing.id);
+    } else if (txType.direction === "in") {
+      const created = await prisma.inventoryBatch.create({
+        data: {
+          productId: item.productId,
+          warehouseId: input.warehouseId,
+          batchCode: item.batchCode,
+          quantity: 0,
+          costPrice: item.unitCost ?? null,
+          manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
+          expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+        },
+      });
+      batchIds.push(created.id);
+    } else {
+      throw notFound(`Lô "${item.batchCode}" không có trong kho ${wh.name}`);
+    }
+  }
 
   const code = generateTxCode();
 
@@ -243,9 +362,10 @@ export async function createTransaction(input: CreateTransactionInput, userId: n
       createdBy: userId,
       status: "draft",
       inventoryTransactionItems: {
-        create: input.items.map((item) => ({
+        create: input.items.map((item, i) => ({
           productId: item.productId,
           variantId: item.variantId ?? null,
+          batchId: batchIds[i],
           quantity: item.quantity,
           unitCost: item.unitCost ?? null,
           notes: item.notes ?? null,
@@ -262,17 +382,18 @@ export async function createTransaction(input: CreateTransactionInput, userId: n
   return tx;
 }
 
-export async function confirmTransaction(id: number, _userId: number) {
+export async function confirmTransaction(id: number, _userId: number | null) {
   const prisma = getPrisma();
   const tx = await prisma.inventoryTransaction.findUnique({
     where: { id },
     include: {
-      inventoryTransactionItems: true,
+      inventoryTransactionItems: { include: { batch: true, product: { select: { name: true } } } },
       transactionType: true,
     },
   });
   if (!tx) throw notFound(`Phiếu kho #${id} không tồn tại`);
-  if (tx.status !== "draft") throw conflict(`Phiếu kho đang ở trạng thái "${tx.status}", không thể xác nhận`);
+  if (tx.status !== "draft")
+    throw conflict(`Phiếu kho đang ở trạng thái "${tx.status}", không thể xác nhận`);
 
   const direction = tx.transactionType.direction; // "in" | "out"
 
@@ -285,19 +406,75 @@ export async function confirmTransaction(id: number, _userId: number) {
       const qty = Number(item.quantity);
       const delta = direction === "in" ? qty : -qty;
 
+      if (direction === "out") {
+        const current = await trx.inventory.findFirst({
+          where: {
+            productId: item.productId,
+            warehouseId: tx.warehouseId,
+            variantId: item.variantId ?? null,
+          },
+          select: { quantity: true },
+        });
+        const available = Number(current?.quantity ?? 0);
+        if (available < qty) {
+          throw conflict(
+            `"${item.product.name}" chỉ còn ${available} trong kho, không đủ xuất ${qty}`,
+          );
+        }
+      }
+
       await upsertInventory(trx, item.productId, tx.warehouseId, item.variantId, delta);
+      if (item.batchId) {
+        await trx.inventoryBatch.update({
+          where: { id: item.batchId },
+          data: { quantity: { increment: delta } },
+        });
+      }
 
       // For transfer: also update destination warehouse
       if (direction === "out" && tx.destinationWarehouseId) {
         await upsertInventory(trx, item.productId, tx.destinationWarehouseId, item.variantId, qty);
+        if (item.batch) {
+          const destBatch = await trx.inventoryBatch.findFirst({
+            where: {
+              productId: item.productId,
+              warehouseId: tx.destinationWarehouseId,
+              batchCode: item.batch.batchCode,
+            },
+          });
+          if (destBatch) {
+            await trx.inventoryBatch.update({
+              where: { id: destBatch.id },
+              data: { quantity: { increment: qty } },
+            });
+          } else {
+            await trx.inventoryBatch.create({
+              data: {
+                productId: item.productId,
+                warehouseId: tx.destinationWarehouseId,
+                batchCode: item.batch.batchCode,
+                quantity: qty,
+                costPrice: item.batch.costPrice,
+                manufactureDate: item.batch.manufactureDate,
+                expiryDate: item.batch.expiryDate,
+              },
+            });
+          }
+        }
       }
     }
   });
 
   // Publish low-stock alert via Redis pub/sub
-  await publishLowStockAlerts(tx.warehouseId, tx.inventoryTransactionItems.map((i) => i.productId));
+  await publishLowStockAlerts(
+    tx.warehouseId,
+    tx.inventoryTransactionItems.map((i) => i.productId),
+  );
 
-  return prisma.inventoryTransaction.findUnique({ where: { id }, include: { transactionType: true, warehouse: true } });
+  return prisma.inventoryTransaction.findUnique({
+    where: { id },
+    include: { transactionType: true, warehouse: true },
+  });
 }
 
 export async function cancelTransaction(id: number) {
@@ -322,7 +499,9 @@ async function publishLowStockAlerts(warehouseId: number, productIds: number[]) 
       },
       include: { product: { select: { id: true, name: true, sku: true, minStock: true } } },
     });
-    const alerts = lowStockItems.filter((inv) => Number(inv.quantity) <= (inv.product.minStock ?? 0));
+    const alerts = lowStockItems.filter(
+      (inv) => Number(inv.quantity) <= (inv.product.minStock ?? 0),
+    );
     if (alerts.length > 0) {
       await redis.publish("bizone:low-stock", JSON.stringify({ warehouseId, alerts }));
     }
@@ -362,7 +541,12 @@ export async function listBatches(input: ListBatchesInput) {
 
   return {
     items,
-    meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) },
+    meta: {
+      page: input.page,
+      pageSize: input.pageSize,
+      total,
+      totalPages: Math.ceil(total / input.pageSize),
+    },
   };
 }
 
@@ -374,7 +558,7 @@ function generateStockTakeCode(): string {
   return `KK-${ymd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
-export async function createStockTake(input: CreateStockTakeInput, userId: number) {
+export async function createStockTake(input: CreateStockTakeInput, userId: number | null) {
   const prisma = getPrisma();
   const wh = await prisma.warehouse.findUnique({ where: { id: input.warehouseId } });
   if (!wh) throw notFound(`Kho #${input.warehouseId} không tồn tại`);
@@ -427,7 +611,12 @@ export async function getStockTake(id: number) {
   return note;
 }
 
-export async function listStockTakes(warehouseId?: number, status?: string, page = 1, pageSize = 20) {
+export async function listStockTakes(
+  warehouseId?: number,
+  status?: string,
+  page = 1,
+  pageSize = 20,
+) {
   const prisma = getPrisma();
   const where = {
     ...(warehouseId ? { warehouseId } : {}),
@@ -457,6 +646,16 @@ export async function updateStockTakeItems(input: UpdateStockTakeItemsInput) {
     throw conflict(`Phiếu kiểm kê đang ở trạng thái "${note.status}", không thể cập nhật`);
   }
 
+  const existingItems = await prisma.stockTakeItem.findMany({
+    where: { stockTakeId: input.stockTakeId },
+    select: { productId: true, variantId: true, systemQuantity: true },
+  });
+  const systemQty = (productId: number, variantId: number | null) =>
+    Number(
+      existingItems.find((e) => e.productId === productId && e.variantId === variantId)
+        ?.systemQuantity ?? 0,
+    );
+
   await prisma.$transaction([
     // Move to in_progress if still draft
     note.status === "draft"
@@ -464,10 +663,14 @@ export async function updateStockTakeItems(input: UpdateStockTakeItemsInput) {
       : prisma.stockTakeNote.findUnique({ where: { id: note.id } }), // no-op
     ...input.items.map((item) =>
       prisma.stockTakeItem.updateMany({
-        where: { stockTakeId: input.stockTakeId, productId: item.productId, variantId: item.variantId ?? null },
+        where: {
+          stockTakeId: input.stockTakeId,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+        },
         data: {
           actualQuantity: item.actualQuantity,
-          difference: item.actualQuantity,
+          difference: item.actualQuantity - systemQty(item.productId, item.variantId ?? null),
           unitCost: item.unitCost ?? null,
           notes: item.notes ?? null,
         },
@@ -478,7 +681,7 @@ export async function updateStockTakeItems(input: UpdateStockTakeItemsInput) {
   return getStockTake(input.stockTakeId);
 }
 
-export async function completeStockTake(stockTakeId: number, userId: number) {
+export async function completeStockTake(stockTakeId: number, userId: number | null) {
   const prisma = getPrisma();
   const note = await prisma.stockTakeNote.findUnique({
     where: { id: stockTakeId },
@@ -501,10 +704,17 @@ export async function completeStockTake(stockTakeId: number, userId: number) {
 
       // Adjust inventory to match actual (set exact quantity, not increment)
       const existingInv = await trx.inventory.findFirst({
-        where: { productId: item.productId, warehouseId: note.warehouseId, variantId: item.variantId ?? null },
+        where: {
+          productId: item.productId,
+          warehouseId: note.warehouseId,
+          variantId: item.variantId ?? null,
+        },
       });
       if (existingInv) {
-        await trx.inventory.update({ where: { id: existingInv.id }, data: { quantity: item.actualQuantity } });
+        await trx.inventory.update({
+          where: { id: existingInv.id },
+          data: { quantity: item.actualQuantity },
+        });
       } else {
         await trx.inventory.create({
           data: {

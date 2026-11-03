@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
+import { resolveDbUserId } from "@/server/services/user.service";
 import {
   listInventory,
   getInventorySummary,
+  getStockByWarehouse,
   listTransactionTypes,
   listTransactions,
   getTransaction,
@@ -33,6 +35,11 @@ export const inventoryRouter = router({
       return getInventorySummary(input.warehouseId);
     }),
 
+  /** GET tổng tồn theo kho (biểu đồ) */
+  stockByWarehouse: permissionProcedure("inventory:read").query(async () => {
+    return getStockByWarehouse();
+  }),
+
   // ── Transaction types ──────────────────────────────────────────────────────
 
   /** GET danh sách loại phiếu kho */
@@ -60,14 +67,14 @@ export const inventoryRouter = router({
   createTransaction: permissionProcedure("inventory:write")
     .input(createTransactionSchema)
     .mutation(async ({ input, ctx }) => {
-      return createTransaction(input, Number(ctx.user!.id));
+      return createTransaction(input, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST xác nhận phiếu → cập nhật tồn kho */
   confirmTransaction: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
-      return confirmTransaction(input.id, Number(ctx.user!.id));
+      return confirmTransaction(input.id, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST huỷ phiếu kho */

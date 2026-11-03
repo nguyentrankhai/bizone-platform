@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
+import { resolveDbUserId } from "@/server/services/user.service";
 import {
   createStockTake,
   getStockTake,
@@ -43,7 +44,7 @@ export const stockTakeRouter = router({
   create: permissionProcedure("inventory:write")
     .input(createStockTakeSchema)
     .mutation(async ({ input, ctx }) => {
-      return createStockTake(input, Number(ctx.user!.id));
+      return createStockTake(input, await resolveDbUserId(ctx.user!));
     }),
 
   /**
@@ -63,7 +64,7 @@ export const stockTakeRouter = router({
   complete: permissionProcedure("inventory:write")
     .input(completeStockTakeSchema)
     .mutation(async ({ input, ctx }) => {
-      return completeStockTake(input.stockTakeId, Number(ctx.user!.id));
+      return completeStockTake(input.stockTakeId, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST huỷ phiếu kiểm kê */

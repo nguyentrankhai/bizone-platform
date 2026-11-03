@@ -113,12 +113,16 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     ├── bizone/                      # P1.1 — BizOne Core (NextJS 16)
     │   ├── app/                     # App Router: pages, layouts, route handlers
     │   │   ├── api/health/route.ts  # GET /api/health (Docker healthcheck)
+    │   │   ├── api/inventory/alerts/route.ts  # P2.4 — SSE cảnh báo tồn thấp (relay Redis "bizone:low-stock")
+    │   │   ├── products/            # P2.2 — UI sản phẩm
+    │   │   ├── warehouse/           # P2.4 — kho: tồn, phiếu nhập/xuất (transactions/new), stock-take, transfer
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
     │   ├── components/ui/           # shadcn/ui components (style base-nova)
-    │   ├── hooks/                   # React hooks dùng chung
-    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma())
+    │   ├── components/inventory/    # P2.4 — WarehouseTable, StockTakeForm, TransferForm, BarcodeScanInput…
+    │   ├── hooks/                   # React hooks dùng chung (useLowStockAlerts: đọc SSE bằng fetch + Bearer)
+    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), trpc.ts, dev-auth.ts)
     │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
@@ -168,6 +172,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub. WebSocket chưa có auth (chờ P1.5).
 
+**Gọi tRPC từ client**: truyền header mỗi call `trpc.x.y.query(input, { context: { headers } })` (helper `apiContext(auth)` trong `components/inventory/shared.ts`). Chưa có đăng nhập OIDC trên trình duyệt — page lấy `DEV_TENANT_ID` / `DEV_AUTH_TOKEN` từ env qua `getDevAuth()`. Next 16 không cho 2 `next dev` cùng thư mục: nếu :3000 đang chạy, test bằng `npm run build && npx next start -p 3001`.
+
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 
 **Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
@@ -175,7 +181,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Metabase**: không thuộc dự án (không có trong BRD/SRS/PLAN). Báo cáo được xây trong app (P2.9, P4.2, P5.5). Container `metabase` trên máy đã dừng — không khởi động lại, không phụ thuộc vào nó.
 
 **Phiên bản MariaDB & Keycloak** (cập nhật 2026-11-03):
-- **MariaDB 10.11 LTS ở mọi nơi**: dev local (container `mariadbtest`, cổng 3306, volume `mariadbtest-10.11-data`), Docker compose của 2 app, production. Server mặc định `utf8mb4` / `utf8mb4_unicode_ci`. Được dùng tính năng 10.11 (`INSERT … RETURNING`, `SKIP LOCKED`, `JSON_TABLE`, kiểu `UUID`…).
+- **MariaDB 10.11 LTS ở mọi nơi**: dev local (container `mariadbtest`, cổng 3306, volume `mariadbtest-10.11-data`, restart policy `unless-stopped`), Docker compose của 2 app, production. Server mặc định `utf8mb4` / `utf8mb4_unicode_ci`. Được dùng tính năng 10.11 (`INSERT … RETURNING`, `SKIP LOCKED`, `JSON_TABLE`, kiểu `UUID`…).
 - `mariadbtest` dùng chung với dự án khác (`jasperserver`, `openapidb`): không xoá/reset DB của dự án khác.
 - **Keycloak 26.8.1** (`docker-compose.keycloak.yml`): admin bootstrap qua `KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD`; health/metrics ở management port **9000** trong container (không publish ra host vì MinIO dùng 9000). Token Exchange v1 (`KC_FEATURES=token-exchange`) đã deprecated — P1.5 không xây trên nó (xem `documents/OAuth2-Keycloak-Spec.md` §5.2).
 - Rollback (giữ tạm, xoá khi chắc chắn không cần): container `mariadbtest-10.3` (đã dừng) + volume gốc `0da92de461be…` còn nguyên dữ liệu 10.3. Khôi phục: dừng `mariadbtest`, `docker rename mariadbtest-10.3 mariadbtest`, start, và đổi Keycloak về 23.0.7.

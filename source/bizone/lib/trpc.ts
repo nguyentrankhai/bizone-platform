@@ -7,9 +7,10 @@ export const trpc = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      headers() {
-        // Headers are set by the browser; server-side calls use direct invocation
-        return {};
+      // Callers pass auth headers per call: `{ context: { headers } }`.
+      // A batch shares one HTTP request, so take headers from the first op.
+      headers({ opList }) {
+        return (opList[0]?.context.headers as Record<string, string> | undefined) ?? {};
       },
     }),
   ],

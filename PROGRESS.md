@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P2.3)
+**Cập nhật lần cuối:** 2026-11-04 (P2.4)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 3 | 0 | 7 |
+| 2 — BizOne Core MVP | 10 | 4 | 0 | 6 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **11** | **0** | **40** |
+| **Tổng** | **51** | **12** | **0** | **39** |
 
 ---
 
@@ -35,6 +35,10 @@
 | 3 | Job webhook chứa `secret` trong Redis → đổi sang `webhookConfigId`, đọc secret từ DB | P1.2 | P3.6 |
 | ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
 | ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
+| 7 | Dev chưa có đăng nhập OIDC trong trình duyệt: page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build) | P2.2/P2.4 | Task auth UI (trước P2.6 POS) |
+| 8 | Router `product.ts` còn dùng `Number(ctx.user.id)` (Keycloak `sub` là UUID → NaN khi tạo/sửa SP) → đổi sang `resolveDbUserId()` | P2.4 | P2.5 |
+| 9 | 25 file của P1.x–P2.3 chưa đạt `npm run format:check` | P2.4 | Commit `chore: format` riêng |
+| 10 | Lỗi nghiệp vụ (`CONFLICT`/`NOT_FOUND`) ném dạng `Error` thường → tRPC trả 500 và log như lỗi server; client vẫn đọc được `bizoneMessage` | P2.1/P2.3 | P2.5 (chuẩn hoá `TRPCError`) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -49,6 +53,9 @@
 | 2026-11-03 | Server MariaDB mặc định `latin1` | Server 10.11 mặc định `utf8mb4_unicode_ci`; `bizonedb` đã đổi sang `utf8mb4` |
 | 2026-11-03 | `updated_at` không còn `ON UPDATE CURRENT_TIMESTAMP` ở mức DB | Chấp nhận: Prisma tự cập nhật qua `@updatedAt`; SQL thuần tự set |
 | 2026-11-03 | Port 3000 bị Metabase chiếm | Metabase không thuộc dự án (người dùng đã dừng); BizOne dùng port 3000 |
+| 2026-11-04 | `mariadbtest` không publish cổng 3306 ra host (`docker port` rỗng dù cấu hình `3306:3306`) → app dev không kết nối DB | Restart container (cổng publish lại); đặt restart policy `unless-stopped` để tự chạy cùng Docker Desktop |
+| 2026-11-04 | Token Keycloak (`bizone-frontend`) thiếu claim `tenant_id`, `realm_access.roles`, `preferred_username` → mọi API trả 401/403 | Thêm 3 protocol mapper vào client (Keycloak đang chạy + `keycloak/realms/bizone-realm.json`) (P2.4) |
+| 2026-11-04 | tRPC client không gửi header `Authorization`/`X-Tenant-ID` truyền qua `context` | `lib/trpc.ts` lấy header từ `opList[0].context` (P2.4) |
 
 ---
 
@@ -72,13 +79,14 @@
 | P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
-| P2.4 | Inventory Module — UI | ⬜ | — | |
+| P2.4 | Inventory Module — UI | ✅ | — | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ⬜ | — | |
 | P2.6 | POS Module — UI | ⬜ | — | |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
+
 
 ## Giai đoạn 3 — Payment Hub MVP (Tuần 4–8)
 
@@ -518,3 +526,61 @@ Ngoài plan, theo yêu cầu người dùng.
   - `publishLowStockAlerts` chưa có consumer phía UI — P2.4 cần implement SSE endpoint hoặc polling.
   - Transfer type "transfer_out" phải có trong seed data (đã có trong P1.3 seed: 9 loại phiếu kho); nếu thiếu, `transfer.create` sẽ throw lỗi rõ ràng.
   - `listWarehouses` hiện không filter theo `tenantId` (tham số bị bỏ qua) — sẽ thêm multi-tenant filter khi tích hợp Keycloak.
+
+---
+
+### P2.4 — Inventory Module — UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/app/warehouse/`, `source/bizone/components/inventory/`, `source/bizone/hooks/useLowStockAlerts.ts`, `source/bizone/app/api/inventory/alerts/route.ts`
+
+- **Đã làm:**
+  - **Trang** (theo `mockups-bizone/04-warehouse.html`):
+    - `app/warehouse/page.tsx` — thao tác nhanh (Nhập/Xuất/Kiểm kê/Chuyển kho), 3 thẻ cảnh báo (mặt hàng tồn, dưới ngưỡng có badge đỏ, sắp hết hạn 30 ngày / đã hết hạn), biểu đồ tồn theo kho, 4 tab: Tồn kho · Phiếu nhập/xuất · Lô & HSD · Danh sách kho (tab lưu trên URL `?tab=`)
+    - `app/warehouse/transactions/new/page.tsx` — phiếu nhập/xuất (`?direction=in|out`)
+    - `app/warehouse/stock-take/page.tsx` — danh sách + tạo + thực hiện kiểm kê
+    - `app/warehouse/transfer/page.tsx` — danh sách + wizard chuyển kho
+  - **Component** `components/inventory/`: `WarehouseClient` (tồn kho, lô/HSD, phân trang), `WarehouseTable` (CRUD kho qua modal), `TransactionHistory` (lọc kho/loại/trạng thái, chi tiết phiếu, xác nhận/huỷ), `TransactionForm` (bảng dòng SP, lô/HSD, đơn giá, tổng), `StockTakeForm` (quét +1, nhập tay, chênh lệch tự tính, lọc Chênh lệch/Chưa kiểm, Đếm lại từ 0, xuất CSV), `StockTakeClient`, `TransferForm` (3 bước: chọn kho → chọn SP, kiểm tồn nguồn → xác nhận), `TransferClient`, `StockChart`, `StatusBadge`, `BarcodeScanInput` (dùng chung), `shared.ts` (auth context, format số/tiền/ngày, đọc lỗi tRPC)
+  - **Quét mã vạch USB**: ô nhập auto-focus và lấy lại focus sau mỗi lần thêm; Enter → tìm khớp chính xác barcode / SKU / SKU biến thể → thêm dòng (quét lại → +1); không khớp chính xác → danh sách gợi ý; gõ tay ≥ 2 ký tự hiện gợi ý (debounce 300ms)
+  - **Cảnh báo tồn thấp real-time**: `GET /api/inventory/alerts` (SSE) relay kênh Redis `bizone:low-stock`; client đọc bằng `fetch` streaming (gửi được Bearer — `EventSource` không gửi được), tự kết nối lại sau 5s; nhận cảnh báo → toast + làm mới số liệu
+  - **Sửa API P2.3 để UI chạy đúng**:
+    - `server/services/user.service.ts` — `resolveDbUserId()` map user Keycloak → `users.id` (theo username/email, null nếu chưa có) thay cho `Number(uuid)` = NaN
+    - `updateStockTakeItems`: chênh lệch = thực tế − hệ thống (trước lưu nhầm bằng số thực tế)
+    - `createTransaction`: lưu lô/HSD (phiếu nhập tạo lô, phiếu xuất phải chọn lô có sẵn); kiểm tra kho đích ≠ kho nguồn và tồn tại
+    - `confirmTransaction`: chặn xuất vượt tồn (CONFLICT, thông báo tiếng Việt); cập nhật số lượng lô; chuyển kho mang lô sang kho đích
+    - `listInventory`: lọc `search` (tên/SKU/barcode); `lowStock` lọc trước khi phân trang (trước lọc sau → tổng/trang sai)
+    - `transfer.list`: chỉ lấy phiếu `transfer_out`, thêm lọc kho đích
+    - `inventory.stockByWarehouse` mới cho biểu đồ
+  - **Hạ tầng**: `lib/trpc.ts` gửi header từ `context` của từng call; `ToastProvider` gắn vào `AppLayout`; `lib/dev-auth.ts` gom cách lấy auth dev cho page; Keycloak client `bizone-frontend` thêm mapper `tenant_id`, `realm_access.roles`, `preferred_username`
+
+- **Kiểm thử** (build production `next start -p 3001`, DB `bizonedb`, token thật lấy qua luồng Authorization Code + PKCE của user `admin@bizone.vn`; thao tác trên trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Quét mã vạch tự động thêm SP | ✅ Gõ barcode + Enter → thêm dòng; quét lại cùng mã → SL 2; quét theo SKU → thêm; mã lạ → "Không tìm thấy sản phẩm"; ô quét giữ focus để quét liên tục |
+  | Kiểm kê: nhập SL thực tế, tự tính chênh lệch | ✅ Tạo phiếu tự lấy 3 SP + tồn hệ thống; quét 3 lần → thực tế 3 (−2), nhập tay 6 (+2), còn lại 0; thống kê Đã kiểm 2/3 · Khớp 1 · Chênh lệch 2; lưu nháp → DB `difference` −2/+2/0; xác nhận → trạng thái Hoàn thành, tồn kho = số thực tế |
+  | Xem lịch sử giao dịch | ✅ Tab Phiếu nhập/xuất liệt kê 5 phiếu (nhập, xuất, chuyển, huỷ) với bộ lọc; xem chi tiết phiếu nhập: 3 dòng, đơn giá, thành tiền, lô `LOT-P24-01 · 20/11/2026` |
+  | Phiếu nhập/xuất (form + scan) | ✅ Nhập 3 SP, tổng 84 / 6.410.000₫ → xác nhận → tồn kho, lô (30, HSD 20/11) đúng trong DB |
+  | Chuyển kho (form 3 bước) | ✅ Bước 1 chặn kho trùng; bước 2 báo "Vượt tồn (15)" và khoá Tiếp tục; bước 3 tóm tắt → xác nhận: HN 15 → 5, HCM +10 |
+  | Cảnh báo (badge đỏ) | ✅ Thẻ "Dưới ngưỡng" + tab Tồn kho có badge đỏ; dòng dưới ngưỡng/hết hàng tô đỏ; SSE nhận sự kiện ~1s sau khi xác nhận phiếu, trang tự cập nhật (2 → 3) |
+  | Biểu đồ tồn kho | ✅ Cột ngang theo kho (HN 14 · 3 mặt hàng, HCM 10 · 1 mặt hàng) |
+  | Trường hợp lỗi | ✅ Không token → 401; sai `X-Tenant-ID` → 403; xuất 100 khi còn 6 → toast "chỉ còn 6 trong kho…", phiếu giữ nháp; mã kho trùng → "Mã kho "P24-HN" đã tồn tại"; xoá kho còn tồn → bị chặn |
+  | Lint / typecheck / build | ✅ Lint 0 lỗi (3 warning có sẵn); typecheck sạch; build OK (4 route `/warehouse*` + `/api/inventory/alerts`); file P2.4 đạt Prettier — 25 file cũ chưa đạt (vấn đề mở #9) |
+
+  Dọn dẹp: đã dừng server test, xoá toàn bộ dữ liệu test (tiền tố `P24-`) khỏi `bizonedb`.
+
+- **Khác biệt so với plan:**
+  - Thêm trang `app/warehouse/transactions/new` cho phiếu nhập/xuất (plan không liệt kê file riêng).
+  - Biểu đồ tồn kho vẽ bằng CSS (repo chưa có thư viện chart); tồn đọng > 90 ngày (mockup §10) chưa có — thiếu API.
+  - Cảnh báo real-time qua SSE thay vì WebSocket (theo quyết định P2.3: Redis pub/sub).
+  - Sửa một số lỗi API của P2.3 (liệt kê ở trên) vì chúng chặn tiêu chí nghiệm thu.
+
+- **Quyết định thiết kế:**
+  - Giữ cách truyền auth của P2.2 (page → props `tenantId`/`authToken`) nhưng gom vào `getDevAuth()`; khi có đăng nhập OIDC chỉ cần đổi một chỗ.
+  - Kiểm kê: lần quét đầu tiên của một dòng đếm từ 1 (không cộng vào số hệ thống đã điền sẵn); "Đếm lại từ 0" cho kiểm kê toàn bộ.
+  - Xác nhận phiếu thất bại (vd. thiếu tồn) thì phiếu vẫn ở dạng nháp và báo mã phiếu — người dùng xử lý tiếp trong lịch sử.
+
+- **Vấn đề / lưu ý:**
+  - Chưa có đăng nhập OIDC trong trình duyệt (vấn đề mở #7). Test dùng token đặt qua `DEV_AUTH_TOKEN` lúc build.
+  - Next 16 không cho chạy 2 `next dev` cùng thư mục — khi đã có dev server ở :3000 thì test bằng `next build && next start -p 3001`.
+  - Bấm "Xác nhận" lại sau khi xác nhận lỗi sẽ tạo thêm một phiếu nháp mới.
+  - `listWarehouses` vẫn chưa lọc theo tenant (DB hiện là single-tenant).

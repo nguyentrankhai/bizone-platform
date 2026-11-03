@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
+import { resolveDbUserId } from "@/server/services/user.service";
 import {
   listTransactions,
   getTransaction,
@@ -39,6 +40,8 @@ export const transferRouter = router({
     .query(async ({ input }) => {
       return listTransactions({
         warehouseId: input.fromWarehouseId,
+        destinationWarehouseId: input.toWarehouseId,
+        transactionTypeId: await getTransferTypeId(),
         status: input.status,
         page: input.page,
         pageSize: input.pageSize,
@@ -75,7 +78,7 @@ export const transferRouter = router({
           notes: input.notes,
           items: input.items,
         },
-        Number(ctx.user!.id),
+        await resolveDbUserId(ctx.user!),
       );
     }),
 
@@ -86,7 +89,7 @@ export const transferRouter = router({
   confirm: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
-      return confirmTransaction(input.id, Number(ctx.user!.id));
+      return confirmTransaction(input.id, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST Huỷ phiếu chuyển kho */

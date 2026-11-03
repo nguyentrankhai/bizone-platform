@@ -52,6 +52,7 @@ export const createTransactionSchema = z.object({
 
 export const listTransactionsSchema = z.object({
   warehouseId: z.number().int().positive().optional(),
+  destinationWarehouseId: z.number().int().positive().optional(),
   transactionTypeId: z.number().int().positive().optional(),
   status: z.enum(["draft", "confirmed", "cancelled"]).optional(),
   dateFrom: z.string().datetime({ offset: true }).optional(),
