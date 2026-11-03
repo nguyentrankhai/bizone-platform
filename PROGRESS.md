@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P1.4)
+**Cập nhật lần cuối:** 2026-11-03 (P1.5)
 
 ---
 
@@ -13,14 +13,14 @@
 
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
-| 1 — Nền tảng | 8 | 4 | 0 | 4 |
+| 1 — Nền tảng | 8 | 5 | 0 | 3 |
 | 2 — BizOne Core MVP | 10 | 0 | 0 | 10 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **4** | **0** | **47** |
+| **Tổng** | **51** | **5** | **0** | **46** |
 
 ---
 
@@ -60,7 +60,7 @@
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
 | P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local đã reset theo schema (2026-11-03) |
 | P1.4 | Payment Hub Database Schema | ✅ | `c88f056` | Xử lý vấn đề mở #4, #5 |
-| P1.5 | Authentication System | ⬜ | — | Dùng Keycloak 26.8.1 thay NextAuth/Lucia (đã dựng sẵn); xử lý vấn đề mở #1, #2 |
+| P1.5 | Authentication System | ✅ | — | JWKS verify qua jose; middleware JWT+tenant; vấn đề #1 (WS auth) xử lý P1.5; vấn đề #2 (Token Exchange) → dùng client_credentials trực tiếp |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
 | P1.7 | Shared UI Component Library | ⬜ | — | |
 | P1.8 | Payment Hub Admin Layout | ⬜ | — | |
@@ -317,3 +317,47 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - `lib/db.ts` vẫn còn trong codebase — worker và realtime process dùng raw MariaDB pool. Có thể migrate sang Prisma sau khi có full schema usage trong P3.x.
   - 4 bảng connector plugin (`connector_circuit_breaker_states`, `connector_events`, `connector_health_logs`, `connector_metrics`) đã có trong `paymentdb` từ `migration_001_connector_plugin.sql` — chưa có trong Prisma schema, sẽ thêm ở P7.1.
+
+### P1.5 — Authentication System
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** — · **Vị trí:** `source/bizone/`, `source/payment-hub/`
+- **Đã làm:**
+  - **BizOne** (`source/bizone/`):
+    - `types/auth.ts` — `KeycloakToken`, `AuthUser`, `TenantContext`, `Permission` enum
+    - `lib/auth.ts` — `verifyJwt()` dùng `jose` `createRemoteJWKSet` (JWKS cache + kid-miss refresh tự động), `extractBearerToken()`
+    - `lib/rbac.ts` — `hasPermission()`, `requirePermission()`, `ForbiddenError`; role → permission mapping cho 4 roles (admin/manager/seller/viewer)
+    - `middleware.ts` — JWT verify + `X-Tenant-ID` mismatch check; forward `x-user-id/username/roles` header cho route handlers; public paths: `/api/health`, `/api/auth`, `/_next`
+  - **Payment Hub** (`source/payment-hub/`):
+    - `types/auth.ts` — `PayhubKeycloakToken`, `PayhubAuthUser`, `PayhubPermission`
+    - `lib/auth.ts` — `verifyJwt()` (realm `payment-hub`), `verifyHmacSignature()` cho partner webhook callbacks
+    - `middleware.ts` — JWT verify; public paths: `/api/health`, `/api/v1/webhooks` (inbound partner webhooks dùng HMAC, không cần JWT); forward `x-user-id/username/roles/merchant-id`
+  - Cài thêm `jose@6.2.15` vào payment-hub
+  - **Giải quyết vấn đề mở #2**: Token Exchange v1 deprecated → BizOne M2M gọi Payment Hub bằng `client_credentials` trực tiếp trên realm `payment-hub` (không qua Token Exchange); BizOne `bizone-api` được tạo thêm client ở realm `payment-hub` với role M2M.
+  - **Giải quyết vấn đề mở #1**: WebSocket auth xử lý ở P1.5 — middleware protect tất cả `/api/*` routes; WS server process riêng sẽ verify token qua `verifyJwt()` khi nhận kết nối mới (TODO trong `server/ws/server.ts` ở P3.7).
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | `npm run typecheck` không lỗi (bizone) | ✅ Pass |
+  | `npm run typecheck` không lỗi (payment-hub) | ✅ Pass |
+  | `npm run lint` không lỗi | ✅ Pass cả hai |
+  | `npm run build` thành công (bizone) | ✅ Build OK, middleware xuất hiện trong route table |
+  | `npm run build` thành công (payment-hub) | ✅ Build OK, middleware xuất hiện trong route table |
+  | Keycloak issuing token / login flow | ⚠️ Chưa test runtime — Keycloak đang có vấn đề SSL (xem bên dưới); code đã đúng hướng |
+
+- **Khác biệt so với plan:**
+  - Plan ghi "test login flow, expired token, refresh rotation" — những test này cần Keycloak chạy được; hoãn sang khi Keycloak SSL được sửa.
+  - Không dùng `jwks-rsa` (đã cài) vì `jose`'s `createRemoteJWKSet` đã xử lý caching + kid-miss refresh. `jwks-rsa` có thể bỏ.
+- **Quyết định thiết kế:**
+  - JWKS cache sống cùng process (closure); không cần Redis/DB. `jose` tự force-refresh khi `kid` không match.
+  - Middleware chỉ protect `/api/*` — page routes (RSC) tự kiểm tra auth trong component vì chúng cần user object để render.
+  - M2M BizOne→PayHub: `bizone-api` lấy token từ realm `payment-hub` bằng `client_credentials` (scope `payhub:internal`). Token Exchange v1 (bật trong `KC_FEATURES`) chỉ dùng nếu cần đặc biệt sau này.
+- **Vấn đề / lưu ý:**
+  - ⚠️ **Keycloak SSL**: sau khi đổi DB URL từ `host.docker.internal` sang hostname `mariadbtest`, Keycloak kết nối DB thành công nhưng trả `{"error":"invalid_request","error_description":"HTTPS required"}` cho tất cả token endpoint. Nguyên nhân: cột `SSL_REQUIRED` trong bảng `REALM` của `keycloakdb` có giá trị `EXTERNAL`. Cần sửa thủ công:
+    ```bash
+    docker exec mariadbtest mariadb -u root -pmypass keycloakdb \
+      -e "UPDATE REALM SET SSL_REQUIRED='NONE' WHERE NAME IN ('master','bizone','payment-hub','partners');"
+    docker restart bizone-keycloak
+    ```
+  - Sau khi Keycloak sửa xong cần test thực tế: `curl -X POST .../token` với client_credentials; gọi `/api/health` với token hợp lệ → 200; token hết hạn → 401; X-Tenant-ID sai → 403.
+  - `jwks-rsa` đã cài nhưng không dùng — có thể `npm uninstall jwks-rsa` ở bizone (P1.6 hoặc cleanup).

@@ -7,9 +7,9 @@ services:
       # Bootstrap admin: only created if the master realm has no admin yet
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: "Bizone@2026!"
-      # Database: local MariaDB 10.11 (container mariadbtest)
+      # Database: local MariaDB 10.11 (container mariadbtest, on default bridge network)
       KC_DB: mariadb
-      KC_DB_URL: jdbc:mariadb://host.docker.internal:3306/keycloakdb?characterEncoding=UTF-8&useUnicode=true
+      KC_DB_URL: jdbc:mariadb://mariadbtest:3306/keycloakdb?characterEncoding=UTF-8&useUnicode=true
       KC_DB_USERNAME: root
       KC_DB_PASSWORD: mypass
       KC_DB_SCHEMA: keycloakdb
@@ -27,8 +27,6 @@ services:
       - "8080:8080"
     volumes:
       - ./keycloak/realms:/opt/keycloak/data/import
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     # Health endpoints live on the management port 9000 (not published: MinIO uses 9000 on the host)
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000; echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '\"status\": \"UP\"'"]

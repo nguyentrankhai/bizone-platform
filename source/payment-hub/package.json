@@ -27,6 +27,7 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "ioredis": "^6.0.0",
+    "jose": "^6.2.15",
     "lucide-react": "^1.66.0",
     "mariadb": "^3.5.4",
     "next": "16.4.4",
