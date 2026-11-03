@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { extractBearerToken, verifyJwt } from "@/lib/auth";
 
-// Routes that don't require authentication
 const PUBLIC_PATHS = [
   "/api/health",
-  "/api/auth",        // Keycloak callback routes
+  "/api/v1/webhooks",   // inbound partner webhooks (verified by HMAC, not JWT)
   "/_next",
   "/favicon.ico",
 ];
@@ -17,12 +16,11 @@ function jsonError(status: number, code: string, message: string): NextResponse 
   return NextResponse.json({ success: false, error: { code, message } }, { status });
 }
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) return NextResponse.next();
 
-  // Only protect /api/* routes via middleware; page routes handle auth in RSC
   if (!pathname.startsWith("/api/")) return NextResponse.next();
 
   const authHeader = request.headers.get("authorization");
@@ -40,31 +38,18 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   const { user } = result;
 
-  // Validate X-Tenant-ID header matches tenant_id claim
-  const headerTenantId = request.headers.get("x-tenant-id");
-  if (!headerTenantId) {
-    return jsonError(403, "FORBIDDEN", "Missing X-Tenant-ID header");
-  }
-
-  if (headerTenantId !== user.tenantId) {
-    return jsonError(403, "FORBIDDEN", "X-Tenant-ID mismatch");
-  }
-
-  // Forward user info to route handlers via request headers
+  // Forward user info to route handlers
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-username", user.username);
   requestHeaders.set("x-user-roles", user.roles.join(","));
+  if (user.merchantId) {
+    requestHeaders.set("x-merchant-id", user.merchantId);
+  }
 
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except static files and images.
-     * Must be kept lightweight — this runs on Edge Runtime.
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
