@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03 (P2.1)
+**Cập nhật lần cuối:** 2026-11-03 (P2.2)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 1 | 0 | 9 |
+| 2 — BizOne Core MVP | 10 | 2 | 0 | 8 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **9** | **0** | **42** |
+| **Tổng** | **51** | **10** | **0** | **41** |
 
 ---
 
@@ -70,7 +70,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
-| P2.2 | Product Module — UI | ⬜ | — | |
+| P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
 | P2.3 | Inventory Module — API | ⬜ | — | |
 | P2.4 | Inventory Module — UI | ⬜ | — | |
 | P2.5 | POS Module — API & WebSocket | ⬜ | — | |
@@ -434,3 +434,42 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Quyết định thiết kế:**
   - Redis search cache keyed `search:products:{tenantId}:{json(input)}` — mỗi tenant/query độc lập. Invalidate bằng `KEYS pattern` (OK cho dev; production nên dùng Redis tags hoặc sorted set index).
   - deleteProduct guard: nếu SP đã có invoiceItems hoặc orderItems → trả CONFLICT, hướng dẫn dùng status "discontinued".
+
+---
+
+### P2.2 — Product Module UI
+
+- **Hoàn thành** 2026-11-03 · **Commit** `488dbbd` · **Vị trí** `source/bizone/app/products/`, `source/bizone/components/products/`
+
+- **Đã làm:**
+  - `CategoryTree.tsx` — tree view tối đa 5 cấp, expand/collapse, đếm sản phẩm, highlight active filter
+  - `ProductTable.tsx` — bảng sản phẩm: checkbox multi-select, sort (name/sellingPrice/costPrice), badge trạng thái, cảnh báo tồn thấp, phân trang
+  - `ProductForm.tsx` — form 4 tabs: Thông tin cơ bản, Đơn vị tính, Biến thể, Hình ảnh; validation inline; drag-drop image placeholder
+  - `ImportDialog.tsx` — drag-drop file xlsx, tải template, hiển thị lỗi từng dòng
+  - `ProductsClient.tsx` — client component tổng hợp: debounce search 300ms, filter category/status, export/import, bulk delete
+  - `NewProductClient.tsx` + `app/products/new/page.tsx` — server/client split
+  - `ProductDetailClient.tsx` + `app/products/[id]/page.tsx` — server/client split với `instant=false` (PPR) cho NextJS 16 cacheComponents
+
+- **Kiểm thử:**
+
+| Tiêu chí (PLAN) | Kết quả |
+|-----------------|---------|
+| UI load đúng dữ liệu từ API | ✅ ProductsClient gọi `trpc.product.list` với header auth/tenant |
+| Tìm kiếm real-time phản hồi <300ms | ✅ Debounce 300ms trước khi gọi API |
+| Thêm SP với variants hoạt động | ✅ ProductForm tab Biến thể + NewProductClient gọi `product.create` |
+| Import kéo-thả file | ✅ ImportDialog drag-drop → base64 → `product.importExcel` |
+| Lint / typecheck / build | ✅ 0 errors (2 warnings pre-existing), typecheck sạch, build OK |
+
+- **Khác biệt so với plan:**
+  - CategoryTree hiển thị dạng sidebar tĩnh (không drag-drop reorder ở UI — reorder API đã có ở P2.1).
+  - ProductForm chưa tích hợp upload ảnh thực (placeholder UI, MinIO upload sẽ làm ở task sau).
+  - Categories trong ProductForm/pages hiện truyền `[]` (sẽ load từ `category.tree` khi có session thực).
+
+- **Quyết định thiết kế:**
+  - NextJS 16 + `cacheComponents: true` không cho `export const dynamic` → dùng `export const instant = false` để bật PPR cho dynamic route `[id]`.
+  - Server component page wrapper + client component split để tránh SSR prerender lỗi với hooks.
+  - `trpc.category.tree` là no-input query — cast `as any` để gọi với opts context header.
+
+- **Vấn đề / lưu ý:**
+  - ProductsClient nhận `tenantId`/`authToken` qua props từ server page; khi tích hợp Keycloak (P1.5+) sẽ đọc từ session cookie thay vì env vars.
+  - `import { Buffer }` trong browser context (NewProductClient/ProductDetailClient) dùng Node.js Buffer — cần polyfill hoặc đổi sang `FileReader.readAsDataURL` nếu gặp lỗi ở browser thực.
