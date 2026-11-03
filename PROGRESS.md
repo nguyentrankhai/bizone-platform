@@ -71,7 +71,7 @@
 |----|------|------------|--------|---------|
 | P2.1 | Product Module — API | ✅ | `c55a06e` | tRPC CRUD + category tree + Redis search cache + Excel import/export |
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
-| P2.3 | Inventory Module — API | ✅ | — | Xem [kết quả P2.3](#p23--inventory-module--api) |
+| P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ⬜ | — | |
 | P2.5 | POS Module — API & WebSocket | ⬜ | — | |
 | P2.6 | POS Module — UI | ⬜ | — | |
@@ -478,7 +478,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.3 — Inventory Module — API
 
-- **Hoàn thành:** 2026-11-03 · **Commit:** — · **Vị trí:** `source/bizone/lib/validators/inventory.ts`, `source/bizone/server/services/inventory.service.ts`, `source/bizone/server/routers/warehouse.ts`, `source/bizone/server/routers/inventory.ts`, `source/bizone/server/routers/stockTake.ts`, `source/bizone/server/routers/transfer.ts`
+- **Hoàn thành:** 2026-11-03 · **Commit:** `a2b729f` · **Vị trí:** `source/bizone/lib/validators/inventory.ts`, `source/bizone/server/services/inventory.service.ts`, `source/bizone/server/routers/warehouse.ts`, `source/bizone/server/routers/inventory.ts`, `source/bizone/server/routers/stockTake.ts`, `source/bizone/server/routers/transfer.ts`
 
 - **Đã làm:**
   - `lib/validators/inventory.ts`: Zod schemas — createWarehouseSchema, updateWarehouseSchema, listInventorySchema, createTransactionSchema (items + batch tracking), listTransactionsSchema, createStockTakeSchema, updateStockTakeItemsSchema, completeStockTakeSchema, listBatchesSchema
