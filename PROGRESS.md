@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-03
+**Cập nhật lần cuối:** 2026-11-03 (P1.4)
 
 ---
 
@@ -13,14 +13,14 @@
 
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
-| 1 — Nền tảng | 8 | 3 | 0 | 5 |
+| 1 — Nền tảng | 8 | 4 | 0 | 4 |
 | 2 — BizOne Core MVP | 10 | 0 | 0 | 10 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **3** | **0** | **48** |
+| **Tổng** | **51** | **4** | **0** | **47** |
 
 ---
 
@@ -33,8 +33,8 @@
 | 1 | WebSocket Payment Hub (`:4001/ws`) chưa xác thực — không publish dữ liệu giao dịch thật trước khi có kiểm tra token | P1.2 | P1.5 |
 | 2 | Token Exchange v1 deprecated trong Keycloak 26; v2 chỉ đổi token trong cùng realm → chọn lại cách BizOne gọi Payment Hub | Nâng cấp Keycloak | P1.5 |
 | 3 | Job webhook chứa `secret` trong Redis → đổi sang `webhookConfigId`, đọc secret từ DB | P1.2 | P3.6 |
-| 4 | Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma | P1.2 | P1.4 |
-| 5 | `paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci` khi dựng schema | Kiểm tra 2026-11-03 | P1.4 |
+| ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
+| ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -59,7 +59,7 @@
 | P1.1 | BizOne Scaffolding | ✅ | `c75c9c5` | Xem [kết quả P1.1](#p11--bizone-scaffolding) |
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
 | P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local đã reset theo schema (2026-11-03) |
-| P1.4 | Payment Hub Database Schema | ⬜ | — | Xử lý vấn đề mở #4, #5 |
+| P1.4 | Payment Hub Database Schema | ✅ | — | Xử lý vấn đề mở #4, #5 |
 | P1.5 | Authentication System | ⬜ | — | Dùng Keycloak 26.8.1 thay NextAuth/Lucia (đã dựng sẵn); xử lý vấn đề mở #1, #2 |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
 | P1.7 | Shared UI Component Library | ⬜ | — | |
@@ -277,3 +277,43 @@ Ngoài plan, theo yêu cầu người dùng.
   - ⚠️ Token Exchange v1 (`token-exchange`) vẫn bật nhưng đã deprecated; Standard Token Exchange v2 chỉ đổi token trong cùng realm → P1.5 phải chọn lại cách BizOne gọi Payment Hub (spec §5.2). _(Vấn đề mở #2)_
   - Rollback còn sẵn: container `mariadbtest-10.3` + volume gốc. Xoá khi chắc chắn không cần (người dùng quyết định). _(Vấn đề mở #6)_
   - Bản dump và đếm số dòng nằm trong thư mục tạm của phiên (không lưu lâu dài).
+
+### P1.4 — Payment Hub Database Schema
+
+- **Hoàn thành:** 2026-11-03 · **Commit:** — · **Vị trí:** `source/payment-hub/prisma`
+- **Đã làm:**
+  - Cài Prisma **7.10.1** (`prisma`, `@prisma/client`, `@prisma/adapter-mariadb`) vào payment-hub
+  - `prisma.config.ts` — đọc `DATABASE_URL` từ `.env.local` (cùng pattern BizOne)
+  - `prisma/schema.prisma` — **20 models, 17 enums** từ `database/schema_paymenthub.sql`:
+    - Model PascalCase + `@@map` về bảng snake_case; field camelCase + `@map`
+    - `ConnectorStatus.Not_Installed` dùng `@map("Not Installed")` để khớp ENUM DB
+    - Quan hệ có tên rõ ràng: `RefundProcessor`, `DisputeCreator`, `DisputeResolver`
+    - 8 cột `updated_at` → `@updatedAt` (Prisma tự cập nhật)
+    - `Boolean` cho `is_active`, `is_read`, `notify_webhook`, `submitted_to_partner` với `@db.TinyInt`
+  - `prisma/migrations/0_init/migration.sql` — baseline 20 bảng với `utf8mb4_unicode_ci`
+  - `prisma/migrations/migration_lock.toml`
+  - `prisma/seed.ts` — admin user + merchant BIZONE + 4 connectors (vnpay, momo, zalopay, vietqr); upsert an toàn
+  - `lib/prisma.ts` — `getPrisma()` singleton dùng adapter MariaDB (thay `lib/db.ts` cho health check)
+  - `app/api/health/route.ts` — đổi từ `getDb().query("SELECT 1")` sang `getPrisma().$queryRaw\`SELECT 1\``
+  - `package.json` — `build` và `typecheck` chạy `prisma generate` trước; thêm scripts `db:generate`, `db:push`, `db:migrate`, `db:seed`, `db:studio`; `lightningcss-*` sang `optionalDependencies`
+  - `paymentdb` charset đổi từ `utf8mb3_general_ci` → `utf8mb4_unicode_ci` (**vấn đề mở #5 đã giải quyết**)
+- **Kiểm thử** (MariaDB 10.11, `paymentdb` local):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | `prisma db push` thành công | ✅ "Your database is now in sync with your Prisma schema" |
+  | `prisma db seed` tạo dữ liệu mẫu | ✅ 1 admin, 1 merchant BIZONE, 4 connectors; upsert lần 2 không trùng |
+  | Có thể query được | ✅ 11/11 model queries: user admin + relations, merchant, 9 model count khác |
+  | `migrate deploy` trên DB rỗng (bổ sung) | ✅ Migration `0_init` apply thành công; diff sau đó rỗng |
+  | Health check dùng Prisma (bổ sung) | ✅ `app/api/health` đã dùng `getPrisma().$queryRaw` thay driver trực tiếp |
+  | Lint / format / typecheck / build | ✅ Không lỗi |
+
+- **Khác biệt so với plan:**
+  - Plan ghi "20 models" — thực tế schema có 20 bảng chính + 4 bảng connector plugin từ `migration_001` → Prisma schema chỉ map 20 bảng theo plan; 4 bảng connector plugin sẽ thêm ở P7.1.
+  - DB connect từ host bị chặn (container không expose port đúng trên macOS Docker Desktop) → dùng container Node tạm kết nối qua bridge network để chạy `prisma db push/migrate/seed`.
+- **Quyết định thiết kế:**
+  - Giữ `lib/db.ts` nguyên (dùng bởi worker + realtime); `lib/prisma.ts` mới cho Next.js app. Hai client không conflict vì singleton riêng biệt.
+  - `generated/prisma/` gitignored; `build`/`typecheck` tự `prisma generate`.
+- **Vấn đề / lưu ý:**
+  - `lib/db.ts` vẫn còn trong codebase — worker và realtime process dùng raw MariaDB pool. Có thể migrate sang Prisma sau khi có full schema usage trong P3.x.
+  - 4 bảng connector plugin (`connector_circuit_breaker_states`, `connector_events`, `connector_health_logs`, `connector_metrics`) đã có trong `paymentdb` từ `migration_001_connector_plugin.sql` — chưa có trong Prisma schema, sẽ thêm ở P7.1.

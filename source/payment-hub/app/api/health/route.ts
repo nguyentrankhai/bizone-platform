@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { getDb } from "@/lib/db";
+import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 
 type Check = { ok: boolean; latencyMs: number; error?: string };
@@ -25,7 +25,7 @@ async function check(probe: () => Promise<unknown>): Promise<Check> {
 export async function GET() {
   await connection();
   const [database, redis] = await Promise.all([
-    check(() => getDb().query("SELECT 1")),
+    check(() => getPrisma().$queryRaw`SELECT 1`),
     check(() => getRedis().ping()),
   ]);
   const checks = { database, redis };

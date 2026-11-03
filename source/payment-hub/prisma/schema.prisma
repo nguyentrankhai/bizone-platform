@@ -1,0 +1,598 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  Admin
+  Owner
+  Developer
+  Operations
+  PartnerManager
+}
+
+enum UserStatus {
+  Active
+  Inactive
+}
+
+enum MerchantStatus {
+  Active
+  Inactive
+}
+
+enum ApiKeyStatus {
+  Active
+  Revoked
+}
+
+enum PartnerConfigStatus {
+  Active
+  Inactive
+  Error
+}
+
+enum PartnerEnvironment {
+  Sandbox
+  Production
+}
+
+enum ConnectorStatus {
+  Installed
+  Not_Installed @map("Not Installed")
+  Error
+}
+
+enum TransactionStatus {
+  Created
+  Pending
+  Success
+  Failed
+  Expired
+  Refunded
+  PartiallyRefunded
+}
+
+enum RawDataDirection {
+  Request
+  Response
+}
+
+enum RawDataSource {
+  Partner
+  PaymentHub
+  Merchant
+}
+
+enum RefundStatus {
+  Pending
+  Processing
+  Completed
+  Failed
+}
+
+enum WebhookConfigStatus {
+  Active
+  Inactive
+}
+
+enum WebhookLogStatus {
+  Success
+  Failed
+}
+
+enum ReconciliationRunStatus {
+  Running
+  Completed
+  Failed
+}
+
+enum ReconciliationMatchStatus {
+  Matched
+  Unmatched_PaymentHub @map("Unmatched_PaymentHub")
+  Unmatched_Partner    @map("Unmatched_Partner")
+  Amount_Mismatch      @map("Amount_Mismatch")
+}
+
+enum ReconciliationDetailStatus {
+  Open
+  Resolved
+}
+
+enum DisputeStatus {
+  Pending
+  Processing
+  Resolved
+  Rejected
+}
+
+enum NotificationType {
+  Success
+  Warning
+  Error
+  Info
+}
+
+enum NotificationChannel {
+  System
+  Email
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model User {
+  id          Int        @id @default(autoincrement())
+  username    String     @unique @db.VarChar(100)
+  email       String     @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  fullName    String     @map("full_name") @db.VarChar(255)
+  role        UserRole   @default(Operations)
+  status      UserStatus @default(Active)
+  avatarUrl   String?    @map("avatar_url") @db.VarChar(500)
+  lastLoginAt DateTime?  @map("last_login_at") @db.DateTime(0)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+
+  refundsProcessed    Refund[]    @relation("RefundProcessor")
+  disputesCreated     Dispute[]   @relation("DisputeCreator")
+  disputesResolved    Dispute[]   @relation("DisputeResolver")
+  partnerConfigLogs   PartnerConfigLog[]
+  notifications       Notification[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@index([status], map: "idx_users_status")
+  @@map("users")
+}
+
+model Merchant {
+  id                 Int            @id @default(autoincrement())
+  name               String         @db.VarChar(255)
+  code               String         @unique @db.VarChar(100)
+  contactName        String?        @map("contact_name") @db.VarChar(255)
+  contactEmail       String?        @map("contact_email") @db.VarChar(255)
+  contactPhone       String?        @map("contact_phone") @db.VarChar(50)
+  status             MerchantStatus @default(Active)
+  defaultWebhookUrl  String?        @map("default_webhook_url") @db.VarChar(500)
+  webhookSecret      String?        @map("webhook_secret") @db.VarChar(500)
+  ipWhitelist        Json?          @map("ip_whitelist")
+  monthlyLimit       Decimal?       @map("monthly_limit") @db.Decimal(15, 0)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.DateTime(0)
+
+  apiKeys        ApiKey[]
+  transactions   Transaction[]
+  webhookConfigs WebhookConfig[]
+
+  @@index([code], map: "idx_merchants_code")
+  @@index([status], map: "idx_merchants_status")
+  @@map("merchants")
+}
+
+model ApiKey {
+  id          Int          @id @default(autoincrement())
+  merchantId  Int          @map("merchant_id")
+  apiKey      String       @unique @map("api_key") @db.VarChar(255)
+  apiSecret   String       @map("api_secret") @db.VarChar(255)
+  name        String       @db.VarChar(200)
+  status      ApiKeyStatus @default(Active)
+  rateLimit   Int          @default(100) @map("rate_limit")
+  lastUsedAt  DateTime?    @map("last_used_at") @db.DateTime(0)
+  expiresAt   DateTime?    @map("expires_at") @db.DateTime(0)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
+
+  merchant     Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade, map: "fk_apikeys_merchant")
+  transactions Transaction[]
+
+  @@index([apiKey], map: "idx_apikeys_key")
+  @@index([merchantId], map: "idx_apikeys_merchant")
+  @@index([status], map: "idx_apikeys_status")
+  @@map("api_keys")
+}
+
+model PartnerConfig {
+  id                  Int                 @id @default(autoincrement())
+  connectorType       String              @map("connector_type") @db.VarChar(50)
+  name                String              @db.VarChar(255)
+  apiKey              String              @map("api_key") @db.VarChar(500)
+  secretKey           String              @map("secret_key") @db.VarChar(500)
+  merchantCode        String?             @map("merchant_code") @db.VarChar(255)
+  endpointSandbox     String?             @map("endpoint_sandbox") @db.VarChar(500)
+  endpointProduction  String?             @map("endpoint_production") @db.VarChar(500)
+  callbackUrl         String?             @map("callback_url") @db.VarChar(500)
+  webhookUrl          String?             @map("webhook_url") @db.VarChar(500)
+  timeout             Int                 @default(30000)
+  retryPolicy         Json?               @map("retry_policy")
+  status              PartnerConfigStatus @default(Inactive)
+  environment         PartnerEnvironment  @default(Sandbox)
+  testResult          Json?               @map("test_result")
+  lastTestedAt        DateTime?           @map("last_tested_at") @db.DateTime(0)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.DateTime(0)
+
+  logs                  PartnerConfigLog[]
+  transactions          Transaction[]
+  reconciliationRuns    ReconciliationRun[]
+
+  @@index([connectorType], map: "idx_partner_type")
+  @@index([status], map: "idx_partner_status")
+  @@index([environment], map: "idx_partner_env")
+  @@map("partner_configs")
+}
+
+model PartnerConfigLog {
+  id              BigInt        @id @default(autoincrement())
+  partnerConfigId Int           @map("partner_config_id")
+  userId          Int?          @map("user_id")
+  fieldChanged    String        @map("field_changed") @db.VarChar(100)
+  oldValue        String?       @map("old_value") @db.Text
+  newValue        String?       @map("new_value") @db.Text
+  ipAddress       String?       @map("ip_address") @db.VarChar(45)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+
+  partnerConfig   PartnerConfig @relation(fields: [partnerConfigId], references: [id], onDelete: Cascade, map: "fk_pcl_partner")
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull, map: "fk_pcl_user")
+
+  @@index([partnerConfigId], map: "idx_pcl_partner")
+  @@map("partner_config_logs")
+}
+
+model Connector {
+  id           Int             @id @default(autoincrement())
+  name         String          @db.VarChar(255)
+  code         String          @unique @db.VarChar(50)
+  version      String          @db.VarChar(50)
+  description  String?         @db.Text
+  status       ConnectorStatus @default(Not_Installed)
+  configSchema Json?           @map("config_schema")
+  isActive     Boolean         @default(false) @map("is_active") @db.TinyInt
+  createdAt    DateTime        @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.DateTime(0)
+
+  @@index([code], map: "idx_connectors_code")
+  @@index([status], map: "idx_connectors_status")
+  @@map("connectors")
+}
+
+model Transaction {
+  id               Int               @id @default(autoincrement())
+  txnCode          String            @unique @map("txn_code") @db.VarChar(100)
+  merchantId       Int               @map("merchant_id")
+  merchantTxnId    String?           @map("merchant_txn_id") @db.VarChar(255)
+  apiKeyId         Int?              @map("api_key_id")
+  amount           Decimal           @db.Decimal(15, 0)
+  refundedAmount   Decimal           @default(0) @map("refunded_amount") @db.Decimal(15, 0)
+  currency         String            @default("VND") @db.VarChar(10)
+  description      String?           @db.Text
+  status           TransactionStatus @default(Created)
+  paymentMethod    String?           @map("payment_method") @db.VarChar(50)
+  partnerConfigId  Int?              @map("partner_config_id")
+  partnerTxnId     String?           @map("partner_txn_id") @db.VarChar(255)
+  returnUrl        String?           @map("return_url") @db.VarChar(500)
+  webhookUrl       String?           @map("webhook_url") @db.VarChar(500)
+  customerName     String?           @map("customer_name") @db.VarChar(255)
+  customerEmail    String?           @map("customer_email") @db.VarChar(255)
+  customerPhone    String?           @map("customer_phone") @db.VarChar(50)
+  ipAddress        String?           @map("ip_address") @db.VarChar(45)
+  metadata         Json?
+  idempotencyKey   String?           @map("idempotency_key") @db.VarChar(255)
+  expiredAt        DateTime?         @map("expired_at") @db.DateTime(0)
+  paidAt           DateTime?         @map("paid_at") @db.DateTime(0)
+  notifyWebhook    Boolean           @default(false) @map("notify_webhook") @db.TinyInt
+  webhookSentAt    DateTime?         @map("webhook_sent_at") @db.DateTime(0)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.DateTime(0)
+
+  merchant      Merchant           @relation(fields: [merchantId], references: [id], onDelete: Restrict, map: "fk_txn_merchant")
+  apiKey        ApiKey?            @relation(fields: [apiKeyId], references: [id], onDelete: SetNull, map: "fk_txn_apikey")
+  partnerConfig PartnerConfig?     @relation(fields: [partnerConfigId], references: [id], onDelete: SetNull, map: "fk_txn_partner")
+  logs          TransactionLog[]
+  rawData       TransactionRawData[]
+  refunds       Refund[]
+  qrCodes       QrCode[]
+  webhookLogs   WebhookLog[]
+  disputes      Dispute[]
+  reconDetails  ReconciliationDetail[]
+
+  @@index([txnCode], map: "idx_txn_code")
+  @@index([merchantId], map: "idx_txn_merchant")
+  @@index([merchantId, merchantTxnId], map: "idx_txn_merchant_txn")
+  @@index([partnerConfigId], map: "idx_txn_partner")
+  @@index([partnerTxnId], map: "idx_txn_partner_txn")
+  @@index([status], map: "idx_txn_status")
+  @@index([createdAt], map: "idx_txn_created")
+  @@index([idempotencyKey], map: "idx_txn_idempotency")
+  @@index([expiredAt], map: "idx_txn_expired")
+  @@map("transactions")
+}
+
+model TransactionLog {
+  id            BigInt      @id @default(autoincrement())
+  transactionId Int         @map("transaction_id")
+  event         String      @db.VarChar(50)
+  fromStatus    String?     @map("from_status") @db.VarChar(50)
+  toStatus      String?     @map("to_status") @db.VarChar(50)
+  description   String?     @db.Text
+  rawData       Json?       @map("raw_data")
+  createdBy     String?     @map("created_by") @db.VarChar(255)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.DateTime(0)
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_txnlog_txn")
+
+  @@index([transactionId], map: "idx_txnlog_txn")
+  @@index([event], map: "idx_txnlog_event")
+  @@index([createdAt], map: "idx_txnlog_created")
+  @@map("transaction_logs")
+}
+
+model TransactionRawData {
+  id            BigInt           @id @default(autoincrement())
+  transactionId Int              @map("transaction_id")
+  direction     RawDataDirection
+  source        RawDataSource
+  endpoint      String?          @db.VarChar(500)
+  headers       Json?
+  body          Json?
+  httpStatus    Int?             @map("http_status")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.DateTime(0)
+
+  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_raw_txn")
+
+  @@index([transactionId], map: "idx_raw_txn")
+  @@index([createdAt], map: "idx_raw_created")
+  @@map("transaction_raw_data")
+}
+
+model Refund {
+  id              Int          @id @default(autoincrement())
+  transactionId   Int          @map("transaction_id")
+  refundCode      String       @unique @map("refund_code") @db.VarChar(100)
+  amount          Decimal      @db.Decimal(15, 0)
+  reason          String       @db.Text
+  status          RefundStatus @default(Pending)
+  partnerRefundId String?      @map("partner_refund_id") @db.VarChar(255)
+  rawRequest      Json?        @map("raw_request")
+  rawResponse     Json?        @map("raw_response")
+  errorMessage    String?      @map("error_message") @db.Text
+  processedBy     Int?         @map("processed_by")
+  processedAt     DateTime?    @map("processed_at") @db.DateTime(0)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_refund_txn")
+  processor   User?       @relation("RefundProcessor", fields: [processedBy], references: [id], onDelete: SetNull, map: "fk_refund_processor")
+
+  @@index([transactionId], map: "idx_refund_txn")
+  @@index([refundCode], map: "idx_refund_code")
+  @@index([status], map: "idx_refund_status")
+  @@map("refunds")
+}
+
+model WebhookConfig {
+  id             Int                 @id @default(autoincrement())
+  merchantId     Int                 @map("merchant_id")
+  url            String              @db.VarChar(500)
+  secret         String              @db.VarChar(500)
+  events         Json
+  status         WebhookConfigStatus @default(Active)
+  retryCount     Int                 @default(5) @map("retry_count")
+  retryIntervals Json?               @map("retry_intervals")
+  timeoutMs      Int                 @default(30000) @map("timeout_ms")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.DateTime(0)
+
+  merchant    Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade, map: "fk_whconf_merchant")
+  webhookLogs WebhookLog[]
+
+  @@index([merchantId], map: "idx_whconf_merchant")
+  @@index([status], map: "idx_whconf_status")
+  @@map("webhook_configs")
+}
+
+model WebhookLog {
+  id               BigInt           @id @default(autoincrement())
+  webhookConfigId  Int?             @map("webhook_config_id")
+  transactionId    Int?             @map("transaction_id")
+  event            String           @db.VarChar(50)
+  requestUrl       String?          @map("request_url") @db.VarChar(500)
+  requestHeaders   Json?            @map("request_headers")
+  requestBody      Json?            @map("request_body")
+  responseStatus   Int?             @map("response_status")
+  responseBody     String?          @map("response_body") @db.Text
+  responseHeaders  Json?            @map("response_headers")
+  status           WebhookLogStatus
+  attempt          Int              @default(1)
+  maxRetries       Int              @default(5) @map("max_retries")
+  nextRetryAt      DateTime?        @map("next_retry_at") @db.DateTime(0)
+  durationMs       Int?             @map("duration_ms")
+  errorMessage     String?          @map("error_message") @db.Text
+  createdAt        DateTime         @default(now()) @map("created_at") @db.DateTime(0)
+
+  webhookConfig    WebhookConfig? @relation(fields: [webhookConfigId], references: [id], onDelete: SetNull, map: "fk_whlog_config")
+  transaction      Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull, map: "fk_whlog_txn")
+
+  @@index([webhookConfigId], map: "idx_whlog_config")
+  @@index([transactionId], map: "idx_whlog_txn")
+  @@index([event], map: "idx_whlog_event")
+  @@index([status], map: "idx_whlog_status")
+  @@index([createdAt], map: "idx_whlog_created")
+  @@index([nextRetryAt], map: "idx_whlog_retry")
+  @@map("webhook_logs")
+}
+
+model ReconciliationRun {
+  id                    Int                     @id @default(autoincrement())
+  runDate               DateTime                @map("run_date") @db.Date
+  partnerConfigId       Int                     @map("partner_config_id")
+  status                ReconciliationRunStatus @default(Running)
+  totalPaymenthub       Int                     @default(0) @map("total_paymenthub")
+  totalPartner          Int                     @default(0) @map("total_partner")
+  totalAmountPaymenthub Decimal                 @default(0) @map("total_amount_paymenthub") @db.Decimal(15, 0)
+  totalAmountPartner    Decimal                 @default(0) @map("total_amount_partner") @db.Decimal(15, 0)
+  matchedCount          Int                     @default(0) @map("matched_count")
+  unmatchedPaymenthub   Int                     @default(0) @map("unmatched_paymenthub")
+  unmatchedPartner      Int                     @default(0) @map("unmatched_partner")
+  amountMismatchCount   Int                     @default(0) @map("amount_mismatch_count")
+  totalDiscrepancy      Decimal                 @default(0) @map("total_discrepancy") @db.Decimal(15, 0)
+  reportFile            String?                 @map("report_file") @db.VarChar(500)
+  notes                 String?                 @db.Text
+  startedAt             DateTime?               @map("started_at") @db.DateTime(0)
+  completedAt           DateTime?               @map("completed_at") @db.DateTime(0)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.DateTime(0)
+
+  partnerConfig PartnerConfig          @relation(fields: [partnerConfigId], references: [id], onDelete: Restrict, map: "fk_recon_partner")
+  details       ReconciliationDetail[]
+
+  @@index([runDate], map: "idx_recon_date")
+  @@index([partnerConfigId], map: "idx_recon_partner")
+  @@index([status], map: "idx_recon_status")
+  @@map("reconciliation_runs")
+}
+
+model ReconciliationDetail {
+  id                  BigInt                     @id @default(autoincrement())
+  reconciliationRunId Int                        @map("reconciliation_run_id")
+  transactionId       Int?                       @map("transaction_id")
+  partnerTxnId        String?                    @map("partner_txn_id") @db.VarChar(255)
+  matchStatus         ReconciliationMatchStatus  @map("match_status")
+  paymenthubAmount    Decimal?                   @map("paymenthub_amount") @db.Decimal(15, 0)
+  partnerAmount       Decimal?                   @map("partner_amount") @db.Decimal(15, 0)
+  discrepancyAmount   Decimal                    @default(0) @map("discrepancy_amount") @db.Decimal(15, 0)
+  partnerTxnDate      DateTime?                  @map("partner_txn_date") @db.DateTime(0)
+  status              ReconciliationDetailStatus @default(Open)
+  resolution          String?                    @db.Text
+  createdAt           DateTime                   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt           DateTime                   @updatedAt @map("updated_at") @db.DateTime(0)
+
+  reconciliationRun ReconciliationRun @relation(fields: [reconciliationRunId], references: [id], onDelete: Cascade, map: "fk_recondetail_run")
+  transaction       Transaction?      @relation(fields: [transactionId], references: [id], onDelete: SetNull, map: "fk_recondetail_txn")
+
+  @@index([reconciliationRunId], map: "idx_recondetail_run")
+  @@index([transactionId], map: "idx_recondetail_txn")
+  @@index([matchStatus], map: "idx_recondetail_status")
+  @@map("reconciliation_details")
+}
+
+model Dispute {
+  id                   Int           @id @default(autoincrement())
+  transactionId        Int           @map("transaction_id")
+  disputeCode          String        @unique @map("dispute_code") @db.VarChar(100)
+  reason               String        @db.Text
+  description          String?       @db.Text
+  status               DisputeStatus @default(Pending)
+  resolution           String?       @db.Text
+  submittedToPartner   Boolean       @default(false) @map("submitted_to_partner") @db.TinyInt
+  partnerResponse      Json?         @map("partner_response")
+  createdBy            Int?          @map("created_by")
+  resolvedBy           Int?          @map("resolved_by")
+  resolvedAt           DateTime?     @map("resolved_at") @db.DateTime(0)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+
+  transaction  Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_dispute_txn")
+  creator      User?              @relation("DisputeCreator", fields: [createdBy], references: [id], onDelete: SetNull, map: "fk_dispute_creator")
+  resolver     User?              @relation("DisputeResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, map: "fk_dispute_resolver")
+  attachments  DisputeAttachment[]
+
+  @@index([transactionId], map: "idx_dispute_txn")
+  @@index([status], map: "idx_dispute_status")
+  @@map("disputes")
+}
+
+model DisputeAttachment {
+  id         Int      @id @default(autoincrement())
+  disputeId  Int      @map("dispute_id")
+  fileName   String   @map("file_name") @db.VarChar(255)
+  filePath   String   @map("file_path") @db.VarChar(500)
+  fileType   String?  @map("file_type") @db.VarChar(50)
+  fileSize   Int?     @map("file_size")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.DateTime(0)
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade, map: "fk_da_dispute")
+
+  @@index([disputeId], map: "idx_da_dispute")
+  @@map("dispute_attachments")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  username    String?  @db.VarChar(100)
+  action      String   @db.VarChar(50)
+  entityType  String   @map("entity_type") @db.VarChar(50)
+  entityId    String?  @map("entity_id") @db.VarChar(100)
+  oldData     Json?    @map("old_data")
+  newData     Json?    @map("new_data")
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  @@index([entityType, entityId], map: "idx_audit_entity")
+  @@index([userId], map: "idx_audit_user")
+  @@index([action], map: "idx_audit_action")
+  @@index([createdAt], map: "idx_audit_created")
+  @@map("audit_logs")
+}
+
+model Notification {
+  id            BigInt              @id @default(autoincrement())
+  userId        Int                 @map("user_id")
+  type          NotificationType    @default(Info)
+  title         String              @db.VarChar(255)
+  message       String?             @db.Text
+  referenceType String?             @map("reference_type") @db.VarChar(50)
+  referenceId   String?             @map("reference_id") @db.VarChar(100)
+  channel       NotificationChannel @default(System)
+  isRead        Boolean             @default(false) @map("is_read") @db.TinyInt
+  readAt        DateTime?           @map("read_at") @db.DateTime(0)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_notif_user")
+
+  @@index([userId], map: "idx_notif_user")
+  @@index([userId, isRead], map: "idx_notif_read")
+  @@index([createdAt], map: "idx_notif_created")
+  @@map("notifications")
+}
+
+model QrCode {
+  id            Int       @id @default(autoincrement())
+  transactionId Int       @map("transaction_id")
+  qrType        String    @map("qr_type") @db.VarChar(50)
+  rawData       String?   @map("raw_data") @db.Text
+  imageBase64   String?   @map("image_base64") @db.LongText
+  imageUrl      String?   @map("image_url") @db.VarChar(500)
+  size          Int       @default(300)
+  expiresAt     DateTime? @map("expires_at") @db.DateTime(0)
+  isExpired     Boolean   @default(false) @map("is_expired") @db.TinyInt
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_qr_txn")
+
+  @@index([transactionId], map: "idx_qr_txn")
+  @@index([expiresAt], map: "idx_qr_expires")
+  @@map("qr_codes")
+}
+
+model IdempotencyKey {
+  id        BigInt   @id @default(autoincrement())
+  keyValue  String   @unique @map("key_value") @db.VarChar(255)
+  response  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  @@index([keyValue], map: "idx_idemp_key")
+  @@index([createdAt], map: "idx_idemp_created")
+  @@map("idempotency_keys")
+}
