@@ -1,0 +1,59 @@
+import Redis from "ioredis";
+
+let _redis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (!_redis) {
+    _redis = new Redis(process.env.REDIS_URL ?? "redis://:123456@localhost:6379");
+    _redis.on("error", () => {}); // suppress unhandled errors
+  }
+  return _redis;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number; // unix ms
+}
+
+/**
+ * Sliding window rate limiter using Redis.
+ * key    — unique identifier (e.g. "rl:tenant:userId:route")
+ * limit  — max requests per window
+ * window — window size in seconds
+ */
+export async function rateLimit(
+  key: string,
+  limit: number,
+  window: number,
+): Promise<RateLimitResult> {
+  const redis = getRedis();
+  const now = Date.now();
+  const windowMs = window * 1000;
+  const clearBefore = now - windowMs;
+
+  const pipeline = redis.pipeline();
+  pipeline.zremrangebyscore(key, 0, clearBefore);
+  pipeline.zadd(key, now, `${now}-${Math.random()}`);
+  pipeline.zcard(key);
+  pipeline.pexpire(key, windowMs);
+
+  const results = await pipeline.exec();
+  const count = (results?.[2]?.[1] as number) ?? 0;
+
+  return {
+    allowed: count <= limit,
+    remaining: Math.max(0, limit - count),
+    resetAt: now + windowMs,
+  };
+}
+
+// Convenience wrappers matching BizOne rate-limit spec
+export const rateLimitGeneral = (tenantId: string, userId: string) =>
+  rateLimit(`rl:g:${tenantId}:${userId}`, 100, 60);
+
+export const rateLimitPos = (tenantId: string, userId: string) =>
+  rateLimit(`rl:pos:${tenantId}:${userId}`, 300, 60);
+
+export const rateLimitAuth = (ip: string) =>
+  rateLimit(`rl:auth:${ip}`, 10, 60);
