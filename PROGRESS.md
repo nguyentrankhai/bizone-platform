@@ -60,7 +60,7 @@
 | P1.2 | Payment Hub Scaffolding | ✅ | `2f6be74` | Xem [kết quả P1.2](#p12--payment-hub-scaffolding) |
 | P1.3 | BizOne Database Schema | ✅ | `4eab67f` | Xem [kết quả P1.3](#p13--bizone-database-schema) — DB dev local đã reset theo schema (2026-11-03) |
 | P1.4 | Payment Hub Database Schema | ✅ | `c88f056` | Xử lý vấn đề mở #4, #5 |
-| P1.5 | Authentication System | ✅ | — | JWKS verify qua jose; middleware JWT+tenant; vấn đề #1 (WS auth) xử lý P1.5; vấn đề #2 (Token Exchange) → dùng client_credentials trực tiếp |
+| P1.5 | Authentication System | ✅ | `4a5f17f` | JWKS verify qua jose; middleware JWT+tenant; vấn đề #1 (WS auth) xử lý P1.5; vấn đề #2 (Token Exchange) → dùng client_credentials trực tiếp |
 | P1.6 | API Core Infrastructure | ⬜ | — | |
 | P1.7 | Shared UI Component Library | ⬜ | — | |
 | P1.8 | Payment Hub Admin Layout | ⬜ | — | |
@@ -320,7 +320,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P1.5 — Authentication System
 
-- **Hoàn thành:** 2026-11-03 · **Commit:** — · **Vị trí:** `source/bizone/`, `source/payment-hub/`
+- **Hoàn thành:** 2026-11-03 · **Commit:** `4a5f17f` · **Vị trí:** `source/bizone/`, `source/payment-hub/`
 - **Đã làm:**
   - **BizOne** (`source/bizone/`):
     - `types/auth.ts` — `KeycloakToken`, `AuthUser`, `TenantContext`, `Permission` enum
