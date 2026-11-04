@@ -130,7 +130,8 @@ npm run dev
 ```
 
 **Default ports:**
-- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; BullMQ worker — `npm run dev:worker`)
+- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; BullMQ worker — `npm run dev:worker`). One database per tenant: set `TENANT_DATABASES` (e.g. `tenant_demo=bizonedb`).
+- Checks (same as CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
@@ -255,7 +256,8 @@ npm run dev
 ```
 
 **Cổng mặc định:**
-- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; worker BullMQ — `npm run dev:worker`)
+- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; worker BullMQ — `npm run dev:worker`). Mỗi tenant một database: khai báo `TENANT_DATABASES` (vd. `tenant_demo=bizonedb`).
+- Kiểm tra (giống CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001

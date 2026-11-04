@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-04 (Rà soát chất lượng & sửa lỗi QA-1; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -30,15 +30,15 @@
 
 | # | Vấn đề | Nguồn | Xử lý ở |
 |---|--------|-------|---------|
-| 1 | WebSocket Payment Hub (`:4001/ws`) chưa xác thực — không publish dữ liệu giao dịch thật trước khi có kiểm tra token | P1.2 | P1.5 |
-| 2 | Token Exchange v1 deprecated trong Keycloak 26; v2 chỉ đổi token trong cùng realm → chọn lại cách BizOne gọi Payment Hub | Nâng cấp Keycloak | P1.5 |
+| ~~1~~ | ~~WebSocket Payment Hub (`:4001/ws`) chưa xác thực~~ | ~~P1.2~~ | ✅ QA-1 |
+| ~~2~~ | ~~Token Exchange v1 deprecated → chọn lại cách BizOne gọi Payment Hub~~ | ~~Nâng cấp Keycloak~~ | ✅ P1.5 (`client_credentials`) |
 | 3 | Job webhook chứa `secret` trong Redis → đổi sang `webhookConfigId`, đọc secret từ DB | P1.2 | P3.6 |
 | ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
 | ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
-| 7 | Dev chưa có đăng nhập OIDC trong trình duyệt: page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build) | P2.2/P2.4 | Task auth UI (trước P2.6 POS) |
-| 8 | Router `product.ts` còn dùng `Number(ctx.user.id)` (Keycloak `sub` là UUID → NaN khi tạo/sửa SP) → đổi sang `resolveDbUserId()` | P2.4 | P2.5 |
-| 9 | 25 file của P1.x–P2.3 chưa đạt `npm run format:check` | P2.4 | Commit `chore: format` riêng |
-| 10 | Lỗi nghiệp vụ (`CONFLICT`/`NOT_FOUND`) ném dạng `Error` thường → tRPC trả 500 và log như lỗi server; client vẫn đọc được `bizoneMessage` | P2.1/P2.3 | P2.5 (chuẩn hoá `TRPCError`) |
+| 7 | Dev chưa có đăng nhập OIDC trong trình duyệt: page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
+| ~~8~~ | ~~Router `product.ts` dùng `Number(ctx.user.id)`~~ | ~~P2.4~~ | ✅ P2.5 |
+| ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
+| ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
 | 11 | Seed chưa có chi nhánh/kho mặc định → POS cần tạo chi nhánh + kho (gắn `branch_id`) trước khi mở ca | P2.5 | P4.6 Multi-store (hoặc seed) |
 | 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` | P2.5 | P6.5 / khi triển khai |
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
@@ -48,12 +48,21 @@
 | 17 | Sau IPN chưa gửi webhook cho merchant (`payment.success` / `payment.failed`) | P3.3 | P3.6 |
 | 18 | `VnpayConnector.refund()` đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
 | 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
+| 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
+| 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
+| 22 | Mapper `merchant_id` đã có trên client `payhub-admin-console`, nhưng chưa user Keycloak nào được gán thuộc tính này (token admin hiện xem mọi merchant) | QA-1 | Khi có tài khoản merchant |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-04 | BizOne chưa cô lập dữ liệu tenant (SRS-NFR-14/19): mọi tenant dùng chung `bizonedb` | DB riêng mỗi tenant qua `lib/tenant.ts` (AsyncLocalStorage + `TENANT_DATABASES`), fail-closed (QA-1) |
+| 2026-11-04 | `GET /api/v1/transactions` kèm `X-Api-Key` bất kỳ bỏ qua JWT và không xác thực → lộ mọi giao dịch | Merchant: HMAC + lọc theo merchant; admin: JWT + role (QA-1) |
+| 2026-11-04 | `/api/internal/transactions` chỉ cần JWT hợp lệ (không kiểm role/merchant) | `requireAdmin()`: role `payhub-admin`/`payhub-viewer`, lọc theo claim `merchant_id` (QA-1) |
+| 2026-11-04 | Job hết hạn có thể ghi đè GD vừa `Success` thành `Expired`; `transitionStatus` đọc-rồi-ghi không điều kiện | `UPDATE … WHERE status = <trạng thái đã đọc>` cho cả hai (QA-1) |
+| 2026-11-04 | Chữ ký HMAC merchant (`ts.body`) khác OpenAPI, không gắn method/path; `api_secret` lưu rõ | Ký `METHOD\nPATH\nTS\nSHA256(body)` (`lib/hmac.ts`), secret AES-256-GCM (QA-1) |
+| 2026-11-04 | Token `payhub-admin-console` thiếu `realm_access.roles` / `preferred_username` | Thêm protocol mapper (Keycloak đang chạy + realm JSON) (QA-1) |
 | 2026-11-02 | Compose project BizOne trùng tên `bizone` với stack Keycloak (nguy cơ xoá Keycloak khi `--remove-orphans`) | Đổi thành `bizone-core` (P1.1) |
 | 2026-11-02 | Worker in stack trace mỗi lần Redis reconnect; có thể treo khi tắt | Log 1 dòng/lần, tự thoát sau 8s khi SIGTERM (P1.2) |
 | 2026-11-03 | DB dev `bizonedb` lệch so với `schema.sql` (do lần chạy Prisma khác 2026-06-15) | Sao lưu → `prisma migrate reset` + seed; khớp schema, có lịch sử migration (P1.3) |
@@ -166,6 +175,7 @@
 | 2026-11-02 | Dựng Keycloak 23 (Docker, port 8080) với 3 realm: `bizone`, `payment-hub`, `partners` _(đã nâng lên 26.8.1 ngày 2026-11-03)_ | `5eefade` |
 | 2026-11-02 | `.gitignore`, `.env.example`; credentials dev trong `.env.development` (gitignored) | `a7ce8cf` |
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
+| 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | _(điền sau commit)_ |
 
 ---
 
@@ -1012,3 +1022,55 @@ Ngoài plan, theo yêu cầu người dùng.
 
 - **Vấn đề / lưu ý:** vấn đề mở #16–#19. Để hoàn tất P3.3: điền TMN/HashSecret sandbox thật vào `.env.development` + `source/payment-hub/.env.local`, `npm run db:seed`, tạo GD và thanh toán bằng thẻ test NCB; refund GD đó qua `VnpayConnector.refund()`.
 
+
+### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone`, `source/payment-hub`, `keycloak/realms/payment-hub-realm.json`, `.github/workflows/ci.yml`
+- **Bối cảnh:** rà soát toàn dự án sau P3.2/P3.3 (không thuộc task nào trong PLAN). Kết quả rà soát: build/typecheck qua, nhưng lint lỗi (`AuditTable`), 29 file lệch format, không có test/CI, và các lỗi bảo mật/nghiệp vụ dưới đây. Người dùng yêu cầu sửa toàn bộ.
+
+- **Đã làm:**
+  - **BizOne — cô lập tenant (DB riêng mỗi tenant, SRS-NFR-14/19, AC-SEC-04):**
+    - `lib/tenant.ts`: registry `TENANT_DATABASES` (`tenantId=database,…`), `runWithTenant()` / `currentTenantId()` trên AsyncLocalStorage; tenant không đăng ký → lỗi (fail closed).
+    - `lib/prisma.ts`: `getPrisma()` trả client (pool riêng) của DB tenant hiện tại; ngoài phạm vi tenant thì throw — không còn DB dùng chung mặc định. `getPrismaForTenant()` cho seed/health.
+    - Điểm vào đặt tenant: middleware tRPC `enforceTenant` (sau khi khớp `X-Tenant-ID` với claim), `proxy.ts` (403 "Tenant is not provisioned"), POS WebSocket (mọi truy cập DB/Redis bọc `runWithTenant`), worker BullMQ (job mang `tenantId`; job thiếu tenant bị từ chối), SSE `/api/inventory/alerts`.
+    - Redis theo tenant: `pos:cart:{tenant}:{session}`, kênh `bizone:pos:{tenant}:{session}`, `bizone:low-stock:{tenant}`; room/queue WS theo `{tenant}:{session}` (queue tự dọn khi rảnh).
+    - `/api/health` ping mọi DB tenant; seed nhận `SEED_TENANT_ID`; `.env.example`/compose thêm `TENANT_DATABASES`, `DEV_TENANT_ID`.
+  - **Payment Hub — bảo mật API:**
+    - `GET /api/v1/transactions`: có `X-Api-Key` → bắt buộc HMAC + chỉ giao dịch của merchant đó; không có → JWT + role admin. (Trước đây `X-Api-Key` bất kỳ đi thẳng vào handler không xác thực.)
+    - `/api/internal/transactions[/:id]`: `requireAdmin()` (role `payhub-admin`/`payhub-viewer`), token có `merchant_id` chỉ thấy merchant đó; tham số `page/limit/status` được kiểm tra.
+    - `proxy.ts` (cả 2 app): xoá header định danh `x-user-*`/`x-merchant-id` do client gửi trên mọi đường dẫn.
+    - Chữ ký merchant theo OpenAPI: `hex(HMAC-SHA256(secret, METHOD\nPATH?QUERY\nTS\nhex(SHA256(body))))`, so sánh constant-time (`lib/hmac.ts`); timestamp giây ±300s.
+    - `api_secret` lưu AES-256-GCM (`enc:v1:`), secret dạng rõ bị từ chối; `lib/api-keys.ts` + `npm run apikey:create -- <MERCHANT_CODE>`.
+    - WebSocket `:4001/ws`: token qua subprotocol `["payhub-events", token]`, yêu cầu role admin/viewer, lọc sự kiện theo `merchantId`, đóng socket khi token hết hạn; mọi sự kiện có `merchantId`.
+    - Kiểm tra `azp` (client được phép) ở cả 2 app — `KEYCLOAK_ALLOWED_CLIENTS`.
+  - **Payment Hub — tranh chấp trạng thái:** `transitionStatus` và `expireOverdueTransactions` dùng `UPDATE … WHERE status = <đã đọc>`; bên thua nhận `InvalidTransitionError`; log hết hạn ghi đúng `fromStatus`.
+  - **Keycloak:** client `payhub-admin-console` thêm mapper `realm roles`, `username`, `merchant_id` (realm JSON + Keycloak đang chạy).
+  - **UI:** `TransactionsClient` gửi Bearer (dev: `DEV_AUTH_TOKEN`), xuất CSV duyệt từng trang 100 (API giới hạn 100/trang, trước đây chỉ xuất được 100 dòng); `AuditTable` hết lỗi lint `set-state-in-effect`.
+  - **Chất lượng:** Prettier toàn bộ; ESLint bỏ qua tham số `_x`; `redis.keys()` → `SCAN` + `UNLINK`; gỡ `jwks-rsa` không dùng; Vitest (`npm test`: BizOne 19 test, Payment Hub 14 test); CI GitHub Actions (format, lint, typecheck, test, build, build:jobs cho 2 app).
+
+- **Kiểm thử:**
+
+  | Tiêu chí | Kết quả |
+  |----------|---------|
+  | format:check / lint / typecheck / test / build / build:jobs (2 app) | ✅ tất cả exit 0 (BizOne 19/19 test, Payment Hub 14/14) |
+  | Payment Hub API (app thật :4010, token Keycloak thật qua PKCE, key do `apikey:create` cấp) | ✅ 17/17: chữ ký mới → 201; chữ ký kiểu cũ, sai path, sai method, body sửa, timestamp ms → 401; `GET /api/v1/transactions` với `X-Api-Key` rác → 401; internal: không token 401, admin/viewer 200, header `x-user-roles` giả → 401 |
+  | Cô lập merchant | ✅ 6/6: key BIZONE không đọc được GD của merchant QA2 (404), list không lẫn; token service account không role → 403; token realm BizOne → 401 |
+  | WebSocket Payment Hub | ✅ 7/7: không token/token rác/token realm khác → 401; viewer kết nối, nhận `transaction.created` có `merchantId` |
+  | Tranh chấp hết hạn vs thanh toán (40 GD Pending quá hạn, chạy song song, 3 lần) | ✅ mỗi lần 39 Success + 1 Expired, 1 transition bị từ chối, **0 bản ghi lệch** giữa trạng thái và log |
+  | BizOne cô lập tenant (2 DB thật: `bizonedb`, `bizone_qa2` tạo từ migration + seed) | ✅ SP tạo ở `tenant_qa2` không hiện ở `tenant_demo`; SP tạo qua API `tenant_demo` chỉ nằm trong `bizonedb`; `X-Tenant-ID` khác claim → 403; tenant không có trong `TENANT_DATABASES` → 403 (tRPC + SSE); health ping cả 2 DB |
+  | SSE cảnh báo tồn | ✅ chỉ nhận `bizone:low-stock:tenant_demo`, không nhận kênh tenant khác |
+  | POS WebSocket | ✅ 6/6: tenant lệch 403, phiên không tồn tại 404, 2 màn hình đồng bộ `cart:updated`, key Redis `pos:cart:tenant_demo:5` |
+  | Worker BullMQ | ✅ job có tenant → completed; job thiếu `tenantId` → failed "has no tenantId" |
+  | Dọn dẹp | ✅ dừng mọi server test, xoá GD/API key/merchant QA2/RACE, chi nhánh/kho/ca/SP/audit QA, DB `bizone_qa2`, key Redis và job BullMQ test |
+
+- **Khác biệt so với rà soát ban đầu:**
+  - Lỗi "proxy chặn API HMAC" đã được P3.3 sửa trước khi QA-1 bắt đầu; QA-1 phát hiện thêm lỗ hổng mới do bản sửa đó (bỏ qua JWT khi có `X-Api-Key` nhưng handler list không xác thực).
+  - Gói `cn` **giữ lại**: là thay thế hợp lệ của clsx + tailwind-merge; `shadcn` giữ trong `dependencies` vì `globals.css` import `shadcn/tailwind.css` lúc build.
+  - Mật khẩu dev trong tài liệu/realm JSON chưa đổi (chỉ dùng cho dev) — cần xác nhận repo GitHub để private.
+
+- **Quyết định thiết kế:**
+  - Multi-tenant theo SRS: **mỗi tenant một database**, chọn qua AsyncLocalStorage để không phải sửa chữ ký ~100 hàm service; registry đặt ở env cho MVP (vấn đề #20).
+  - Chữ ký HMAC theo `OpenAPI-PaymentHub.yaml` (máy đọc được) — `API-Design-PaymentHub.md` §2.1 đã sửa cho khớp; URI_PATH gồm cả query string.
+  - `api_secret` mã hoá (không hash) vì cần lấy lại để kiểm chữ ký.
+
+- **Vấn đề / lưu ý:** #7 (page admin chưa có đăng nhập), #20–#22. Merchant đang tích hợp (nếu có) phải đổi sang chữ ký mới; key cấp trước QA-1 (secret dạng rõ) cần cấp lại.

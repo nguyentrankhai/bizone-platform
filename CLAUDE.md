@@ -108,6 +108,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 ├── mockups-bizone/                  # 8 màn hình HTML BizOne
 ├── mockups-paymenthub/              # mockup HTML Payment Hub Admin
 ├── graphify-out/                    # knowledge graph (graph.html, graph.json, GRAPH_REPORT.md)
+├── .github/workflows/ci.yml          # CI: format, lint, typecheck, test, build, build:jobs cho 2 app
 ├── .agents/skills/                  # skills: software-architecture-design, frontend-design
 └── source/                          # MÃ NGUỒN ỨNG DỤNG
     ├── bizone/                      # P1.1 — BizOne Core (NextJS 16)
@@ -124,7 +125,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/inventory/    # P2.4 — WarehouseTable, StockTakeForm, TransferForm, BarcodeScanInput…
     │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal, CustomerDisplay, Receipt, SessionClient
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
-    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), trpc.ts, dev-auth.ts)
+    │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
     │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
@@ -136,6 +137,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── ws/pos.ts            # P2.5 — process WebSocket POS 2 màn hình :3002/ws/pos/{sessionId}
     │   │   └── worker.ts            # P2.5 — process worker BullMQ
     │   ├── types/                   # TypeScript types dùng chung
+    │   ├── tests/                   # Vitest (`npm test`): cart, rbac, tenant
     │   ├── public/                  # static assets
     │   ├── Dockerfile               # multi-stage, output standalone, node:24-alpine
     │   ├── docker-compose.yml       # project "bizone-core": app + db (MariaDB 10.11) + cache (Redis 7)
@@ -148,14 +150,17 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── components/ui/           # shadcn/ui
         ├── app/api/ipn/vnpay/       # P3.3 — IPN VNPay (public, verify HMAC-SHA512)
         ├── app/pay/                 # P3.3 — /pay/{txnCode} (chọn PT → PSP), /pay/vnpay/return (redirect)
-        ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent), crypto.ts (AES-256-GCM secret đối tác)
+        ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
         ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN)
         ├── services/
         │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
         │   ├── queue/               # BullMQ connection, queues, enqueueWebhook()
         │   ├── webhook/deliver.ts   # gửi webhook ký HMAC-SHA256
         │   └── worker.ts            # process worker (BullMQ)
-        ├── server/ws/server.ts      # process realtime: WebSocket :4001/ws, relay Redis "payhub:events"
+        ├── server/ws/server.ts      # process realtime: WebSocket :4001/ws (JWT + role, lọc theo merchant), relay Redis "payhub:events"
+        ├── server/middleware/       # apiAuth.ts (API key + HMAC), adminAuth.ts (role admin/viewer), idempotency.ts
+        ├── scripts/create-api-key.ts # `npm run apikey:create -- <MERCHANT_CODE>`
+        ├── tests/                   # Vitest (`npm test`): stateMachine, hmac, security
         ├── hooks/  types/  public/
         ├── Dockerfile               # 1 image cho 3 process (app / dist/worker.js / dist/server.js)
         └── docker-compose.yml       # project "bizone-payhub": app, worker, realtime, db, cache
@@ -167,13 +172,15 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 |------|-------|
 | `npm run dev` | Dev server port 3000 (DB dev: `bizonedb` trên MariaDB local 3306) |
 | `npm run build` / `npm start` | Build & chạy production |
-| `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
+| `npm run lint` / `npm run typecheck` / `npm run format` / `npm test` | ESLint / tsc / Prettier / Vitest |
 | `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
 | `npm run db:push` / `db:migrate` / `db:seed` / `db:studio` | Prisma: đồng bộ schema / chạy migration / seed dữ liệu mẫu / Prisma Studio |
 | `npm run dev:realtime` / `npm run dev:worker` | POS WebSocket (port `POS_WS_PORT`, mặc định 3002) / BullMQ worker (tsx watch, đọc `.env.local`) |
 | `npm run build:jobs` | Bundle ESM `dist/pos.mjs` + `dist/worker.mjs` (chạy `node --env-file=.env.local dist/pos.mjs`) |
 
 **Lưu ý POS realtime**: token gửi qua subprotocol `new WebSocket(url, ["bizone-pos", token])` + `?tenant=`; giỏ hàng lưu Redis `pos:cart:{sessionId}`, mọi thay đổi publish `bizone:pos:{sessionId}`. Mutation POS dùng `posPermissionProcedure` (300 req/phút). Bundle phải là ESM vì Prisma 7 client dùng `import.meta.url`. UI POS (P2.6) cần cả `npm run dev` và `npm run dev:realtime`; QR chuyển khoản lấy tài khoản từ `store_config` (`bank_bin`, `bank_account_no`, `bank_name`, `bank_account_name`).
+
+**Lưu ý multi-tenant (QA-1)**: mỗi tenant một database. `TENANT_DATABASES="tenant_demo=bizonedb,…"` (host/credential lấy từ `DATABASE_URL`); tenant không có trong danh sách → 403. `getPrisma()` chỉ chạy trong `runWithTenant()` (tRPC, POS WS, worker, SSE đã bọc sẵn) — code mới ở entry point khác (route handler, job, script) phải tự bọc, dùng `getPrismaForTenant()` cho script/health. Key/kênh Redis phải có tenant (`pos:cart:{tenant}:{session}`, `bizone:pos:{tenant}:{session}`, `bizone:low-stock:{tenant}`); job BullMQ mang `tenantId`. Seed: `SEED_TENANT_ID=<tenant> npm run db:seed`.
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 
@@ -184,11 +191,14 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run dev` | Next app port 4000 |
 | `npm run dev:worker` / `npm run dev:realtime` | BullMQ worker / WebSocket relay (tsx watch, đọc `.env.local`) |
 | `npm run build` + `npm run build:jobs` | Build Next + bundle worker/relay ra `dist/` |
+| `npm test` / `npm run apikey:create -- <MERCHANT_CODE>` | Vitest / cấp API key merchant (in key + secret một lần, lưu secret mã hoá) |
 | `docker compose up -d --build` | app :4000, realtime :4001, worker, MariaDB 10.11 (host 3308), Redis (host 6381) |
 
 **Lưu ý connector (P3.3)**: secret đối tác trong `partner_configs` mã hoá bằng `PARTNER_ENCRYPTION_KEY` (base64 32 byte, có trong `.env.local`); `npm run db:seed` tạo partner config "VNPay Sandbox" từ `VNPAY_*`. `/api/ipn/*` public (không JWT); `/api/v1/*` có `X-Api-Key` xác thực HMAC ở route handler. IPN là nguồn sự thật — redirect không đổi trạng thái.
 
-**Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub. WebSocket chưa có auth (chờ P1.5).
+**Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub (mọi event phải có `merchantId`). WS yêu cầu token qua subprotocol `["payhub-events", token]`, role `payhub-admin`/`payhub-viewer`.
+
+**Lưu ý bảo mật Payment Hub**: merchant API (`/api/v1/*` có `X-Api-Key`) ký `hex(HMAC-SHA256(secret, METHOD\nPATH?QUERY\nTS\nhex(SHA256(body))))` (`lib/hmac.ts`, theo OpenAPI); `api_secret` lưu `enc:v1:` (AES-256-GCM, `PARTNER_ENCRYPTION_KEY`). Admin API `/api/internal/*` dùng `requireAdmin()`; token có claim `merchant_id` chỉ thấy merchant đó. `proxy.ts` xoá header `x-user-*` do client gửi. Đổi trạng thái giao dịch luôn bằng `UPDATE … WHERE status = <đã đọc>`.
 
 **Gọi tRPC từ client**: truyền header mỗi call `trpc.x.y.query(input, { context: { headers } })` (helper `apiContext(auth)` trong `components/inventory/shared.ts`). Chưa có đăng nhập OIDC trên trình duyệt — page lấy `DEV_TENANT_ID` / `DEV_AUTH_TOKEN` từ env qua `getDevAuth()`. Next 16 không cho 2 `next dev` cùng thư mục: nếu :3000 đang chạy, test bằng `npm run build && npx next start -p 3001`.
 
