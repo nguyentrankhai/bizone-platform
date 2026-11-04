@@ -88,7 +88,7 @@
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
-| P2.8 | CRM Module — API & UI | ✅ | — | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
+| P2.8 | CRM Module — API & UI | ✅ | 3866a5f | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
 
@@ -740,7 +740,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.8 — CRM Module — API & UI
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `3866a5f` · **Vị trí:** `source/bizone/`
 - **Đã làm:**
   - `lib/validators/customer.ts` — Zod schemas: listCustomers, createCustomer, updateCustomer, adjustPoints (earn/redeem/adjust), createDebt, payDebt, mergeCustomers
   - `types/auth.ts` — thêm `crm:manage_points` và `crm:manage_debt` vào Permission type
