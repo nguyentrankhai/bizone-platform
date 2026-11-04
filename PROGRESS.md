@@ -83,7 +83,7 @@
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
-| P2.5 | POS Module — API & WebSocket | ✅ | — | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
+| P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ⬜ | — | |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
@@ -592,7 +592,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.5 — POS Module — API & WebSocket
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/server/routers/pos.ts`, `source/bizone/server/services/{cashSession,invoice,payment,pricing,posCart,posEvents}.ts`, `source/bizone/server/ws/pos.ts`, `source/bizone/server/queue/inventory.ts`, `source/bizone/server/worker.ts`, `source/bizone/lib/pos/`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `6b88230` · **Vị trí:** `source/bizone/server/routers/pos.ts`, `source/bizone/server/services/{cashSession,invoice,payment,pricing,posCart,posEvents}.ts`, `source/bizone/server/ws/pos.ts`, `source/bizone/server/queue/inventory.ts`, `source/bizone/server/worker.ts`, `source/bizone/lib/pos/`
 
 - **Đã làm:**
   - **tRPC `pos`** (`posPermissionProcedure`: rate limit POS 300/phút + RBAC `pos:read`/`pos:write`): `openSession`, `currentSession`, `closeSession`, `sessions`, `session`, `sessionSummary`, `scan`, `quote`, `createInvoice`, `invoices`, `invoice`, `print`, `cancelInvoice`, `refundInvoice`
