@@ -97,7 +97,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P3.1 | Transaction Engine — Core API | ✅ | — | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
+| P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ⬜ | — | |
 | P3.3 | VNPay Connector | ⬜ | — | |
 | P3.4 | VietQR Generator | ⬜ | — | |
@@ -882,7 +882,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.1 — Transaction Engine — Core API
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** — · **Vị trí:** `source/payment-hub`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `0e47fcd` · **Vị trí:** `source/payment-hub`
 - **Đã làm:**
   - `server/middleware/apiAuth.ts` — xác thực API Key + HMAC-SHA256 (X-Api-Key, X-Timestamp, X-Signature); timestamp drift ±300s; rate limit Redis (1 phút window); cập nhật `lastUsedAt` fire-and-forget
   - `server/middleware/idempotency.ts` — check/save idempotency key Redis TTL 24h (`idempotency:payhub:{merchantId}:{key}`)
