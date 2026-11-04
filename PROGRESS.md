@@ -127,7 +127,7 @@
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
-| P3.6 | Webhook Engine | ✅ | — | Xem [kết quả P3.6](#p36--webhook-engine) |
+| P3.6 | Webhook Engine | ✅ | `ba87a4a` | Xem [kết quả P3.6](#p36--webhook-engine) |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
 
@@ -1139,7 +1139,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.6 — Webhook Engine
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** — · **Vị trí:** `source/payment-hub/services/webhook/` (`sender.ts`, `queue.ts`, `deliver.ts`), `server/services/webhook.service.ts`, `server/routes/webhook-config.ts`, `app/api/internal/webhooks/`, `app/api/internal/webhook-logs/`, `app/webhooks/`, `components/ph/Webhook*.tsx`; BizOne `app/api/webhooks/payhub/`, `lib/payhub/webhook.ts`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `ba87a4a` · **Vị trí:** `source/payment-hub/services/webhook/` (`sender.ts`, `queue.ts`, `deliver.ts`), `server/services/webhook.service.ts`, `server/routes/webhook-config.ts`, `app/api/internal/webhooks/`, `app/api/internal/webhook-logs/`, `app/webhooks/`, `components/ph/Webhook*.tsx`; BizOne `app/api/webhooks/payhub/`, `lib/payhub/webhook.ts`
 - **Đã làm:**
   - **Gửi** (`services/webhook/sender.ts`): HTTP POST JSON, header `X-Webhook-Id` (UUID, giữ nguyên qua retry/replay), `X-Webhook-Event`, `X-Timestamp`, `X-Signature` = `hex(HMAC-SHA256(secret, timestamp + "." + body))`; timeout theo endpoint; không theo redirect; ghi lại headers/body/HTTP/thời gian. **Chặn SSRF**: URL phải https và không trỏ vào IP nội bộ/loopback/link-local (169.254.169.254…) — dev bật `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` vì BizOne chạy localhost
   - **Hàng đợi** (`services/webhook/queue.ts`, BullMQ `webhook-delivery`): job chỉ mang `deliveryId`, `webhookConfigId`, URL, body — **không có secret** (đóng #3); attempts = 1 + `retry_count`; backoff tuỳ biến theo `retry_intervals` của endpoint (mặc định 1ph → 5ph → 15ph → 1h → 6h); `jobId` = delivery + endpoint ⇒ đưa vào hàng đợi lặp lại không gửi trùng
