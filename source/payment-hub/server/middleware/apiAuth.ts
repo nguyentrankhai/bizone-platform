@@ -1,6 +1,8 @@
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import type { NextRequest } from "next/server";
+import { decryptSecret, isEncrypted } from "@/lib/crypto";
+import { isTimestampFresh, verifyRequestSignature } from "@/lib/hmac";
 
 const RATE_WINDOW_SECONDS = 60;
 
@@ -29,9 +31,10 @@ export class ApiAuthError extends Error {
  * Request must include:
  *   X-Api-Key: <api_key>
  *   X-Timestamp: <unix seconds>
- *   X-Signature: <hex(HMAC-SHA256(secret, timestamp + "." + rawBody))>
+ *   X-Signature: hex(HMAC-SHA256(secret, METHOD\nURI_PATH\nTIMESTAMP\nhex(SHA256(body))))
  *
- * Timestamp must be within ±300 s of server time.
+ * See lib/hmac.ts. Timestamp must be within ±300 s of server time. The API secret is stored
+ * AES-256-GCM encrypted (`enc:v1:`) and decrypted only to verify the signature.
  */
 export async function verifyApiRequest(
   req: NextRequest,
@@ -49,8 +52,7 @@ export async function verifyApiRequest(
   }
 
   // Timestamp drift check (±5 minutes)
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {
+  if (!isTimestampFresh(timestamp)) {
     throw new ApiAuthError("UNAUTHORIZED", "Timestamp expired or invalid");
   }
 
@@ -70,8 +72,21 @@ export async function verifyApiRequest(
     throw new ApiAuthError("UNAUTHORIZED", "API key has expired");
   }
 
-  // HMAC-SHA256 verification
-  const sigValid = await verifyHmac(key.apiSecret, `${timestamp}.${rawBody}`, signature);
+  // HMAC-SHA256 verification over method + path(+query) + timestamp + body hash
+  if (!isEncrypted(key.apiSecret)) {
+    // Plaintext secrets are no longer accepted — re-issue the key (npm run apikey:create).
+    console.error(`[apiAuth] API key #${key.id} has an unencrypted secret; rejecting`);
+    throw new ApiAuthError("UNAUTHORIZED", "Invalid or revoked API key");
+  }
+  const uriPath = req.nextUrl.pathname + req.nextUrl.search;
+  const sigValid = verifyRequestSignature(
+    decryptSecret(key.apiSecret),
+    req.method,
+    uriPath,
+    timestamp,
+    rawBody,
+    signature,
+  );
   if (!sigValid) {
     throw new ApiAuthError("UNAUTHORIZED", "Invalid signature");
   }
@@ -93,23 +108,6 @@ export async function verifyApiRequest(
     apiKeyId: key.id,
     rateLimit: key.rateLimit,
   };
-}
-
-async function verifyHmac(secret: string, payload: string, signature: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-  try {
-    const sigBytes = Buffer.from(signature, "hex");
-    return await crypto.subtle.verify("HMAC", keyMaterial, sigBytes, encoder.encode(payload));
-  } catch {
-    return false;
-  }
 }
 
 async function enforceRateLimit(apiKey: string, limit: number): Promise<void> {

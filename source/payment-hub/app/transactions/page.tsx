@@ -4,6 +4,7 @@ import { PHLayout } from "@/components/ph/PHLayout";
 export const instant = false;
 import { TransactionsClient } from "@/components/ph/TransactionsClient";
 import { listTransactions } from "@/server/services/transaction.service";
+import { getDevAuthToken } from "@/lib/dev-auth";
 
 export default async function TransactionsPage() {
   await connection();
@@ -24,7 +25,7 @@ export default async function TransactionsPage() {
 
   return (
     <PHLayout>
-      <TransactionsClient initialData={initialData} />
+      <TransactionsClient initialData={initialData} authToken={getDevAuthToken()} />
     </PHLayout>
   );
 }

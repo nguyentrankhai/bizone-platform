@@ -71,29 +71,35 @@ Tất cả request đến Payment Hub Merchant API phải có chữ ký HMAC-SHA
 | Header | Mô tả | Bắt buộc |
 |--------|-------|----------|
 | `X-Api-Key` | API Key của merchant | Có |
-| `X-Signature` | HMAC-SHA256 signature | Có |
-| `X-Timestamp` | Unix timestamp (milliseconds) | Có |
+| `X-Signature` | hex(HMAC-SHA256) — xem bên dưới | Có |
+| `X-Timestamp` | Unix timestamp (**giây**), lệch tối đa ±300s | Có |
 | `Idempotency-Key` | UUID chống trùng lặp | Không (khuyến nghị) |
 
-**Cách tạo signature:**
+**Cách tạo signature** (khớp `OpenAPI-PaymentHub.yaml` → `MerchantHMAC`; cài đặt: `source/payment-hub/lib/hmac.ts`):
 
 ```
-HMAC-SHA256(
-  secret_key,
-  HTTP_METHOD + "\n" +
-  URI_PATH + "\n" +
-  X-Timestamp + "\n" +
-  Body (nếu có, otherwise empty)
+X-Signature = hex(
+  HMAC-SHA256(
+    api_secret,
+    HTTP_METHOD + "\n" +          // chữ in hoa: POST, GET…
+    URI_PATH + "\n" +             // path + query đúng như gửi: /api/v1/transactions?page=2
+    X-Timestamp + "\n" +          // Unix giây
+    hex(SHA256(Body))             // body thô; request không có body → SHA256("")
+  )
 )
 ```
 
 Ví dụ:
 ```
 POST /api/v1/transactions
-X-Api-Key: mer_abc123
-X-Timestamp: 1718200000000
-X-Signature: <base64(HMAC-SHA256(secret, "POST\n/api/v1/transactions\n1718200000000\n{\"amount\":150000}"))>
+X-Api-Key: pk_3f9c…
+X-Timestamp: 1718200000
+X-Signature: <hex(HMAC-SHA256(secret, "POST\n/api/v1/transactions\n1718200000\n" + hex(SHA256("{\"amount\":150000}"))))>
 ```
+
+Ghi chú:
+- Chữ ký gắn method + path nên không dùng lại được cho endpoint khác.
+- `api_secret` chỉ hiển thị một lần khi cấp key; Payment Hub lưu dạng mã hoá AES-256-GCM. Cấp key (dev): `npm run apikey:create -- <MERCHANT_CODE>`.
 
 ### 2.2. Admin Authentication (JWT)
 

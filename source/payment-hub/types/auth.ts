@@ -27,6 +27,8 @@ export interface PayhubAuthUser {
   merchantId?: string;
   roles: string[];
   resourceRoles: Record<string, string[]>;
+  /** Token expiry (epoch seconds) */
+  expiresAt: number;
 }
 
 export type PayhubPermission =

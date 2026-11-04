@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { extractBearerToken, verifyJwt } from "@/lib/auth";
+import { IDENTITY_HEADERS } from "@/server/middleware/adminAuth";
 
 const PUBLIC_PATHS = [
   "/api/health",
@@ -17,21 +18,25 @@ function jsonError(status: number, code: string, message: string): NextResponse 
   return NextResponse.json({ success: false, error: { code, message } }, { status });
 }
 
+/** Copy of the request headers without any client-supplied identity headers. */
+function strippedHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  for (const h of IDENTITY_HEADERS) headers.delete(h);
+  return headers;
+}
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) return NextResponse.next();
-
-  if (!pathname.startsWith("/api/")) return NextResponse.next();
+  // Identity headers are only ever set below, from a verified JWT — strip them on every path
+  // so no request (public, page or API) can impersonate a user.
+  if (isPublicPath(pathname) || !pathname.startsWith("/api/")) {
+    return NextResponse.next({ request: { headers: strippedHeaders(request) } });
+  }
 
   // Merchant API (/api/v1/*) authenticates with API key + HMAC in the route handler.
-  // Strip identity headers so a merchant request can never impersonate a JWT user.
   if (pathname.startsWith("/api/v1/") && request.headers.has("x-api-key")) {
-    const headers = new Headers(request.headers);
-    for (const h of ["x-user-id", "x-user-username", "x-user-roles", "x-merchant-id"]) {
-      headers.delete(h);
-    }
-    return NextResponse.next({ request: { headers } });
+    return NextResponse.next({ request: { headers: strippedHeaders(request) } });
   }
 
   const authHeader = request.headers.get("authorization");
@@ -50,7 +55,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { user } = result;
 
   // Forward user info to route handlers
-  const requestHeaders = new Headers(request.headers);
+  const requestHeaders = strippedHeaders(request);
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-username", user.username);
   requestHeaders.set("x-user-roles", user.roles.join(","));

@@ -104,6 +104,7 @@ export async function initiatePayment(
   if (fromStatus === "Created") {
     void publishEvent("transaction.status_changed", {
       txnId: txn.id,
+      merchantId: txn.merchantId,
       txnCode: txn.txnCode,
       fromStatus,
       toStatus: "Pending",
@@ -212,6 +213,7 @@ export async function applyPaymentResult(
 
   void publishEvent("transaction.status_changed", {
     txnId: txn.id,
+    merchantId: txn.merchantId,
     txnCode: txn.txnCode,
     fromStatus: "Pending",
     toStatus,

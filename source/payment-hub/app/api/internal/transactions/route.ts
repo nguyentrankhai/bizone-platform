@@ -3,23 +3,35 @@ import {
   listTransactions,
   type ListTransactionsInput,
 } from "@/server/services/transaction.service";
-import type { TxnStatus } from "@/server/services/stateMachine";
+import { isTxnStatus } from "@/server/services/stateMachine";
+import { requireAdmin } from "@/server/middleware/adminAuth";
+
+function positiveInt(value: string | null, fallback: number): number {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n > 0 ? n : fallback;
+}
 
 function ok(data: unknown): Response {
   return Response.json({ success: true, data });
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
+  const auth = requireAdmin(req);
+  if (auth instanceof Response) return auth;
+
   const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
 
   const input: ListTransactionsInput = {
-    page: parseInt(searchParams.get("page") ?? "1", 10),
-    limit: Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100),
-    status: (searchParams.get("status") as TxnStatus) || undefined,
+    page: positiveInt(searchParams.get("page"), 1),
+    limit: Math.min(positiveInt(searchParams.get("limit"), 20), 100),
+    status: status && isTxnStatus(status) ? status : undefined,
     paymentMethod: searchParams.get("payment_method") ?? undefined,
     dateFrom: searchParams.get("date_from") ?? undefined,
     dateTo: searchParams.get("date_to") ?? undefined,
     search: searchParams.get("search") ?? undefined,
+    // Merchant-bound tokens only ever see their own merchant's transactions.
+    merchantId: auth.merchantId,
   };
 
   const amountMin = searchParams.get("amount_min");

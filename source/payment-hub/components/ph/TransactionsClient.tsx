@@ -34,9 +34,15 @@ interface ApiResult {
 
 interface TransactionsClientProps {
   initialData: ApiResult;
+  /** Bearer token for /api/internal/* (dev: DEV_AUTH_TOKEN until OIDC login lands). */
+  authToken: string;
 }
 
-export function TransactionsClient({ initialData }: TransactionsClientProps) {
+const EXPORT_PAGE_SIZE = 100; // API maximum per page
+const EXPORT_MAX_ROWS = 10_000;
+
+export function TransactionsClient({ initialData, authToken }: TransactionsClientProps) {
+  const authHeaders: HeadersInit = authToken ? { Authorization: `Bearer ${authToken}` } : {};
   const [rows, setRows] = useState<TxnRow[]>(initialData.items);
   const [total, setTotal] = useState(initialData.total);
   const [totalPages, setTotalPages] = useState(initialData.totalPages);
@@ -80,7 +86,7 @@ export function TransactionsClient({ initialData }: TransactionsClientProps) {
       if (dt) params.set("date_to", dt);
       if (q) params.set("search", q);
 
-      const res = await fetch(`/api/internal/transactions?${params}`);
+      const res = await fetch(`/api/internal/transactions?${params}`, { headers: authHeaders });
       const json = (await res.json()) as { success: boolean; data: ApiResult };
       if (json.success) {
         setRows(json.data.items);
@@ -115,16 +121,23 @@ export function TransactionsClient({ initialData }: TransactionsClientProps) {
   }
 
   async function exportCsv() {
-    const params = new URLSearchParams({ page: "1", limit: "1000" });
+    const params = new URLSearchParams({ limit: String(EXPORT_PAGE_SIZE) });
     if (statusRef.current) params.set("status", statusRef.current);
     if (methodRef.current) params.set("payment_method", methodRef.current);
     if (dateFromRef.current) params.set("date_from", dateFromRef.current);
     if (dateToRef.current) params.set("date_to", dateToRef.current);
     if (searchRef.current) params.set("search", searchRef.current);
 
-    const res = await fetch(`/api/internal/transactions?${params}`);
-    const json = (await res.json()) as { success: boolean; data: ApiResult };
-    if (!json.success) return;
+    // The API caps a page at 100 rows — walk the pages instead of asking for more.
+    const items: TxnRow[] = [];
+    for (let p = 1; items.length < EXPORT_MAX_ROWS; p++) {
+      params.set("page", String(p));
+      const res = await fetch(`/api/internal/transactions?${params}`, { headers: authHeaders });
+      const json = (await res.json()) as { success: boolean; data: ApiResult };
+      if (!json.success) return;
+      items.push(...json.data.items);
+      if (p >= json.data.totalPages) break;
+    }
 
     const headers = [
       "Mã GD",
@@ -138,7 +151,7 @@ export function TransactionsClient({ initialData }: TransactionsClientProps) {
     ];
     const csvRows = [
       headers.join(","),
-      ...json.data.items.map((t) =>
+      ...items.map((t) =>
         [
           t.txnCode,
           new Date(t.createdAt).toLocaleString("vi-VN"),

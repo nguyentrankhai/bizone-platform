@@ -6,6 +6,17 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "payment-hub";
 const JWKS_URL = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs`;
 const ISSUER = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
 
+/**
+ * Clients whose tokens this app accepts (`azp` claim). Any other client of the realm — even
+ * with a valid signature — is rejected. Override with KEYCLOAK_ALLOWED_CLIENTS (comma list).
+ */
+const ALLOWED_CLIENTS = new Set(
+  (process.env.KEYCLOAK_ALLOWED_CLIENTS ?? "payhub-admin-console,payhub-api")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean),
+);
+
 const getJWKS = (() => {
   let cached: ReturnType<typeof createRemoteJWKSet> | null = null;
   return () => {
@@ -24,6 +35,10 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
 
     const claims = payload as unknown as PayhubKeycloakToken;
 
+    if (!claims.azp || !ALLOWED_CLIENTS.has(claims.azp)) {
+      return { ok: false, reason: "client_not_allowed" };
+    }
+
     const realmRoles = claims.realm_access?.roles ?? [];
     const resourceRoles = Object.fromEntries(
       Object.entries(claims.resource_access ?? {}).map(([k, v]) => [k, v.roles]),
@@ -38,6 +53,7 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
       merchantId: claims.merchant_id,
       roles: [...new Set(allRoles)],
       resourceRoles,
+      expiresAt: claims.exp,
     };
 
     return { ok: true, user };
@@ -50,24 +66,4 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
 export function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader?.startsWith("Bearer ")) return null;
   return authHeader.slice(7);
-}
-
-// HMAC-SHA256 signature verification for webhook callbacks and partner API calls
-export async function verifyHmacSignature(
-  payload: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-
-  // signature expected as hex string
-  const sigBytes = Buffer.from(signature, "hex");
-  return crypto.subtle.verify("HMAC", key, sigBytes, encoder.encode(payload));
 }

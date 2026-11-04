@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { verifyApiRequest, ApiAuthError } from "@/server/middleware/apiAuth";
 import { checkIdempotency, saveIdempotency } from "@/server/middleware/idempotency";
+import { requireAdmin } from "@/server/middleware/adminAuth";
+import { isTxnStatus } from "@/server/services/stateMachine";
 import {
   createTransaction,
   getTransactionById,
@@ -208,18 +210,40 @@ export async function handleGetByMerchantTxnId(
   return ok(serializeTxnFull(txn));
 }
 
-// ─── GET /api/v1/transactions (admin/internal — Keycloak JWT) ─────────────────
+// ─── GET /api/v1/transactions ─────────────────────────────────────────────────
+// Merchant (X-Api-Key + HMAC) → own transactions only.
+// Admin (Keycloak JWT via proxy.ts) → role payhub-admin | payhub-viewer, scoped by merchant_id claim.
+
+function parsePositiveInt(value: string | null, fallback: number): number {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n > 0 ? n : fallback;
+}
 
 export async function handleListTransactions(req: NextRequest): Promise<Response> {
-  const { searchParams } = new URL(req.url);
+  let merchantId: number | undefined;
+  if (req.headers.has("x-api-key")) {
+    try {
+      merchantId = (await verifyApiRequest(req, "")).merchantId;
+    } catch (e) {
+      if (e instanceof ApiAuthError) return err(e.code, e.message, e.status);
+      throw e;
+    }
+  } else {
+    const auth = requireAdmin(req);
+    if (auth instanceof Response) return auth;
+    merchantId = auth.merchantId;
+  }
 
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
   const input: ListTransactionsInput = {
-    page: parseInt(searchParams.get("page") ?? "1", 10),
-    limit: Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100),
-    status: (searchParams.get("status") as ListTransactionsInput["status"]) || undefined,
+    page: parsePositiveInt(searchParams.get("page"), 1),
+    limit: Math.min(parsePositiveInt(searchParams.get("limit"), 20), 100),
+    status: status && isTxnStatus(status) ? status : undefined,
     dateFrom: searchParams.get("date_from") ?? undefined,
     dateTo: searchParams.get("date_to") ?? undefined,
     search: searchParams.get("search") ?? undefined,
+    merchantId,
   };
 
   const result = await listTransactions(input);

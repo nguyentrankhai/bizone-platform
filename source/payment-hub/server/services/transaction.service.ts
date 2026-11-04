@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
-import { assertTransition, type TxnStatus } from "./stateMachine";
+import { InvalidTransitionError, assertTransition, type TxnStatus } from "./stateMachine";
 
 const DEFAULT_EXPIRY_MINUTES = 15;
 const BASE_PAYMENT_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:4000";
@@ -215,7 +215,7 @@ export async function transitionStatus(
   const fromStatus = txn.status as TxnStatus;
   assertTransition(fromStatus, toStatus);
 
-  const updateData: Prisma.TransactionUpdateInput = { status: toStatus };
+  const updateData: Prisma.TransactionUncheckedUpdateManyInput = { status: toStatus };
   if (toStatus === "Success" && !txn.paidAt) {
     updateData.paidAt = options.paidAt ?? new Date();
   }
@@ -223,9 +223,15 @@ export async function transitionStatus(
     updateData.partnerTxnId = options.partnerTxnId;
   }
 
-  await prisma.$transaction([
-    prisma.transaction.update({ where: { id: txnId }, data: updateData }),
-    prisma.transactionLog.create({
+  // Conditional update: only applies if nobody changed the status since we read it
+  // (IPN, expire job, admin action racing). The loser gets InvalidTransitionError.
+  const applied = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.transaction.updateMany({
+      where: { id: txnId, status: fromStatus },
+      data: updateData,
+    });
+    if (count === 0) return false;
+    await tx.transactionLog.create({
       data: {
         transactionId: txnId,
         event: `status_changed:${toStatus.toLowerCase()}`,
@@ -235,11 +241,21 @@ export async function transitionStatus(
         rawData: options.rawData ? (options.rawData as Prisma.InputJsonValue) : undefined,
         createdBy: options.createdBy ?? "system",
       },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!applied) {
+    const fresh = await prisma.transaction.findUnique({
+      where: { id: txnId },
+      select: { status: true },
+    });
+    throw new InvalidTransitionError((fresh?.status ?? fromStatus) as TxnStatus, toStatus);
+  }
 
   void publishEvent("transaction.status_changed", {
     txnId,
+    merchantId: txn.merchantId,
     txnCode: txn.txnCode,
     fromStatus,
     toStatus,
@@ -260,36 +276,46 @@ export async function expireOverdueTransactions(): Promise<number> {
       status: { in: ["Created", "Pending"] },
       expiredAt: { lte: now },
     },
-    select: { id: true, txnCode: true, merchantId: true },
+    select: { id: true, txnCode: true, merchantId: true, status: true },
     take: 500,
   });
 
   if (expired.length === 0) return 0;
 
-  await prisma.$transaction([
-    prisma.transaction.updateMany({
-      where: { id: { in: expired.map((t) => t.id) } },
-      data: { status: "Expired" },
-    }),
-    ...expired.map((t) =>
-      prisma.transactionLog.create({
+  // Each row is expired only if it is still in the status we read — a PSP success (IPN)
+  // that lands between the read and the write must never be overwritten with Expired.
+  const done: typeof expired = [];
+  for (const t of expired) {
+    const applied = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.transaction.updateMany({
+        where: { id: t.id, status: t.status, expiredAt: { lte: now } },
+        data: { status: "Expired" },
+      });
+      if (count === 0) return false;
+      await tx.transactionLog.create({
         data: {
           transactionId: t.id,
           event: "expired",
-          fromStatus: "Created",
+          fromStatus: t.status,
           toStatus: "Expired",
           description: "Transaction expired due to timeout",
           createdBy: "system:expire-job",
         },
-      }),
-    ),
-  ]);
-
-  for (const t of expired) {
-    void publishEvent("transaction.expired", { txnId: t.id, txnCode: t.txnCode }).catch(() => {});
+      });
+      return true;
+    });
+    if (applied) done.push(t);
   }
 
-  return expired.length;
+  for (const t of done) {
+    void publishEvent("transaction.expired", {
+      txnId: t.id,
+      merchantId: t.merchantId,
+      txnCode: t.txnCode,
+    }).catch(() => {});
+  }
+
+  return done.length;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

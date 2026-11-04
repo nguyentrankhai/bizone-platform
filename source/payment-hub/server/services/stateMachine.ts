@@ -24,6 +24,10 @@ const VALID_TRANSITIONS: Record<TxnStatus, TxnStatus[]> = {
   Refunded: [],
 };
 
+export function isTxnStatus(value: string): value is TxnStatus {
+  return Object.prototype.hasOwnProperty.call(VALID_TRANSITIONS, value);
+}
+
 export class InvalidTransitionError extends Error {
   constructor(from: TxnStatus, to: TxnStatus) {
     super(`Invalid state transition: ${from} → ${to}`);
