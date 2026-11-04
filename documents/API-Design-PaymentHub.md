@@ -1320,27 +1320,30 @@ config: { "name": "NewPartner", "version": "1.0.0" }
 
 ### 7.3. Webhook Delivery
 
-- **Method**: HTTP POST với JSON body
-- **Signature**: HMAC-SHA256 trong header `X-Signature` (signed bằng secret key của merchant)
-- **Retry**: Tối đa 5 lần, exponential backoff: 1ph, 5ph, 15ph, 1h, 6h
-- **Idempotency**: Header `X-Webhook-Id` (UUID) để merchant chống trùng lặp
+- **Method**: HTTP POST, JSON body (payload §7.2, không có trường `signature` trong body)
+- **Headers**:
+  - `X-Webhook-Id`: UUID của thông điệp — giống nhau ở mọi lần retry và replay → merchant chống trùng theo giá trị này
+  - `X-Webhook-Event`: mã sự kiện (`payment.success`, …; `webhook.ping` khi test)
+  - `X-Timestamp`: unix giây lúc gửi
+  - `X-Signature`: `hex(HMAC-SHA256(secret, X-Timestamp + "." + raw_body))` — secret của endpoint (`whsec_…`, chỉ hiển thị một lần khi tạo/đổi)
+- **Retry**: gửi ngay, sau đó tối đa 5 lần với backoff 1ph → 5ph → 15ph → 1h → 6h (cấu hình theo endpoint). Mọi phản hồi khác 2xx, timeout hoặc lỗi mạng đều retry; trả 2xx để xác nhận đã nhận.
+- **Đảm bảo**: at-least-once (outbox trên bảng `transactions`: `notify_webhook` / `webhook_sent_at`) — merchant phải xử lý idempotent theo `X-Webhook-Id`.
 
 ### 7.4. Xác thực Webhook (dành cho merchant)
 
 ```python
-import hmac, hashlib, json
+import hmac, hashlib, time
 
-secret = "whsec_abc123"
-payload = json.dumps(body)
-expected_signature = hmac.new(
-    secret.encode(),
-    payload.encode(),
-    hashlib.sha256
-).hexdigest()
-
-received_signature = request.headers.get("X-Signature")
-assert hmac.compare_digest(expected_signature, received_signature)
+secret = "whsec_..."
+raw_body = request.get_data()                      # bytes đúng như nhận được, không parse lại
+timestamp = request.headers["X-Timestamp"]
+assert abs(time.time() - int(timestamp)) <= 300    # chống replay
+expected = hmac.new(secret.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+assert hmac.compare_digest(expected, request.headers["X-Signature"])
+# rồi chống trùng theo request.headers["X-Webhook-Id"]
 ```
+
+Tham chiếu: BizOne nhận tại `POST /api/webhooks/payhub` (`source/bizone/app/api/webhooks/payhub/route.ts`).
 
 ---
 

@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.5 Partner Config UI — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-04 (P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 2 | 3 | 3 |
+| 3 — Payment Hub MVP | 8 | 3 | 3 | 2 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **20** | **3** | **28** |
+| **Tổng** | **51** | **21** | **3** | **27** |
 
 ---
 
@@ -32,7 +32,7 @@
 |---|--------|-------|---------|
 | ~~1~~ | ~~WebSocket Payment Hub (`:4001/ws`) chưa xác thực~~ | ~~P1.2~~ | ✅ QA-1 |
 | ~~2~~ | ~~Token Exchange v1 deprecated → chọn lại cách BizOne gọi Payment Hub~~ | ~~Nâng cấp Keycloak~~ | ✅ P1.5 (`client_credentials`) |
-| 3 | Job webhook chứa `secret` trong Redis → đổi sang `webhookConfigId`, đọc secret từ DB | P1.2 | P3.6 |
+| ~~3~~ | ~~Job webhook chứa `secret` trong Redis~~ | ~~P1.2~~ | ✅ P3.6 |
 | ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
 | ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
 | 7 | Dev chưa có đăng nhập OIDC trong trình duyệt: page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
@@ -45,7 +45,7 @@
 | 14 | Chưa có UI cài đặt tài khoản ngân hàng cho VietQR (`store_config.bank_*`) và tên cửa hàng — đang sửa trực tiếp trong DB | P2.6 | Module Cài đặt (P4.x) |
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
-| 17 | Sau IPN chưa gửi webhook cho merchant (`payment.success` / `payment.failed`) | P3.3 | P3.6 |
+| ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
 | 18 | `VnpayConnector.refund()` đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
 | 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
@@ -57,12 +57,17 @@
 | 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
 | 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
 | 28 | Log thay đổi đối tác lấy IP từ `x-forwarded-for` — tin cậy được khi chạy sau reverse proxy ghi đè header này | P3.5 | Khi triển khai (P6.5) |
+| 29 | Sự kiện `refund.completed` đã khai báo (endpoint đăng ký được) nhưng chưa phát — chưa có luồng hoàn tiền | P3.6 | P5.3 |
+| 30 | BizOne `/api/webhooks/payhub` mới xác thực + chống trùng + ghi log; chưa áp sự kiện vào hoá đơn/đơn hàng. Secret là một biến `PAYHUB_WEBHOOK_SECRET` cho cả app — chưa map merchant Payment Hub ↔ tenant BizOne | P3.6 | P4.5 (POS ↔ Payment Hub) |
+| 31 | API webhook cho merchant (`POST /api/v1/webhooks`, `POST /api/v1/webhook-test` trong OpenAPI / API-Design §5.4) chưa có — hiện chỉ admin cấu hình qua `/api/internal/webhooks` | P3.6 | Cổng merchant / P7.x |
+| 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | P6.5 / triển khai |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-04 | Job webhook trong Redis chứa `secret` dạng rõ (#3); IPN không gửi webhook cho merchant (#17) | Job chỉ mang `webhookConfigId` (secret mã hoá trong DB, đọc lúc gửi); outbox `notify_webhook` gửi `payment.success/failed/expired` (P3.6) |
 | 2026-11-04 | BizOne chưa cô lập dữ liệu tenant (SRS-NFR-14/19): mọi tenant dùng chung `bizonedb` | DB riêng mỗi tenant qua `lib/tenant.ts` (AsyncLocalStorage + `TENANT_DATABASES`), fail-closed (QA-1) |
 | 2026-11-04 | `GET /api/v1/transactions` kèm `X-Api-Key` bất kỳ bỏ qua JWT và không xác thực → lộ mọi giao dịch | Merchant: HMAC + lọc theo merchant; admin: JWT + role (QA-1) |
 | 2026-11-04 | `/api/internal/transactions` chỉ cần JWT hợp lệ (không kiểm role/merchant) | `requireAdmin()`: role `payhub-admin`/`payhub-viewer`, lọc theo claim `merchant_id` (QA-1) |
@@ -122,7 +127,7 @@
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
-| P3.6 | Webhook Engine | ⬜ | — | |
+| P3.6 | Webhook Engine | ✅ | — | Xem [kết quả P3.6](#p36--webhook-engine) |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
 
@@ -1130,6 +1135,57 @@ Ngoài plan, theo yêu cầu người dùng.
   - Metadata từng loại connector (`lib/partner-types.ts`) dùng chung cho API (validate, che secret) và UI (nhãn, mặc định) — thêm PSP mới chỉ cần khai báo một mục.
 
 - **Vấn đề / lưu ý:** vấn đề mở #26–#28. Khi có credential VNPay sandbox thật (#16): cập nhật trên `/partners/1` → Test → Kích hoạt để hoàn tất tiêu chí VNPay của P3.5 cùng lúc với P3.3.
+
+
+### P3.6 — Webhook Engine
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** — · **Vị trí:** `source/payment-hub/services/webhook/` (`sender.ts`, `queue.ts`, `deliver.ts`), `server/services/webhook.service.ts`, `server/routes/webhook-config.ts`, `app/api/internal/webhooks/`, `app/api/internal/webhook-logs/`, `app/webhooks/`, `components/ph/Webhook*.tsx`; BizOne `app/api/webhooks/payhub/`, `lib/payhub/webhook.ts`
+- **Đã làm:**
+  - **Gửi** (`services/webhook/sender.ts`): HTTP POST JSON, header `X-Webhook-Id` (UUID, giữ nguyên qua retry/replay), `X-Webhook-Event`, `X-Timestamp`, `X-Signature` = `hex(HMAC-SHA256(secret, timestamp + "." + body))`; timeout theo endpoint; không theo redirect; ghi lại headers/body/HTTP/thời gian. **Chặn SSRF**: URL phải https và không trỏ vào IP nội bộ/loopback/link-local (169.254.169.254…) — dev bật `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` vì BizOne chạy localhost
+  - **Hàng đợi** (`services/webhook/queue.ts`, BullMQ `webhook-delivery`): job chỉ mang `deliveryId`, `webhookConfigId`, URL, body — **không có secret** (đóng #3); attempts = 1 + `retry_count`; backoff tuỳ biến theo `retry_intervals` của endpoint (mặc định 1ph → 5ph → 15ph → 1h → 6h); `jobId` = delivery + endpoint ⇒ đưa vào hàng đợi lặp lại không gửi trùng
+  - **Worker** (`deliver.ts`): mỗi lần thử = 1 dòng `webhook_logs` (attempt, max_retries, next_retry_at, response, duration, lỗi); đọc + giải mã secret lúc gửi ⇒ đổi secret/tắt endpoint áp dụng ngay cho cả các retry đang chờ (endpoint bị xoá/tắt → dừng retry)
+  - **Sự kiện giao dịch qua outbox** (`webhook.service.ts`): đổi trạng thái cuối (IPN `Success`/`Failed`, job hết hạn `Expired`, `transitionStatus`) đặt `notify_webhook = 1, webhook_sent_at = NULL` **trong cùng DB transaction**; sau commit gửi ngay (`dispatchSoon`), worker quét outbox mỗi 30 s cho những gì chưa đưa vào hàng đợi (Redis down, crash). Đóng #17. Payload theo API-Design §7.2 (`payment.success` có `partner_txn_id`, `paid_at`; `payment.failed` có `failure_reason`; `payment.expired` có `expired_at`). `transactions.webhook_url` ghi đè URL endpoint. Không có endpoint nào đăng ký → log `webhook_skipped` trên giao dịch; gửi thành công → log `webhook_delivered`
+  - **API admin** (`/api/internal/*`, JWT; đọc: admin/viewer, ghi: admin; token có `merchant_id` chỉ thấy merchant đó): CRUD `webhooks` (secret `whsec_…` sinh tự động, mã hoá AES-256-GCM, **chỉ trả một lần** khi tạo/`rotate-secret`), `PUT …/status`, `POST …/test` (ping, 10/phút), `GET webhooks/stats?hours=`, `GET webhook-logs` (lọc endpoint/giao dịch/sự kiện/trạng thái/URL/ngày, phân trang), `GET webhook-logs/{id}`, `POST webhook-logs/{id}/replay` (30/phút)
+  - **Replay**: gửi lại đồng bộ cùng `X-Webhook-Id` + cùng body, ký bằng secret hiện tại, ghi thành lần thử tiếp theo của endpoint đó
+  - **UI `/webhooks`** (theo mockup "Danh sách Webhook" / "Cấu hình" / "Lịch sử gửi"): 5 thẻ thống kê (số lần gửi, thành công + tỉ lệ, thất bại, thời gian phản hồi TB/chậm nhất, đang chờ gửi/retry) theo 1h/24h/7 ngày; tab Endpoint — bảng URL, sự kiện, trạng thái, số lần gửi/thành công/thất bại, nút Ping (kết quả hiện tại dòng), Sửa, Bật/Tắt, Xoá; form modal (merchant, URL, checkbox sự kiện, retry, khoảng retry, timeout, đổi secret) và màn hình hiển thị secret một lần có nút chép; tab Lịch sử — lọc trạng thái/sự kiện/mã GD, bảng lần gửi, ngăn kéo chi tiết request/response + nút **Gửi lại**
+  - **BizOne nhận webhook** (`POST /api/webhooks/payhub`, public trong `proxy.ts`): kiểm `X-Timestamp` ±5 phút, chữ ký HMAC (constant-time), `X-Webhook-Event` khớp body, chống trùng theo `X-Webhook-Id` (Redis 7 ngày) → 200 `{received, duplicate}`; secret ở `PAYHUB_WEBHOOK_SECRET`
+  - Migration `2_webhook_delivery_id`: cột `webhook_logs.delivery_id` + index (gom các lần thử của một thông điệp); `queues.ts` cũ (chứa secret trong job) bị thay bằng `services/webhook/queue.ts`
+  - Test Vitest: Payment Hub `tests/webhook.test.ts` (6 — chữ ký, secret, delivery id ổn định, backoff 1ph…6h, chặn SSRF, cờ dev); BizOne `tests/payhub-webhook.test.ts` (3 — chữ ký, sai secret/timestamp/body, cửa sổ 5 phút)
+  - Tài liệu: API-Design §7.3–7.4 và OpenAPI `/v1/webhooks` cập nhật cách ký + retry thống nhất với code
+
+- **Kiểm thử** (Payment Hub `next start` :4010 + worker thật, BizOne `next start` :3001 với secret do Payment Hub cấp, endpoint giả lập :3999 `/flaky` (500 hai lần rồi 200) và `/down` (luôn 500), token Keycloak thật, IPN VNPay ký HMAC-SHA512):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Webhook gửi đến BizOne thành công | ✅ IPN thành công → `payment.success` tới BizOne HTTP 200 sau **~0,1–0,7 s** (API-Design: < 3 s); `payment.failed` (IPN mã 24) có `failure_reason`; `payment.expired` do job hết hạn của worker; BizOne log đúng sự kiện + mã GD |
+  | Retry khi thất bại | ✅ `/flaky` (retry 3, khoảng [2,3,4] s): Failed → Failed → Success, `next_retry_at` cách 2 s rồi 3 s; `/down` (retry 2): 3 lần Failed, lần cuối không còn `next_retry_at`, dừng hẳn; mọi lần thử cùng một `X-Webhook-Id`; lịch mặc định 1ph/5ph/15ph/1h/6h kiểm bằng unit test |
+  | Replay từ lịch sử | ✅ API + UI: replay lần gửi tới BizOne → lần thử 2, cùng `X-Webhook-Id`, BizOne trả `duplicate: true` (chống trùng hoạt động); replay lần lỗi của `/flaky` trên UI → "Gửi lại thành công — HTTP 200"; viewer replay → 403 |
+  | Test ping | ✅ ping BizOne → 200 (~20 ms); ping `/down` → báo lỗi HTTP 500; sau khi đổi secret, ping tới BizOne còn secret cũ → 401 (BizOne từ chối chữ ký) |
+  | Log chi tiết request/response | ✅ chi tiết có headers (kèm chữ ký — tự tính lại bằng secret endpoint khớp), body, HTTP, response headers/body, thời gian, lỗi, lần thử; lọc theo GD + trạng thái trả đúng 5 lần lỗi |
+  | Dashboard: số lần gửi, success, failed, response time | ✅ `stats` khớp đếm trực tiếp trong `webhook_logs` (15 = 8 + 7); bộ đếm theo endpoint khớp DB; UI tự cập nhật sau ping/replay |
+  | Webhook config CRUD + active/inactive | ✅ tạo/sửa/tắt/xoá; tắt hết endpoint → IPN mới không gửi gì, GD có log `webhook_skipped` |
+  | Outbox | ✅ GD đặt `Success` + cờ outbox trực tiếp trong DB (không qua `dispatchSoon`) → worker quét và gửi tới BizOne trong ≤ 40 s |
+  | Bảo mật | ✅ 16 job trong Redis không job nào chứa secret; secret không có trong list/detail, DB lưu `enc:v1:`; không token 401; viewer tạo/ping 403; validate (không sự kiện, URL `ftp://`, khoảng retry 0) → 400; BizOne: chữ ký sai 401, timestamp cũ 10 phút 401, thiếu `X-Webhook-Id` 400, event không khớp 400, gửi trùng 200 `duplicate` |
+  | Script e2e | ✅ 27/27 (lần đầu 25/27: phát hiện và sửa lỗi đánh số lần thử khi replay — trước đây đếm gộp mọi endpoint; 1 kỳ vọng sai trong script) |
+  | Trình duyệt | ✅ thống kê, bảng endpoint, ping, tab lịch sử + lọc, ngăn kéo chi tiết, replay; không lỗi console. Sửa thêm: nhãn "Lỗi — chờ retry" chỉ hiện khi `next_retry_at` còn ở tương lai |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ cả 2 app (Payment Hub 30/30, BizOne 22/22) |
+  | Dọn dẹp | ✅ dừng server :4010/:3001/:3999 + worker; xoá endpoint, `webhook_logs`, GD test, API key test, 34 key Redis (job BullMQ, rate limit, khoá chống trùng BizOne); xoá file token/secret tạm |
+
+- **Khác biệt so với plan:**
+  - **Chữ ký** = `HMAC(secret, timestamp + "." + body)` trong `X-Signature` (+ `X-Timestamp`): PLAN/API-Design chỉ ký body (không chống được gửi lại), OpenAPI có timestamp nhưng header `X-PayHub-Signature` và retry 3 lần. Chọn tên header của PLAN + timestamp của OpenAPI + retry 5 lần của PLAN; đã sửa API-Design §7.3–7.4 và OpenAPI cho thống nhất.
+  - "Retry tối đa 5 lần" hiểu là 1 lần gửi + 5 lần retry; số lần và khoảng cách cấu hình được theo endpoint.
+  - Đường dẫn `/api/internal/webhooks`, `/api/internal/webhook-logs` (không phải `/api/admin/*`) — thống nhất với QA-1/P3.5.
+  - Replay và ping gửi **đồng bộ** (admin thấy kết quả ngay), không qua hàng đợi.
+  - `refund.completed` chưa phát (chưa có hoàn tiền — #29); API webhook phía merchant chưa có (#31).
+  - Thêm điểm nhận ở BizOne để nghiệm thu "gửi đến BizOne" — chỉ xác thực + chống trùng; áp vào hoá đơn ở P4.5 (#30).
+
+- **Quyết định thiết kế:**
+  - **Transactional outbox** trên cột có sẵn `transactions.notify_webhook` / `webhook_sent_at` thay vì gửi trực tiếp sau commit: Redis down hoặc process chết giữa chừng không làm mất sự kiện (at-least-once); claim bằng `UPDATE … WHERE webhook_sent_at IS NULL` nên nhiều process cùng quét không gửi đôi.
+  - `X-Webhook-Id` tất định theo (mã GD, sự kiện) ⇒ outbox gửi lại, retry, replay đều cùng id — merchant chỉ cần chống trùng theo header này.
+  - Secret đọc từ DB lúc gửi (không nằm trong job) ⇒ đổi secret/tắt endpoint có hiệu lực cả với retry đang chờ; mất Redis không lộ secret.
+  - Mọi phản hồi khác 2xx đều retry (kể cả 4xx) vì merchant hay trả 4xx tạm thời khi deploy; chỉ URL không hợp lệ/bị chặn mới dừng ngay.
+
+- **Vấn đề / lưu ý:** vấn đề mở #29–#32. Đóng #3, #17. BizOne cần đặt `PAYHUB_WEBHOOK_SECRET` (secret hiện một lần khi tạo endpoint trên `/webhooks`) để nhận webhook.
 
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)

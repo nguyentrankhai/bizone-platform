@@ -8,6 +8,7 @@ import {
   resolveConnectorForMethod,
 } from "@/services/connectors/registry";
 import type { PaymentResult } from "@/services/connectors/types";
+import { OUTBOX_PENDING, dispatchSoon } from "@/server/services/webhook.service";
 
 /**
  * Bridges the Transaction Engine and PSP connectors:
@@ -183,6 +184,7 @@ export async function applyPaymentResult(
         status: toStatus,
         partnerTxnId: result.partnerTxnId ?? null,
         ...(toStatus === "Success" ? { paidAt: result.paidAt ?? new Date() } : {}),
+        ...OUTBOX_PENDING, // payment.success / payment.failed webhook (P3.6)
       },
     });
     if (count === 0) return false;
@@ -218,6 +220,7 @@ export async function applyPaymentResult(
     fromStatus: "Pending",
     toStatus,
   }).catch(() => {});
+  dispatchSoon(txn.id);
 
   return { kind: "applied", status: toStatus };
 }

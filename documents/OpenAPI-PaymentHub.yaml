@@ -749,10 +749,12 @@ paths:
       description: |
         PayHub sẽ gửi HTTP POST đến URL đã đăng ký khi có sự kiện thanh toán.
 
-        **Retry policy**: 3 lần (tức thì → sau 1 phút → sau 5 phút).
+        **Retry policy**: gửi ngay, sau đó retry tối đa 5 lần (1 phút → 5 phút → 15 phút → 1 giờ → 6 giờ),
+        cấu hình được theo endpoint. Mọi phản hồi khác 2xx (hoặc timeout) đều được retry.
 
         **Signature verification**: PayHub ký mỗi webhook với:
-        `X-PayHub-Signature: HMAC-SHA256(secret, timestamp + "." + body)`
+        `X-Signature: hex(HMAC-SHA256(secret, X-Timestamp + "." + body))`, kèm `X-Timestamp` (unix giây),
+        `X-Webhook-Id` (UUID, giống nhau ở mọi lần retry/replay — dùng để chống trùng) và `X-Webhook-Event`.
       security:
         - MerchantHMAC: []
       parameters:

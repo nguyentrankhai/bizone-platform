@@ -15,6 +15,7 @@ function strippedHeaders(request: NextRequest): Headers {
 const PUBLIC_PATHS = [
   "/api/health",
   "/api/auth", // Keycloak callback routes
+  "/api/webhooks/", // inbound partner webhooks — authenticated by HMAC in the route (P3.6)
   "/_next",
   "/favicon.ico",
 ];

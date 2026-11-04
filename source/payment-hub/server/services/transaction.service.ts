@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
 import { InvalidTransitionError, assertTransition, type TxnStatus } from "./stateMachine";
+import { OUTBOX_PENDING, dispatchSoon } from "./webhook.service";
 
 const DEFAULT_EXPIRY_MINUTES = 15;
 const BASE_PAYMENT_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:4000";
@@ -222,6 +223,8 @@ export async function transitionStatus(
   if (options.partnerTxnId) {
     updateData.partnerTxnId = options.partnerTxnId;
   }
+  const notifies = toStatus === "Success" || toStatus === "Failed" || toStatus === "Expired";
+  if (notifies) Object.assign(updateData, OUTBOX_PENDING);
 
   // Conditional update: only applies if nobody changed the status since we read it
   // (IPN, expire job, admin action racing). The loser gets InvalidTransitionError.
@@ -260,6 +263,7 @@ export async function transitionStatus(
     fromStatus,
     toStatus,
   }).catch(() => {});
+  if (notifies) dispatchSoon(txnId);
 
   return { ...txn, status: toStatus };
 }
@@ -289,7 +293,7 @@ export async function expireOverdueTransactions(): Promise<number> {
     const applied = await prisma.$transaction(async (tx) => {
       const { count } = await tx.transaction.updateMany({
         where: { id: t.id, status: t.status, expiredAt: { lte: now } },
-        data: { status: "Expired" },
+        data: { status: "Expired", ...OUTBOX_PENDING }, // payment.expired webhook (P3.6)
       });
       if (count === 0) return false;
       await tx.transactionLog.create({
@@ -308,6 +312,7 @@ export async function expireOverdueTransactions(): Promise<number> {
   }
 
   for (const t of done) {
+    dispatchSoon(t.id);
     void publishEvent("transaction.expired", {
       txnId: t.id,
       merchantId: t.merchantId,

@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   id                BIGINT AUTO_INCREMENT PRIMARY KEY,
   webhook_config_id INT,
   transaction_id    INT,
+  delivery_id       VARCHAR(64) COMMENT 'X-Webhook-Id, chung cho mọi lần gửi/replay (P3.6)',
   event             VARCHAR(50) NOT NULL,
   request_url       VARCHAR(500),
   request_headers   JSON,
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   INDEX idx_whlog_status (status),
   INDEX idx_whlog_created (created_at),
   INDEX idx_whlog_retry (next_retry_at),
+  INDEX idx_whlog_delivery (delivery_id),
   CONSTRAINT fk_whlog_config FOREIGN KEY (webhook_config_id) REFERENCES webhook_configs(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 

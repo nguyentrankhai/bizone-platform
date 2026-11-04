@@ -115,6 +115,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── app/                     # App Router: pages, layouts, route handlers
     │   │   ├── api/health/route.ts  # GET /api/health (Docker healthcheck)
     │   │   ├── api/inventory/alerts/route.ts  # P2.4 — SSE cảnh báo tồn thấp (relay Redis "bizone:low-stock")
+    │   │   ├── api/webhooks/payhub/route.ts  # P3.6 — nhận webhook Payment Hub (HMAC + chống trùng X-Webhook-Id)
     │   │   ├── products/            # P2.2 — UI sản phẩm
     │   │   ├── warehouse/           # P2.4 — kho: tồn, phiếu nhập/xuất (transactions/new), stock-take, transfer
     │   │   ├── pos/                 # P2.6 — /pos (bán hàng), /pos/session (mở/khóa ca), /pos/display?session= (màn hình khách)
@@ -154,13 +155,15 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── app/qr/[file]/           # P3.4 — ảnh QR public /qr/{token}.png (từ Redis, hết hạn cùng QR)
         ├── app/partners/            # P3.5 — /partners (card), /partners/new, /partners/{id} (form, test, kích hoạt, lịch sử)
         ├── app/api/internal/partners/ # P3.5 — CRUD, /test, /status, /logs (JWT + role)
+        ├── app/api/internal/webhooks/ + webhook-logs/ # P3.6 — CRUD, ping, status, rotate-secret, stats; lịch sử, chi tiết, replay
+        ├── app/webhooks/            # P3.6 — UI thống kê, endpoint, lịch sử gửi + replay
         ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
-        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5)
+        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5), webhook.service (P3.6: outbox, CRUD, replay, stats)
         ├── services/
         │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
         │   ├── qr/vietqr.ts         # P3.4 — payload EMVCo/VietQR (NAPAS 247), CRC16, render PNG 200/300/500
-        │   ├── queue/               # BullMQ connection, queues, enqueueWebhook()
-        │   ├── webhook/deliver.ts   # gửi webhook ký HMAC-SHA256
+        │   ├── queue/connection.ts  # kết nối BullMQ
+        │   ├── webhook/             # P3.6 — sender.ts (ký HMAC, chặn SSRF), queue.ts (BullMQ, backoff), deliver.ts (processor worker)
         │   └── worker.ts            # process worker (BullMQ)
         ├── server/ws/server.ts      # process realtime: WebSocket :4001/ws (JWT + role, lọc theo merchant), relay Redis "payhub:events"
         ├── server/middleware/       # apiAuth.ts (API key + HMAC), adminAuth.ts (role admin/viewer), idempotency.ts
@@ -204,6 +207,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý VietQR (P3.4)**: tài khoản nhận lấy từ `partner_configs` `connector_type='VietQR'` Active — `api_key` = BIN ngân hàng (mã hoá), `merchant_code` = số tài khoản, `secret_key` = tên chủ TK (mã hoá); seed từ `VIETQR_BANK_BIN/ACCOUNT_NO/ACCOUNT_NAME` (hiện là **tài khoản demo**). Nội dung CK = `txn_code` bỏ dấu `-`. Mỗi (GD, loại, size) có 1 QR hiện hành; cache Redis `payhub:qr:{txnId}:{type}:{size}`, ảnh `payhub:qr:img:{token}`; worker đánh dấu QR hết hạn mỗi phút. Rate limit QR 60 req/phút/key.
 
 **Lưu ý đối tác (P3.5)**: cấu hình mới luôn `Inactive`; chỉ kích hoạt khi test kết nối của cấu hình hiện tại đạt; sửa trường kết nối → xoá kết quả test và về `Inactive`. API không bao giờ trả secret (che `••••`). Metadata từng loại connector ở `lib/partner-types.ts`. Log `partner_config_logs.changed_by` = username token.
+
+**Lưu ý webhook (P3.6)**: đổi trạng thái cuối của GD phải đặt `OUTBOX_PENDING` (`notify_webhook=1, webhook_sent_at=NULL`) trong cùng DB transaction rồi gọi `dispatchSoon(txnId)` sau commit; worker quét outbox mỗi 30 s. Ký `X-Signature = HMAC-SHA256(secret, X-Timestamp + "." + body)`, `X-Webhook-Id` giữ nguyên qua retry/replay. Job BullMQ không mang secret. Dev cần `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` (Payment Hub) và `PAYHUB_WEBHOOK_SECRET` (BizOne).
 
 **Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub (mọi event phải có `merchantId`). WS yêu cầu token qua subprotocol `["payhub-events", token]`, role `payhub-admin`/`payhub-viewer`.
 

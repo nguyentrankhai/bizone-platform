@@ -1,36 +1,55 @@
-import { createHmac } from "node:crypto";
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
+import { getPrisma } from "@/lib/prisma";
+import { decryptSecret } from "@/lib/crypto";
+import { recordAttempt } from "@/server/services/webhook.service";
+import { sendWebhook } from "./sender";
+import { webhookBackoff, type WebhookJob } from "./queue";
 
-export type WebhookJob = {
-  url: string;
-  secret: string;
-  event: string;
-  payload: unknown;
-};
+/**
+ * Worker processor: one call = one HTTP attempt = one webhook_logs row.
+ * Throwing makes BullMQ retry with the "webhook" backoff (1 min, 5 min, 15 min, 1 h, 6 h by
+ * default); UnrecoverableError stops retrying (endpoint removed/disabled, URL not deliverable).
+ */
+export async function processWebhookJob(job: Job<WebhookJob>): Promise<{ status: number | null }> {
+  const { deliveryId, webhookConfigId, url, event, transactionId, body } = job.data;
+  const attempt = job.attemptsMade + 1;
+  const maxAttempts = job.opts.attempts ?? 1;
+  const maxRetries = maxAttempts - 1;
 
-export function signWebhook(secret: string, timestamp: string, body: string): string {
-  return createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
-}
+  const config = await getPrisma().webhookConfig.findUnique({ where: { id: webhookConfigId } });
+  if (!config || config.status !== "Active") {
+    throw new UnrecoverableError(
+      `Webhook endpoint #${webhookConfigId} ${config ? "is inactive" : "was deleted"} — not sent`,
+    );
+  }
 
-// Throwing on a non-2xx response lets BullMQ retry with the queue's backoff policy.
-export async function deliverWebhook(job: Job<WebhookJob>): Promise<{ status: number }> {
-  const { url, secret, event, payload } = job.data;
-  const body = JSON.stringify({ event, data: payload });
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-payhub-event": event,
-      "x-payhub-delivery": String(job.id),
-      "x-payhub-timestamp": timestamp,
-      "x-payhub-signature": signWebhook(secret, timestamp, body),
-    },
+  const res = await sendWebhook({
+    url,
+    secret: decryptSecret(config.secret),
+    event,
+    deliveryId,
     body,
-    signal: AbortSignal.timeout(10_000),
+    timeoutMs: config.timeoutMs,
   });
 
-  if (!res.ok) throw new Error(`Webhook ${url} responded ${res.status}`);
-  return { status: res.status };
+  const willRetry = !res.ok && res.retryable && attempt < maxAttempts;
+  await recordAttempt(
+    {
+      deliveryId,
+      webhookConfigId,
+      transactionId,
+      event,
+      url,
+      body,
+      attempt,
+      maxRetries,
+      nextRetryAt: willRetry ? new Date(Date.now() + webhookBackoff(attempt, job)) : null,
+    },
+    res,
+  );
+
+  if (res.ok) return { status: res.status };
+  const message = `${event} → ${url}: ${res.error ?? "failed"} (attempt ${attempt}/${maxAttempts})`;
+  if (!res.retryable) throw new UnrecoverableError(message);
+  throw new Error(message);
 }

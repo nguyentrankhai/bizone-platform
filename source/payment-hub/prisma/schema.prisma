@@ -406,6 +406,8 @@ model WebhookLog {
   id               BigInt           @id @default(autoincrement())
   webhookConfigId  Int?             @map("webhook_config_id")
   transactionId    Int?             @map("transaction_id")
+  /// X-Webhook-Id: same for every attempt/replay of one message (merchant de-duplicates on it)
+  deliveryId       String?          @map("delivery_id") @db.VarChar(64)
   event            String           @db.VarChar(50)
   requestUrl       String?          @map("request_url") @db.VarChar(500)
   requestHeaders   Json?            @map("request_headers")
@@ -430,6 +432,7 @@ model WebhookLog {
   @@index([status], map: "idx_whlog_status")
   @@index([createdAt], map: "idx_whlog_created")
   @@index([nextRetryAt], map: "idx_whlog_retry")
+  @@index([deliveryId], map: "idx_whlog_delivery")
   @@map("webhook_logs")
 }
 

@@ -1,24 +1,27 @@
 import { Worker } from "bullmq";
 import { describeError } from "@/lib/redis";
 import { queueConnection } from "./queue/connection";
-import { QUEUE_NAMES } from "./queue/queues";
-import { deliverWebhook, type WebhookJob } from "./webhook/deliver";
+import { WEBHOOK_QUEUE, webhookBackoff, type WebhookJob } from "./webhook/queue";
+import { processWebhookJob } from "./webhook/deliver";
+import { sweepWebhookOutbox } from "@/server/services/webhook.service";
 import { runExpireJob } from "@/server/jobs/expireTransactions";
 import { runExpireQrJob } from "@/server/jobs/expireQrCodes";
 
-const webhookWorker = new Worker<WebhookJob>(QUEUE_NAMES.webhookDelivery, deliverWebhook, {
+const webhookWorker = new Worker<WebhookJob>(WEBHOOK_QUEUE, processWebhookJob, {
   connection: queueConnection(),
   concurrency: 10,
+  settings: {
+    backoffStrategy: (attemptsMade, _type, _err, job) =>
+      webhookBackoff(attemptsMade, job as { data: WebhookJob } | undefined),
+  },
 });
 
 webhookWorker.on("completed", (job) => {
-  console.log(`[worker] ${job.queueName} #${job.id} delivered (${job.data.event})`);
+  console.log(`[worker] webhook ${job.data.event} #${job.id} delivered`);
 });
 
 webhookWorker.on("failed", (job, err) => {
-  console.error(
-    `[worker] ${job?.queueName} #${job?.id} attempt ${job?.attemptsMade} failed: ${err.message}`,
-  );
+  console.error(`[worker] webhook #${job?.id} attempt ${job?.attemptsMade}: ${err.message}`);
 });
 
 webhookWorker.on("error", (err) => {
@@ -27,11 +30,21 @@ webhookWorker.on("error", (err) => {
 
 webhookWorker
   .waitUntilReady()
-  .then(() => console.log(`[worker] listening on queue "${QUEUE_NAMES.webhookDelivery}"`))
+  .then(() => console.log(`[worker] listening on queue "${WEBHOOK_QUEUE}"`))
   .catch((err) => {
     console.error("[worker] failed to connect to Redis:", err);
     process.exit(1);
   });
+
+// Webhook outbox sweeper: dispatch transaction events nobody enqueued (Redis was down, crash…)
+const OUTBOX_INTERVAL_MS = 30_000;
+setInterval(() => {
+  sweepWebhookOutbox()
+    .then((n) => n > 0 && console.log(`[webhook-outbox] enqueued ${n} delivery(ies)`))
+    .catch((err: unknown) =>
+      console.error("[webhook-outbox] error:", err instanceof Error ? err.message : err),
+    );
+}, OUTBOX_INTERVAL_MS);
 
 // Expire overdue transactions, then their QR codes, every minute
 const EXPIRE_INTERVAL_MS = 60_000;
