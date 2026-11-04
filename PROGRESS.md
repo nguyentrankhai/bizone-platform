@@ -86,7 +86,7 @@
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
-| P2.6 | POS Module — UI | ✅ | — | Xem [kết quả P2.6](#p26--pos-module--ui) |
+| P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
@@ -649,7 +649,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.6 — POS Module — UI
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/app/pos/`, `source/bizone/components/pos/`, `source/bizone/hooks/usePosWebSocket.ts`, `source/bizone/hooks/useBarcodeScan.ts`, `source/bizone/lib/pos/vietqr.ts`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `49147ea` · **Vị trí:** `source/bizone/app/pos/`, `source/bizone/components/pos/`, `source/bizone/hooks/usePosWebSocket.ts`, `source/bizone/hooks/useBarcodeScan.ts`, `source/bizone/lib/pos/vietqr.ts`
 
 - **Đã làm** (theo `mockups-bizone/02-pos.html`):
   - **`/pos`** (`PosClient`): 2 panel — `ProductGrid` (ô tìm/quét auto-focus, chip danh mục, thẻ SP có giá + tồn tại kho chi nhánh, chọn biến thể, hết hàng bị khóa) và `CartPanel` (±SL nút 44px, xóa, chọn khách theo SĐT/tên, mã giảm giá, tạm tính / giảm theo dòng / ưu đãi hạng / coupon / VAT đã gồm, nút "Thanh toán" lớn + CK/Thẻ/Ví/QR); thanh trên: ca, trạng thái đồng bộ (Trực tuyến/Cục bộ), Màn hình khách, In lại, Khóa ca, Phím tắt; toast khi thêm SP
