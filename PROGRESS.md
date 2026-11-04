@@ -121,7 +121,7 @@
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
-| P3.5 | Partner Config UI | 🟡 | — | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
+| P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ⬜ | — | |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
@@ -1081,7 +1081,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.5 — Partner Config UI
 
-- **Trạng thái:** 🟡 (2026-11-04) — còn bước test + kích hoạt VNPay với credential thật · **Commit:** — · **Vị trí:** `source/payment-hub/app/partners/`, `app/api/internal/partners/`, `components/ph/Partner*.tsx`, `server/services/partner.service.ts`, `server/routes/partners.ts`, `lib/partner-types.ts`
+- **Trạng thái:** 🟡 (2026-11-04) — còn bước test + kích hoạt VNPay với credential thật · **Commit:** `619bfd1` · **Vị trí:** `source/payment-hub/app/partners/`, `app/api/internal/partners/`, `components/ph/Partner*.tsx`, `server/services/partner.service.ts`, `server/routes/partners.ts`, `lib/partner-types.ts`
 - **Đã làm:**
   - **API admin** (JWT Keycloak qua `proxy.ts`; đọc: `payhub-admin`/`payhub-viewer`, ghi: `payhub-admin`; token gắn `merchant_id` → 403 vì cấu hình đối tác là toàn cục):
     `GET/POST /api/internal/partners`, `GET/PUT /api/internal/partners/{id}`, `POST …/{id}/test`, `PUT …/{id}/status`, `GET …/{id}/logs`
