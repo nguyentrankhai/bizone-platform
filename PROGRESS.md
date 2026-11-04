@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.8)
+**Cập nhật lần cuối:** 2026-11-04 (P2.9)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 8 | 0 | 2 |
+| 2 — BizOne Core MVP | 10 | 9 | 0 | 1 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **16** | **0** | **35** |
+| **Tổng** | **51** | **17** | **0** | **34** |
 
 ---
 
@@ -89,7 +89,7 @@
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ✅ | 3866a5f | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
-| P2.9 | Dashboard — API & UI | ⬜ | — | |
+| P2.9 | Dashboard — API & UI | ✅ | — | Xem [kết quả P2.9](#p29--dashboard--api--ui) |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
 
 
@@ -786,3 +786,53 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - `updateSpentAndRanking()` chưa được gọi tự động từ invoice/POS service — cần wire thủ công trong P2.5/P2.9 hoặc làm task riêng.
   - Seed chưa có customers mẫu → table rỗng trên DB dev.
+
+### P2.9 — Dashboard — API & UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Đã làm:**
+  - `server/services/dashboard.service.ts`:
+    - `cached<T>(key, fn)` — helper Redis cache 5 phút (TTL 300s), đọc từ `getRedis()`
+    - `getTodayStats()` — doanh thu, số HĐ POS, số đơn online, KH mới, tồn thấp; tính % tăng so với hôm qua
+    - `getRevenue7Days()` — doanh thu từng ngày 7 ngày (group by date, fill 0 cho ngày trống)
+    - `getTopProducts()` — top 5 SP bán chạy (groupBy invoiceItem, 7 ngày, kèm tên/SKU từ products)
+    - `getPaymentBreakdown()` — doanh thu theo phương thức thanh toán hôm nay (groupBy invoicePayment.paymentMethod)
+    - `getPendingOrders()` — 5 đơn hàng pending/confirmed mới nhất, kèm tên khách
+    - `getLowStockItems()` — 5 SP tồn kho thấp nhất (raw SQL `quantity <= min_quantity AND min_quantity > 0`, JOIN products)
+    - `getDashboardSummary()` — gọi song song cả 6 hàm trên, trả object tổng hợp
+    - `invalidateDashboardCache()` — xóa tất cả 6 key cache (gọi sau giao dịch POS/đơn hàng)
+  - `server/routers/dashboard.ts` — `summary` endpoint (permissionProcedure `report:read`)
+  - `server/routers/index.ts` — wire `dashboardRouter`
+  - `app/dashboard/page.tsx` — Server page; metadata; Suspense wrapper; truyền `getDevAuth()` → `DashboardClient`
+  - `components/dashboard/DashboardClient.tsx`:
+    - Load data qua `trpc.dashboard.summary.query()` (vanilla tRPC + useCallback/useEffect)
+    - Skeleton loading (animate-pulse)
+    - 4 stat cards: Doanh thu, Hóa đơn POS, Khách hàng mới, Cảnh báo tồn (amber khi > 0)
+    - Biểu đồ cột doanh thu 7 ngày (CSS bars, hôm nay nổi bật xanh đậm, hiển thị giá trị rút gọn)
+    - Phương thức thanh toán (legend + % + số tiền)
+    - Top 5 sản phẩm bán chạy (huy chương vàng/bạc/đồng)
+    - Đơn hàng chờ xử lý (click → `/orders/[id]`)
+    - Cảnh báo tồn kho thấp (panel amber, link → `/warehouse`)
+    - Nút "Làm mới" (quiet refresh không xóa data hiện tại)
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Doanh thu ngày, tuần | ✅ `getTodayStats` + `getRevenue7Days` trả đúng; cache Redis 5 phút |
+  | Top sản phẩm bán chạy | ✅ groupBy invoiceItem, trả rank + name + sku + qty + revenue |
+  | Cảnh báo tồn thấp | ✅ raw SQL `quantity <= min_quantity`; card chuyển màu amber khi có cảnh báo |
+  | Lint / typecheck / build | ✅ 0 errors; build thành công; Decimal fix (`Number()`) trong service |
+
+- **Khác biệt so với plan:**
+  - Không có live WebSocket push (chart tự refresh khi người dùng nhấn "Làm mới") — đủ cho MVP; real-time sẽ thêm ở P4.2 Reports nếu cần.
+  - Biểu đồ CSS thuần thay vì thư viện chart (Recharts/Chart.js) — phù hợp MVP, không cần bundle thêm.
+
+- **Quyết định thiết kế:**
+  - Cache mỗi nhóm dữ liệu riêng (6 key): `invalidateDashboardCache()` xóa cả 6 sau giao dịch POS, đảm bảo nhất quán.
+  - `getLowStockItems` và `getTodayStats.lowStockCount` dùng `$queryRaw` vì cần so sánh 2 cột (Prisma where không hỗ trợ).
+
+- **Vấn đề / lưu ý:**
+  - `invalidateDashboardCache()` chưa được gọi từ POS/order service — cần wire ở P2.5/P4.2 hoặc task riêng.
+  - Dữ liệu dev có thể rỗng (chưa có HĐ/đơn) → Dashboard hiển thị 0 đúng; cần seed thêm để test biểu đồ.
+

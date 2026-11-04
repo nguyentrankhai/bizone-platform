@@ -9,6 +9,7 @@ import { transferRouter } from "./transfer";
 import { posRouter } from "./pos";
 import { orderRouter } from "./order";
 import { customerRouter } from "./customer";
+import { dashboardRouter } from "./dashboard";
 
 export const appRouter = router({
   product: productRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   pos: posRouter,
   order: orderRouter,
   customer: customerRouter,
+  dashboard: dashboardRouter,
 });
 
 export type AppRouter = typeof appRouter;
