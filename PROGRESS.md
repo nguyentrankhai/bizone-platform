@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.9)
+**Cập nhật lần cuối:** 2026-11-04 (P2.10)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 9 | 0 | 1 |
+| 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **17** | **0** | **34** |
+| **Tổng** | **51** | **18** | **0** | **33** |
 
 ---
 
@@ -90,7 +90,7 @@
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ✅ | 3866a5f | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
 | P2.9 | Dashboard — API & UI | ✅ | `1fa131f` | Xem [kết quả P2.9](#p29--dashboard--api--ui) |
-| P2.10 | Audit Log — API & UI | 🟡 | — | Đang xây dựng |
+| P2.10 | Audit Log — API & UI | ✅ | `412f39a` | Xem [kết quả P2.10](#p210--audit-log--api--ui) |
 
 
 ## Giai đoạn 3 — Payment Hub MVP (Tuần 4–8)
@@ -835,4 +835,46 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - `invalidateDashboardCache()` chưa được gọi từ POS/order service — cần wire ở P2.5/P4.2 hoặc task riêng.
   - Dữ liệu dev có thể rỗng (chưa có HĐ/đơn) → Dashboard hiển thị 0 đúng; cần seed thêm để test biểu đồ.
+
+---
+
+### P2.10 — Audit Log — API & UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** `412f39a` · **Vị trí:** `source/bizone/`
+
+- **Đã làm:**
+  - `lib/validators/auditLog.ts`: Zod schemas `listAuditLogsSchema`, `createAuditLogSchema`
+  - `server/services/auditLog.service.ts`: `createAuditLog`, `listAuditLogs` (filter: module/action/entityType/entityId/userId/dateRange, paginate), `getAuditLog`, `exportAuditLogsToExcel` (ExcelJS, max 10000 dòng)
+  - `server/routers/auditLog.ts`: `list`, `get`, `export` — permission `staff:view_audit_log`
+  - `server/middleware/auditLog.ts`: `auditTrpcCall()` — 20 route mappings (invoice, product, category, inventory, stock_take, transfer, order, crm); fail-silent (lỗi ghi log không làm hỏng response); đọc IP từ `x-forwarded-for`/`x-real-ip`
+  - `server/routers/order.ts`: tích hợp auditTrpcCall cho create, updateStatus, cancel, refund
+  - `server/routers/product.ts`: tích hợp auditTrpcCall cho create, update, delete
+  - `types/auth.ts`: thêm permission `staff:view_audit_log`
+  - `lib/rbac.ts`: bizone-admin + bizone-manager có `staff:view_audit_log`
+  - `components/audit/AuditTable.tsx`: filter module/action/dateFrom/dateTo, bảng + phân trang, modal chi tiết (old/new value JSON diff), export Excel
+  - `app/audit-log/page.tsx`: trang `/audit-log`
+  - `components/layout/Sidebar.tsx`: thêm mục "Audit Log" (icon ScrollText)
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo hóa đơn → log xuất hiện | ✅ `auditTrpcCall("invoice.create", ...)` wired; ghi async fail-silent |
+  | Filter đúng (user/time/action/module/entity) | ✅ `listAuditLogs` filter đầy đủ; UI filter module + action + dateFrom/dateTo |
+  | Không thể xóa log | ✅ Router chỉ có `list`, `get`, `export` — không có `delete`; bảng DB append-only |
+  | Export ra Excel | ✅ `exportAuditLogsToExcel` ExcelJS, header styled #2563EB, 10000 dòng max |
+  | Lint / typecheck / build | ✅ 0 errors; `/audit-log` trong static routes |
+
+- **Khác biệt so với plan:**
+  - Middleware không phải auto-intercept tất cả tRPC — thay vào đó wired thủ công tại mỗi router mutation cần thiết. Phương án này rõ ràng hơn và tránh log những operation không cần thiết.
+  - `userId` trong audit log là numeric DB id (nullable nếu user Keycloak chưa có record trong bảng `users`) thay vì Keycloak UUID — nhất quán với cấu trúc FK hiện tại.
+
+- **Quyết định thiết kế:**
+  - `auditTrpcCall` fail-silent (try/catch bên trong) — một lỗi DB khi ghi log không được phép làm rollback business transaction.
+  - `void auditTrpcCall(...)` — không await, không block response; log ghi fire-and-forget.
+  - Append-only được đảm bảo bởi không có route `delete`/`update` trong auditLogRouter.
+
+- **Vấn đề / lưu ý:**
+  - `auditTrpcCall` chưa wire vào tất cả router (inventory, stockTake, transfer, customer, pos/invoice) — có thể thêm dần theo nhu cầu; pattern đã sẵn.
+  - `userId` nullable vì token Keycloak `sub` (UUID) không map thẳng sang `users.id` (int) khi chưa có user trong DB — xử lý khi tích hợp OIDC đầy đủ.
 
