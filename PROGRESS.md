@@ -98,7 +98,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
-| P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | (pending) | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
+| P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | ⬜ | — | |
 | P3.4 | VietQR Generator | ⬜ | — | |
 | P3.5 | Partner Config UI | ⬜ | — | |
@@ -924,7 +924,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.2 — Transaction UI — Danh sách & Chi tiết
 
-- **Hoàn thành** 2026-11-04 · **Commit** (pending) · **Vị trí** `source/payment-hub/app/transactions/`, `source/payment-hub/components/ph/`
+- **Hoàn thành** 2026-11-04 · **Commit** `9e5bf92` · **Vị trí** `source/payment-hub/app/transactions/`, `source/payment-hub/components/ph/`
 
 **Đã làm:**
 - API internal route `/api/internal/transactions` (GET list, không cần HMAC) và `/api/internal/transactions/[id]`
