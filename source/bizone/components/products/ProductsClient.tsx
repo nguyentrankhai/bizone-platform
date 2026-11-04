@@ -75,7 +75,8 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
           search: debouncedSearch || undefined,
           categoryId: categoryId ?? undefined,
           status: (status || undefined) as "active" | "inactive" | "discontinued" | undefined,
-          sortBy: sortBy as "name" | "sku" | "sellingPrice" | "costPrice" | "createdAt" | "updatedAt",
+          sortBy: sortBy as
+            "name" | "sku" | "sellingPrice" | "costPrice" | "createdAt" | "updatedAt",
           sortDir,
         },
         { context: { headers } },
@@ -117,7 +118,11 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
   async function handleExport() {
     try {
       const result = await trpc.product.exportExcel.query(
-        { search: debouncedSearch || undefined, categoryId: categoryId ?? undefined, status: (status || undefined) as "active" | "inactive" | "discontinued" | undefined },
+        {
+          search: debouncedSearch || undefined,
+          categoryId: categoryId ?? undefined,
+          status: (status || undefined) as "active" | "inactive" | "discontinued" | undefined,
+        },
         { context: { headers } },
       );
       const a = document.createElement("a");
@@ -173,31 +178,37 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
         <CategoryTree
           categories={categories}
           selectedId={categoryId}
-          onSelect={(id) => { setCategoryId(id); setPage(1); }}
+          onSelect={(id) => {
+            setCategoryId(id);
+            setPage(1);
+          }}
           loading={catLoading}
         />
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         {/* Toolbar */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Tìm theo tên, SKU, mã vạch..."
-              className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-lg border border-gray-200 py-2 pr-3 pl-9 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </div>
 
           {/* Status filter */}
           <select
             value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-            className="rounded-lg border border-gray-200 py-2 pl-3 pr-8 text-sm outline-none focus:border-blue-400"
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="rounded-lg border border-gray-200 py-2 pr-8 pl-3 text-sm outline-none focus:border-blue-400"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="active">Đang bán</option>
@@ -247,7 +258,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
               Tất cả
             </button>
             <span>/</span>
-            <span className="text-gray-700 font-medium">
+            <span className="font-medium text-gray-700">
               {findCategoryName(categories, categoryId) ?? `Danh mục #${categoryId}`}
             </span>
           </div>

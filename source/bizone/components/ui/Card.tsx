@@ -21,7 +21,12 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, action, className }: CardHeaderProps) {
   return (
-    <div className={cn("flex items-center justify-between border-b border-gray-100 px-5 py-4", className)}>
+    <div
+      className={cn(
+        "flex items-center justify-between border-b border-gray-100 px-5 py-4",
+        className,
+      )}
+    >
       <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
       {action}
     </div>

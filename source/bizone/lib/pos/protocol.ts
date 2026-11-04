@@ -10,8 +10,16 @@ export const POS_WS_PATH = "/ws/pos";
 /** WebSocket subprotocol; the access token travels as the second protocol value */
 export const POS_WS_PROTOCOL = "bizone-pos";
 /** Redis pub/sub channel per cash session — fans events out to every WS instance */
-export const posChannel = (sessionId: number) => `bizone:pos:${sessionId}`;
+/** Redis pub/sub channel of one cash session — namespaced by tenant (session ids are per-DB). */
+export const posChannel = (tenantId: string, sessionId: number) =>
+  `bizone:pos:${tenantId}:${sessionId}`;
 export const POS_CHANNEL_PATTERN = "bizone:pos:*";
+
+/** Inverse of posChannel(); null for anything that is not a session channel. */
+export function parsePosChannel(channel: string): { tenantId: string; sessionId: number } | null {
+  const m = /^bizone:pos:([A-Za-z0-9_-]+):(\d+)$/.exec(channel);
+  return m ? { tenantId: m[1], sessionId: Number(m[2]) } : null;
+}
 
 export interface CartSnapshot extends CartTotals {
   sessionId: number;

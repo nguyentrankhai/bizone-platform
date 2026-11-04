@@ -37,7 +37,10 @@ export const updateCustomerSchema = z.object({
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
 export const adjustPointsSchema = z.object({
-  points: z.number().int().refine((n) => n !== 0, "Điểm không được bằng 0"),
+  points: z
+    .number()
+    .int()
+    .refine((n) => n !== 0, "Điểm không được bằng 0"),
   type: z.enum(["earn", "redeem", "adjust"]),
   notes: z.string().optional(),
 });

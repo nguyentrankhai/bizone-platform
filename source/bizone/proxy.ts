@@ -1,10 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { extractBearerToken, verifyJwt } from "@/lib/auth";
+import { isKnownTenant } from "@/lib/tenant";
+
+/** Identity headers are only ever set below from a verified JWT — never trusted from clients. */
+const IDENTITY_HEADERS = ["x-user-id", "x-user-username", "x-user-roles"];
+
+function strippedHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  for (const h of IDENTITY_HEADERS) headers.delete(h);
+  return headers;
+}
 
 // Routes that don't require authentication
 const PUBLIC_PATHS = [
   "/api/health",
-  "/api/auth",        // Keycloak callback routes
+  "/api/auth", // Keycloak callback routes
   "/_next",
   "/favicon.ico",
 ];
@@ -20,10 +30,10 @@ function jsonError(status: number, code: string, message: string): NextResponse 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) return NextResponse.next();
-
   // Only protect /api/* routes via middleware; page routes handle auth in RSC
-  if (!pathname.startsWith("/api/")) return NextResponse.next();
+  if (isPublicPath(pathname) || !pathname.startsWith("/api/")) {
+    return NextResponse.next({ request: { headers: strippedHeaders(request) } });
+  }
 
   const authHeader = request.headers.get("authorization");
   const token = extractBearerToken(authHeader);
@@ -50,8 +60,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return jsonError(403, "FORBIDDEN", "X-Tenant-ID mismatch");
   }
 
+  if (!isKnownTenant(headerTenantId)) {
+    return jsonError(403, "FORBIDDEN", "Tenant is not provisioned");
+  }
+
   // Forward user info to route handlers via request headers
-  const requestHeaders = new Headers(request.headers);
+  const requestHeaders = strippedHeaders(request);
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-username", user.username);
   requestHeaders.set("x-user-roles", user.roles.join(","));
@@ -63,7 +77,7 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except static files and images.
-     * Must be kept lightweight — this runs on Edge Runtime.
+     * Must be kept lightweight — runs before every matched request (Node.js runtime).
      */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],

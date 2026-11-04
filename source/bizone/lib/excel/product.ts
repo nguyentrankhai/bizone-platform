@@ -108,10 +108,32 @@ export async function parseProductImport(buffer: ArrayBuffer): Promise<ImportRes
 
   ws.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // skip header
-    const [, name, sku, barcode, category, description, costPrice, sellingPrice, unit, minStock, status] =
-      row.values as (string | number | undefined)[];
+    const [
+      ,
+      name,
+      sku,
+      barcode,
+      category,
+      description,
+      costPrice,
+      sellingPrice,
+      unit,
+      minStock,
+      status,
+    ] = row.values as (string | number | undefined)[];
 
-    const raw = { name, sku, barcode, category, description, costPrice, sellingPrice, unit, minStock, status };
+    const raw = {
+      name,
+      sku,
+      barcode,
+      category,
+      description,
+      costPrice,
+      sellingPrice,
+      unit,
+      minStock,
+      status,
+    };
     const parsed = importProductRowSchema.safeParse(raw);
     if (parsed.success) {
       success.push(parsed.data);

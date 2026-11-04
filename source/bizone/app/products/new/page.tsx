@@ -3,7 +3,7 @@ import { NewProductClient } from "@/components/products/NewProductClient";
 
 export const metadata = { title: "Thêm sản phẩm | BizOne" };
 
-const TENANT_ID = process.env.DEV_TENANT_ID ?? "dev-tenant";
+const TENANT_ID = process.env.DEV_TENANT_ID ?? "tenant_demo";
 const AUTH_TOKEN = process.env.DEV_AUTH_TOKEN ?? "";
 
 export default function NewProductPage() {

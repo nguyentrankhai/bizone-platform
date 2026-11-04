@@ -31,6 +31,8 @@ export interface AuthUser {
   tenantId: string;
   roles: string[]; // merged realm + resource roles
   resourceRoles: Record<string, string[]>;
+  /** Token expiry (epoch seconds) */
+  expiresAt: number;
 }
 
 export interface TenantContext {

@@ -19,14 +19,14 @@ export function TopBar({ className }: TopBarProps) {
       )}
     >
       {/* Search */}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <div className="relative max-w-md flex-1">
+        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Tìm kiếm sản phẩm, đơn hàng, khách hàng..."
-          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pr-4 pl-9 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
         />
       </div>
 
@@ -41,7 +41,7 @@ export function TopBar({ className }: TopBarProps) {
         {/* Notifications */}
         <button className="relative rounded-full p-2 text-gray-500 hover:bg-gray-100">
           <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 flex h-2 w-2 rounded-full bg-red-500" />
+          <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
         </button>
 
         {/* Avatar */}

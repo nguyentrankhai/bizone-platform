@@ -8,7 +8,9 @@ export const metadata = { title: "CRM Khách hàng | BizOne" };
 export default function CrmPage() {
   return (
     <AppLayout>
-      <Suspense fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}>
+      <Suspense
+        fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
+      >
         <CustomerTable auth={getDevAuth()} />
       </Suspense>
     </AppLayout>

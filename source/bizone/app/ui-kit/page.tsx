@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { StatCard } from "@/components/ui/StatCard";
-import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { Card, CardBody } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
@@ -11,13 +11,7 @@ import { Input } from "@/components/forms/Input";
 import { Select } from "@/components/forms/Select";
 import { NumericKeypad } from "@/components/forms/NumericKeypad";
 import { Button } from "@/components/ui/button";
-import {
-  DollarSign,
-  ShoppingCart,
-  Users,
-  Package,
-  Search,
-} from "lucide-react";
+import { DollarSign, ShoppingCart, Users, Package, Search } from "lucide-react";
 
 interface Product {
   id: number;
@@ -107,7 +101,9 @@ function UIKitInner() {
 
         {/* DataTable */}
         <section>
-          <h2 className="mb-4 text-base font-semibold text-gray-700">DataTable (sort + search + phân trang)</h2>
+          <h2 className="mb-4 text-base font-semibold text-gray-700">
+            DataTable (sort + search + phân trang)
+          </h2>
           <DataTable
             columns={COLUMNS}
             data={PRODUCTS}
@@ -130,11 +126,7 @@ function UIKitInner() {
                 required
                 leftIcon={<Search className="h-4 w-4" />}
               />
-              <Input
-                label="Mã SKU"
-                placeholder="VD: SKU-0001"
-                hint="Mã SKU phải là duy nhất"
-              />
+              <Input label="Mã SKU" placeholder="VD: SKU-0001" hint="Mã SKU phải là duy nhất" />
               <Input
                 label="Lỗi nhập liệu"
                 placeholder="Trường bắt buộc"
@@ -165,7 +157,7 @@ function UIKitInner() {
         {/* Numeric Keypad */}
         <section>
           <h2 className="mb-4 text-base font-semibold text-gray-700">NumericKeypad (POS)</h2>
-          <div className="flex gap-6 items-start">
+          <div className="flex items-start gap-6">
             <div className="w-60">
               <div className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-right">
                 <p className="text-xs text-gray-400">Số tiền</p>
@@ -183,9 +175,15 @@ function UIKitInner() {
           <h2 className="mb-4 text-base font-semibold text-gray-700">Toast Notifications</h2>
           <div className="flex flex-wrap gap-3">
             <Button onClick={() => success("Lưu thành công!")}>Success Toast</Button>
-            <Button variant="destructive" onClick={() => error("Có lỗi xảy ra!")}>Error Toast</Button>
-            <Button variant="outline" onClick={() => info("Thông tin cập nhật")}>Info Toast</Button>
-            <Button variant="secondary" onClick={() => warning("Tồn kho sắp hết!")}>Warning Toast</Button>
+            <Button variant="destructive" onClick={() => error("Có lỗi xảy ra!")}>
+              Error Toast
+            </Button>
+            <Button variant="outline" onClick={() => info("Thông tin cập nhật")}>
+              Info Toast
+            </Button>
+            <Button variant="secondary" onClick={() => warning("Tồn kho sắp hết!")}>
+              Warning Toast
+            </Button>
           </div>
         </section>
 
@@ -203,7 +201,12 @@ function UIKitInner() {
                 <Button variant="outline" onClick={() => setModalOpen(false)}>
                   Huỷ
                 </Button>
-                <Button onClick={() => { success("Đã lưu!"); setModalOpen(false); }}>
+                <Button
+                  onClick={() => {
+                    success("Đã lưu!");
+                    setModalOpen(false);
+                  }}
+                >
                   Lưu
                 </Button>
               </>

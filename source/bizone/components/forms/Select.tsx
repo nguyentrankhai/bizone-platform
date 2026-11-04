@@ -31,7 +31,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             className={cn(
-              "w-full appearance-none rounded-lg border bg-white py-2.5 pl-3 pr-9 text-sm text-gray-900 outline-none transition",
+              "w-full appearance-none rounded-lg border bg-white py-2.5 pr-9 pl-3 text-sm text-gray-900 transition outline-none",
               "focus:ring-2 focus:ring-blue-100",
               error
                 ? "border-red-400 focus:border-red-400"
@@ -52,7 +52,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <ChevronDown className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
         {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}

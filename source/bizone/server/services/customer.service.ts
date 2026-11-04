@@ -169,10 +169,7 @@ export async function createCustomer(input: CreateCustomerInput, userId: number 
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-export async function updateCustomer(
-  id: number,
-  input: UpdateCustomerInput,
-) {
+export async function updateCustomer(id: number, input: UpdateCustomerInput) {
   const prisma = getPrisma();
   const customer = await prisma.customer.findUnique({ where: { id } });
   if (!customer) throw notFound(`Khách hàng #${id} không tồn tại`);
@@ -212,9 +209,7 @@ export async function adjustLoyaltyPoints(
   if (!customer) throw notFound(`Khách hàng #${customerId} không tồn tại`);
 
   if (input.type === "redeem" && customer.totalPoints < Math.abs(input.points)) {
-    throw conflict(
-      `Không đủ điểm. Hiện có ${customer.totalPoints}, cần ${Math.abs(input.points)}`,
-    );
+    throw conflict(`Không đủ điểm. Hiện có ${customer.totalPoints}, cần ${Math.abs(input.points)}`);
   }
 
   const delta = input.type === "redeem" ? -Math.abs(input.points) : Math.abs(input.points);
@@ -240,10 +235,7 @@ export async function adjustLoyaltyPoints(
 
 // ─── Debts ────────────────────────────────────────────────────────────────────
 
-export async function createDebt(
-  customerId: number,
-  input: CreateDebtInput,
-) {
+export async function createDebt(customerId: number, input: CreateDebtInput) {
   const prisma = getPrisma();
   const customer = await prisma.customer.findUnique({ where: { id: customerId } });
   if (!customer) throw notFound(`Khách hàng #${customerId} không tồn tại`);
@@ -261,11 +253,7 @@ export async function createDebt(
   });
 }
 
-export async function payDebt(
-  customerId: number,
-  input: PayDebtInput,
-  _userId: number | null,
-) {
+export async function payDebt(customerId: number, input: PayDebtInput, _userId: number | null) {
   const prisma = getPrisma();
   const debt = await prisma.customerDebt.findUnique({ where: { id: input.debtId } });
   if (!debt || debt.customerId !== customerId)
@@ -273,8 +261,7 @@ export async function payDebt(
   if (debt.status === "paid") throw conflict("Công nợ đã được thanh toán đủ");
 
   const remaining = Number(debt.remainingAmount) - input.amount;
-  const newStatus =
-    remaining <= 0 ? "paid" : input.amount > 0 ? "partial" : debt.status;
+  const newStatus = remaining <= 0 ? "paid" : input.amount > 0 ? "partial" : debt.status;
 
   return prisma.customerDebt.update({
     where: { id: input.debtId },
@@ -387,7 +374,10 @@ export async function exportCustomersToExcel(input: ListCustomersInput) {
   ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
 
   const rankLabel: Record<string, string> = {
-    silver: "Silver", gold: "Gold", vip: "VIP", diamond: "Diamond",
+    silver: "Silver",
+    gold: "Gold",
+    vip: "VIP",
+    diamond: "Diamond",
   };
 
   for (const c of items) {

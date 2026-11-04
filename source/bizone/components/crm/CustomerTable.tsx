@@ -5,13 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Download, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  fmtMoney,
-  fmtDate,
-  errorMessage,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, fmtMoney, errorMessage, type ApiAuth } from "@/components/inventory/shared";
 import { RANKING } from "./shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
@@ -159,11 +153,16 @@ export function CustomerTable({ auth }: Props) {
           <select
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             value={ranking}
-            onChange={(e) => { setRanking(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setRanking(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="">Tất cả xếp hạng</option>
             {Object.entries(RANKING).map(([v, r]) => (
-              <option key={v} value={v}>{r.label}</option>
+              <option key={v} value={v}>
+                {r.label}
+              </option>
             ))}
           </select>
 
@@ -182,25 +181,43 @@ export function CustomerTable({ auth }: Props) {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Khách hàng</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">SĐT</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Nhóm</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Xếp hạng</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Điểm</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Tổng chi tiêu</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Lần mua</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
+                  Khách hàng
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
+                  SĐT
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
+                  Nhóm
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">
+                  Xếp hạng
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
+                  Điểm
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
+                  Tổng chi tiêu
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
+                  Lần mua
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">Đang tải...</td>
+                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">
+                    Đang tải...
+                  </td>
                 </tr>
               )}
               {!loading && customers.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">Không có khách hàng nào</td>
+                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">
+                    Không có khách hàng nào
+                  </td>
                 </tr>
               )}
               {customers.map((c) => {
@@ -240,7 +257,9 @@ export function CustomerTable({ auth }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       {rank && (
-                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${rank.className}`}>
+                        <span
+                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${rank.className}`}
+                        >
                           {rank.label}
                         </span>
                       )}
@@ -270,7 +289,8 @@ export function CustomerTable({ auth }: Props) {
         {/* Pagination */}
         <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3 text-sm text-slate-500">
           <span>
-            Hiển thị {customers.length > 0 ? (page - 1) * 20 + 1 : 0}–{(page - 1) * 20 + customers.length} của {total} khách
+            Hiển thị {customers.length > 0 ? (page - 1) * 20 + 1 : 0}–
+            {(page - 1) * 20 + customers.length} của {total} khách
           </span>
           <div className="flex gap-1">
             <button
@@ -338,7 +358,7 @@ export function CustomerTable({ auth }: Props) {
                 />
               </div>
             </div>
-            <div className="mt-5 flex gap-3 justify-end">
+            <div className="mt-5 flex justify-end gap-3">
               <button
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
                 onClick={() => setShowAdd(false)}

@@ -11,6 +11,8 @@ import type {
   UpdateStockTakeItemsInput,
   ListBatchesInput,
 } from "@/lib/validators/inventory";
+import { currentTenantId } from "@/lib/tenant";
+import { lowStockChannel } from "@/lib/inventory/channels";
 
 // Prisma 7: nullable field in compound unique cannot be null in where clause — use findFirst + update/create
 async function upsertInventory(
@@ -503,7 +505,10 @@ export async function publishLowStockAlerts(warehouseId: number, productIds: num
       (inv) => Number(inv.quantity) <= (inv.product.minStock ?? 0),
     );
     if (alerts.length > 0) {
-      await redis.publish("bizone:low-stock", JSON.stringify({ warehouseId, alerts }));
+      await redis.publish(
+        lowStockChannel(currentTenantId()),
+        JSON.stringify({ warehouseId, alerts }),
+      );
     }
   } catch {
     // non-critical — don't fail the main operation

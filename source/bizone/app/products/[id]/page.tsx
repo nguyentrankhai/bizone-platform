@@ -5,7 +5,7 @@ import { ProductDetailClient } from "@/components/products/ProductDetailClient";
 
 export const metadata = { title: "Chi tiết sản phẩm | BizOne" };
 
-const TENANT_ID = process.env.DEV_TENANT_ID ?? "dev-tenant";
+const TENANT_ID = process.env.DEV_TENANT_ID ?? "tenant_demo";
 const AUTH_TOKEN = process.env.DEV_AUTH_TOKEN ?? "";
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {

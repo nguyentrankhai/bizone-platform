@@ -6,6 +6,17 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "bizone";
 const JWKS_URL = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs`;
 const ISSUER = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`;
 
+/**
+ * Clients whose tokens this app accepts (`azp` claim). Any other client of the realm — even
+ * with a valid signature — is rejected. Override with KEYCLOAK_ALLOWED_CLIENTS (comma list).
+ */
+const ALLOWED_CLIENTS = new Set(
+  (process.env.KEYCLOAK_ALLOWED_CLIENTS ?? "bizone-frontend,bizone-api")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean),
+);
+
 // Cache JWKS set — createRemoteJWKSet handles 24h caching + kid-miss refresh internally
 const getJWKS = (() => {
   let cached: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -15,9 +26,7 @@ const getJWKS = (() => {
   };
 })();
 
-export type JwtVerifyResult =
-  | { ok: true; user: AuthUser }
-  | { ok: false; reason: string };
+export type JwtVerifyResult = { ok: true; user: AuthUser } | { ok: false; reason: string };
 
 export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
   try {
@@ -28,6 +37,10 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
 
     const claims = payload as unknown as KeycloakToken;
 
+    if (!claims.azp || !ALLOWED_CLIENTS.has(claims.azp)) {
+      return { ok: false, reason: "client_not_allowed" };
+    }
+
     if (!claims.tenant_id) {
       return { ok: false, reason: "missing_tenant_id_claim" };
     }
@@ -36,10 +49,7 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
     const resourceRoles = Object.fromEntries(
       Object.entries(claims.resource_access ?? {}).map(([k, v]) => [k, v.roles]),
     );
-    const allRoles = [
-      ...realmRoles,
-      ...Object.values(resourceRoles).flat(),
-    ];
+    const allRoles = [...realmRoles, ...Object.values(resourceRoles).flat()];
 
     const user: AuthUser = {
       id: claims.sub,
@@ -49,6 +59,7 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
       tenantId: claims.tenant_id,
       roles: [...new Set(allRoles)],
       resourceRoles,
+      expiresAt: claims.exp,
     };
 
     return { ok: true, user };

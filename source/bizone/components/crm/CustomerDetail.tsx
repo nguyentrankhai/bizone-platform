@@ -74,7 +74,11 @@ export function CustomerDetail({ customerId, auth }: Props) {
 
   // Adjust points modal
   const [showPoints, setShowPoints] = useState(false);
-  const [pointsForm, setPointsForm] = useState({ points: "", type: "adjust" as "earn" | "redeem" | "adjust", notes: "" });
+  const [pointsForm, setPointsForm] = useState({
+    points: "",
+    type: "adjust" as "earn" | "redeem" | "adjust",
+    notes: "",
+  });
   const [savingPoints, setSavingPoints] = useState(false);
 
   // Add debt modal
@@ -145,11 +149,17 @@ export function CustomerDetail({ customerId, auth }: Props) {
   async function handleAdjustPoints() {
     if (!customer) return;
     const pts = parseInt(pointsForm.points);
-    if (!pts || isNaN(pts)) { toast.error("Vui lòng nhập số điểm hợp lệ"); return; }
+    if (!pts || isNaN(pts)) {
+      toast.error("Vui lòng nhập số điểm hợp lệ");
+      return;
+    }
     setSavingPoints(true);
     try {
       await trpc.customer.adjustPoints.mutate(
-        { customerId: customer.id, data: { points: pts, type: pointsForm.type, notes: pointsForm.notes || undefined } },
+        {
+          customerId: customer.id,
+          data: { points: pts, type: pointsForm.type, notes: pointsForm.notes || undefined },
+        },
         ctx,
       );
       toast.success("Cập nhật điểm thành công");
@@ -166,11 +176,21 @@ export function CustomerDetail({ customerId, auth }: Props) {
   async function handleAddDebt() {
     if (!customer) return;
     const amt = parseFloat(debtForm.totalAmount);
-    if (!amt || isNaN(amt)) { toast.error("Vui lòng nhập số tiền hợp lệ"); return; }
+    if (!amt || isNaN(amt)) {
+      toast.error("Vui lòng nhập số tiền hợp lệ");
+      return;
+    }
     setSavingDebt(true);
     try {
       await trpc.customer.createDebt.mutate(
-        { customerId: customer.id, data: { totalAmount: amt, dueDate: debtForm.dueDate || undefined, notes: debtForm.notes || undefined } },
+        {
+          customerId: customer.id,
+          data: {
+            totalAmount: amt,
+            dueDate: debtForm.dueDate || undefined,
+            notes: debtForm.notes || undefined,
+          },
+        },
         ctx,
       );
       toast.success("Ghi nhận công nợ thành công");
@@ -187,7 +207,10 @@ export function CustomerDetail({ customerId, auth }: Props) {
   async function handlePayDebt() {
     if (!customer || !payDebtId) return;
     const amt = parseFloat(payAmount);
-    if (!amt || isNaN(amt)) { toast.error("Vui lòng nhập số tiền hợp lệ"); return; }
+    if (!amt || isNaN(amt)) {
+      toast.error("Vui lòng nhập số tiền hợp lệ");
+      return;
+    }
     setPayingDebt(true);
     try {
       await trpc.customer.payDebt.mutate(
@@ -209,7 +232,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
     return <div className="py-20 text-center text-sm text-slate-400">Đang tải...</div>;
   }
   if (!customer) {
-    return <div className="py-20 text-center text-sm text-slate-400">Không tìm thấy khách hàng</div>;
+    return (
+      <div className="py-20 text-center text-sm text-slate-400">Không tìm thấy khách hàng</div>
+    );
   }
 
   const rank = RANKING[customer.ranking];
@@ -257,7 +282,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
               )}
               <div className="mt-1 text-sm text-slate-500">{customer.phone}</div>
               {rank && (
-                <span className={`mt-2 inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${rank.className}`}>
+                <span
+                  className={`mt-2 inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${rank.className}`}
+                >
                   {rank.label}
                 </span>
               )}
@@ -385,7 +412,7 @@ export function CustomerDetail({ customerId, auth }: Props) {
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    className={`border-b-2 px-5 py-2.5 text-sm font-medium transition-colors ${
                       tab === t
                         ? "border-blue-600 text-blue-600"
                         : "border-transparent text-slate-500 hover:text-slate-800"
@@ -400,7 +427,7 @@ export function CustomerDetail({ customerId, auth }: Props) {
             {/* Tab: Info */}
             {tab === "info" && (
               <div>
-                <div className="text-sm font-medium text-slate-700 mb-3">Ghi chú</div>
+                <div className="mb-3 text-sm font-medium text-slate-700">Ghi chú</div>
                 {editing ? (
                   <textarea
                     className="w-full rounded-lg border border-blue-300 px-3 py-2 text-sm focus:outline-none"
@@ -415,12 +442,17 @@ export function CustomerDetail({ customerId, auth }: Props) {
 
                 {customer.customerAddresses.length > 0 && (
                   <div className="mt-5">
-                    <div className="text-sm font-medium text-slate-700 mb-2">Địa chỉ</div>
+                    <div className="mb-2 text-sm font-medium text-slate-700">Địa chỉ</div>
                     {customer.customerAddresses.map((a) => (
-                      <div key={a.id} className="text-sm text-slate-600 flex items-center gap-2 py-1.5 border-b border-slate-50">
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-2 border-b border-slate-50 py-1.5 text-sm text-slate-600"
+                      >
                         {a.address}
                         {a.isDefault && (
-                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">Mặc định</span>
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
+                            Mặc định
+                          </span>
                         )}
                       </div>
                     ))}
@@ -433,7 +465,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
             {tab === "history" && (
               <div>
                 {customer.invoices.length === 0 && customer.orders.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-slate-400">Chưa có lịch sử mua hàng</div>
+                  <div className="py-10 text-center text-sm text-slate-400">
+                    Chưa có lịch sử mua hàng
+                  </div>
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
@@ -447,19 +481,37 @@ export function CustomerDetail({ customerId, auth }: Props) {
                     </thead>
                     <tbody>
                       {customer.invoices.map((inv) => (
-                        <tr key={`inv-${inv.id}`} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <tr
+                          key={`inv-${inv.id}`}
+                          className="border-b border-slate-50 hover:bg-slate-50/50"
+                        >
                           <td className="py-2 font-medium text-blue-600">{inv.invoiceCode}</td>
-                          <td className="py-2"><span className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700">Hóa đơn</span></td>
-                          <td className="py-2 text-right font-medium">{fmtMoney(inv.totalAmount)}</td>
+                          <td className="py-2">
+                            <span className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-700">
+                              Hóa đơn
+                            </span>
+                          </td>
+                          <td className="py-2 text-right font-medium">
+                            {fmtMoney(inv.totalAmount)}
+                          </td>
                           <td className="py-2 text-slate-600">{inv.status}</td>
                           <td className="py-2 text-slate-500">{fmtDate(inv.createdAt)}</td>
                         </tr>
                       ))}
                       {customer.orders.map((ord) => (
-                        <tr key={`ord-${ord.id}`} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <tr
+                          key={`ord-${ord.id}`}
+                          className="border-b border-slate-50 hover:bg-slate-50/50"
+                        >
                           <td className="py-2 font-medium text-blue-600">{ord.orderCode}</td>
-                          <td className="py-2"><span className="rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">Đơn hàng</span></td>
-                          <td className="py-2 text-right font-medium">{fmtMoney(ord.totalAmount)}</td>
+                          <td className="py-2">
+                            <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">
+                              Đơn hàng
+                            </span>
+                          </td>
+                          <td className="py-2 text-right font-medium">
+                            {fmtMoney(ord.totalAmount)}
+                          </td>
                           <td className="py-2 text-slate-600">{ord.status}</td>
                           <td className="py-2 text-slate-500">{fmtDate(ord.createdAt)}</td>
                         </tr>
@@ -475,7 +527,10 @@ export function CustomerDetail({ customerId, auth }: Props) {
               <div>
                 <div className="mb-4 flex items-center justify-between">
                   <div className="text-sm text-slate-600">
-                    Tổng điểm: <span className="text-lg font-bold text-blue-600">{customer.totalPoints.toLocaleString("vi-VN")}</span>
+                    Tổng điểm:{" "}
+                    <span className="text-lg font-bold text-blue-600">
+                      {customer.totalPoints.toLocaleString("vi-VN")}
+                    </span>
                   </div>
                   <button
                     onClick={() => setShowPoints(true)}
@@ -485,7 +540,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
                   </button>
                 </div>
                 {customer.customerLoyaltyPoints.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-slate-400">Chưa có lịch sử điểm</div>
+                  <div className="py-8 text-center text-sm text-slate-400">
+                    Chưa có lịch sử điểm
+                  </div>
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
@@ -503,8 +560,11 @@ export function CustomerDetail({ customerId, auth }: Props) {
                         return (
                           <tr key={p.id} className="border-b border-slate-50">
                             <td className="py-2">{lt?.label ?? p.type}</td>
-                            <td className={`py-2 text-right font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>
-                              {isPositive ? "+" : ""}{p.points.toLocaleString("vi-VN")}
+                            <td
+                              className={`py-2 text-right font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}
+                            >
+                              {isPositive ? "+" : ""}
+                              {p.points.toLocaleString("vi-VN")}
                             </td>
                             <td className="py-2 text-slate-500">{p.notes ?? "—"}</td>
                             <td className="py-2 text-slate-500">{fmtDate(p.createdAt)}</td>
@@ -553,13 +613,23 @@ export function CustomerDetail({ customerId, auth }: Props) {
                         const ds = DEBT_STATUS[d.status];
                         return (
                           <tr key={d.id} className="border-b border-slate-50">
-                            <td className="py-2 text-right font-medium">{fmtMoney(d.totalAmount)}</td>
-                            <td className="py-2 text-right text-emerald-600">{fmtMoney(d.paidAmount)}</td>
-                            <td className="py-2 text-right font-semibold text-red-500">{fmtMoney(d.remainingAmount)}</td>
-                            <td className="py-2 text-slate-500">{d.dueDate ? fmtDate(d.dueDate) : "—"}</td>
+                            <td className="py-2 text-right font-medium">
+                              {fmtMoney(d.totalAmount)}
+                            </td>
+                            <td className="py-2 text-right text-emerald-600">
+                              {fmtMoney(d.paidAmount)}
+                            </td>
+                            <td className="py-2 text-right font-semibold text-red-500">
+                              {fmtMoney(d.remainingAmount)}
+                            </td>
+                            <td className="py-2 text-slate-500">
+                              {d.dueDate ? fmtDate(d.dueDate) : "—"}
+                            </td>
                             <td className="py-2">
                               {ds && (
-                                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${ds.className}`}>
+                                <span
+                                  className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${ds.className}`}
+                                >
                                   {ds.label}
                                 </span>
                               )}
@@ -567,7 +637,10 @@ export function CustomerDetail({ customerId, auth }: Props) {
                             <td className="py-2">
                               {d.status !== "paid" && (
                                 <button
-                                  onClick={() => { setPayDebtId(d.id); setPayAmount(""); }}
+                                  onClick={() => {
+                                    setPayDebtId(d.id);
+                                    setPayAmount("");
+                                  }}
                                   className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
                                 >
                                   Thanh toán
@@ -597,7 +670,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
                 <select
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none"
                   value={pointsForm.type}
-                  onChange={(e) => setPointsForm((f) => ({ ...f, type: e.target.value as typeof f.type }))}
+                  onChange={(e) =>
+                    setPointsForm((f) => ({ ...f, type: e.target.value as typeof f.type }))
+                  }
                 >
                   <option value="earn">Tích điểm (+)</option>
                   <option value="redeem">Đổi điểm (-)</option>
@@ -625,8 +700,17 @@ export function CustomerDetail({ customerId, auth }: Props) {
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowPoints(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Huỷ</button>
-              <button onClick={() => void handleAdjustPoints()} disabled={savingPoints} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              <button
+                onClick={() => setShowPoints(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={() => void handleAdjustPoints()}
+                disabled={savingPoints}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
                 {savingPoints ? "Đang lưu..." : "Xác nhận"}
               </button>
             </div>
@@ -641,7 +725,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
             <h3 className="mb-4 text-base font-semibold">Ghi nhận công nợ mới</h3>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Số tiền nợ *</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Số tiền nợ *
+                </label>
                 <input
                   type="number"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none"
@@ -651,7 +737,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Hạn thanh toán</label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Hạn thanh toán
+                </label>
                 <input
                   type="date"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none"
@@ -670,8 +758,17 @@ export function CustomerDetail({ customerId, auth }: Props) {
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setShowDebt(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Huỷ</button>
-              <button onClick={() => void handleAddDebt()} disabled={savingDebt} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              <button
+                onClick={() => setShowDebt(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={() => void handleAddDebt()}
+                disabled={savingDebt}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
                 {savingDebt ? "Đang lưu..." : "Ghi nhận"}
               </button>
             </div>
@@ -685,7 +782,9 @@ export function CustomerDetail({ customerId, auth }: Props) {
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
             <h3 className="mb-4 text-base font-semibold">Ghi nhận thanh toán nợ</h3>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Số tiền thanh toán *</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Số tiền thanh toán *
+              </label>
               <input
                 type="number"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none"
@@ -695,8 +794,17 @@ export function CustomerDetail({ customerId, auth }: Props) {
               />
             </div>
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => setPayDebtId(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Huỷ</button>
-              <button onClick={() => void handlePayDebt()} disabled={payingDebt} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              <button
+                onClick={() => setPayDebtId(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={() => void handlePayDebt()}
+                disabled={payingDebt}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
                 {payingDebt ? "Đang lưu..." : "Xác nhận"}
               </button>
             </div>

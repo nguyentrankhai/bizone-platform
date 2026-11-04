@@ -61,7 +61,10 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h2 className="text-lg font-semibold text-gray-900">Import sản phẩm từ Excel</h2>
-          <button onClick={handleClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+          <button
+            onClick={handleClose}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -86,11 +89,20 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
           <div
             className={cn(
               "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 transition-colors",
-              dragging ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50 hover:border-gray-300",
+              dragging
+                ? "border-blue-400 bg-blue-50"
+                : "border-gray-200 bg-gray-50 hover:border-gray-300",
             )}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
             onDragLeave={() => setDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0] ?? null); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              handleFile(e.dataTransfer.files[0] ?? null);
+            }}
             onClick={() => fileRef.current?.click()}
           >
             <Upload className="h-9 w-9 text-gray-300" />
@@ -103,7 +115,11 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
                 <FileSpreadsheet className="h-5 w-5 text-emerald-500" />
                 <span className="text-sm font-medium text-gray-700">{file.name}</span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFile(null);
+                    setResult(null);
+                  }}
                   className="ml-1 text-gray-400 hover:text-red-500"
                 >
                   <X className="h-4 w-4" />
@@ -161,7 +177,9 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
               disabled={!file || loading}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {loading && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+              {loading && (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
               {loading ? "Đang import..." : "Bắt đầu import"}
             </button>
           )}

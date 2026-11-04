@@ -4,6 +4,7 @@ import superjson from "superjson";
 import { verifyJwt, extractBearerToken } from "@/lib/auth";
 import { hasPermission, ForbiddenError } from "@/lib/rbac";
 import { rateLimitGeneral, rateLimitPos } from "@/lib/rate-limit";
+import { isKnownTenant, runWithTenant } from "@/lib/tenant";
 import type { AuthUser, Permission } from "@/types/auth";
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,12 @@ const enforceTenant = t.middleware(({ ctx, next }) => {
   if (ctx.user && ctx.tenantId !== ctx.user.tenantId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "X-Tenant-ID mismatch" });
   }
-  return next({ ctx: { ...ctx, tenantId: ctx.tenantId } });
+  const tenantId = ctx.tenantId;
+  if (!isKnownTenant(tenantId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Tenant is not provisioned" });
+  }
+  // Everything downstream (rate limit, RBAC, resolver, services) runs against this tenant's DB.
+  return runWithTenant(tenantId, () => next({ ctx: { ...ctx, tenantId } }));
 });
 
 // ─── Rate-limit middleware ────────────────────────────────────────────────────

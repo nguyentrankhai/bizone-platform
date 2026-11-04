@@ -1,12 +1,28 @@
 import { connection } from "next/server";
-import { getPrisma } from "@/lib/prisma";
+import { getPrismaForTenant } from "@/lib/prisma";
+import { tenantRegistry } from "@/lib/tenant";
 
-async function checkDatabase(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+type DbCheck = { ok: boolean; latencyMs: number; error?: string };
+
+/** Ping every provisioned tenant database (one DB per tenant). */
+async function checkDatabases(): Promise<{ ok: boolean; tenants: Record<string, DbCheck> }> {
+  const ids = [...tenantRegistry().keys()];
+  if (ids.length === 0) {
+    return {
+      ok: false,
+      tenants: { _registry: { ok: false, latencyMs: 0, error: "TENANT_DATABASES is empty" } },
+    };
+  }
+  const results = await Promise.all(ids.map(async (id) => [id, await checkDatabase(id)] as const));
+  return { ok: results.every(([, r]) => r.ok), tenants: Object.fromEntries(results) };
+}
+
+async function checkDatabase(tenantId: string): Promise<DbCheck> {
   const start = Date.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      getPrisma().$queryRaw`SELECT 1`,
+      getPrismaForTenant(tenantId).$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error("timeout")), 3000);
       }),
@@ -21,7 +37,7 @@ async function checkDatabase(): Promise<{ ok: boolean; latencyMs: number; error?
 
 export async function GET() {
   await connection();
-  const database = await checkDatabase();
+  const database = await checkDatabases();
 
   if (database.ok) {
     return Response.json({

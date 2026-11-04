@@ -1,8 +1,13 @@
 // Reference data from database/schema.sql (SEED DATA section). Safe to re-run: every row is
 // upserted by its unique code, and Admin is (re)granted every permission.
-import { getPrisma } from "@/lib/prisma";
+//
+// One database per tenant: seeds the tenant named by SEED_TENANT_ID (default DEV_TENANT_ID),
+// which must be listed in TENANT_DATABASES.
+import { getPrismaForTenant } from "@/lib/prisma";
 
-const prisma = getPrisma();
+const seedTenant = process.env.SEED_TENANT_ID ?? process.env.DEV_TENANT_ID;
+if (!seedTenant) throw new Error("Set SEED_TENANT_ID (or DEV_TENANT_ID) to the tenant to seed");
+const prisma = getPrismaForTenant(seedTenant);
 
 const roles = [
   { code: "admin", name: "Admin", description: "Chủ cửa hàng - Toàn quyền" },

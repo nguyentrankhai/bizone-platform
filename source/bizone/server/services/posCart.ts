@@ -1,4 +1,5 @@
 import { getRedis } from "@/lib/redis";
+import { currentTenantId } from "@/lib/tenant";
 import type { CartSnapshot } from "@/lib/pos/protocol";
 import { quoteCart } from "./pricing.service";
 
@@ -17,7 +18,8 @@ export interface StoredCart {
 }
 
 const CART_TTL_SECONDS = 12 * 60 * 60;
-const cartKey = (sessionId: number) => `pos:cart:${sessionId}`;
+// Session ids are per tenant database → the key must carry the tenant.
+const cartKey = (sessionId: number) => `pos:cart:${currentTenantId()}:${sessionId}`;
 
 export const emptyCart = (): StoredCart => ({
   items: [],

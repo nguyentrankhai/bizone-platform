@@ -45,5 +45,4 @@ export const rateLimitGeneral = (tenantId: string, userId: string) =>
 export const rateLimitPos = (tenantId: string, userId: string) =>
   rateLimit(`rl:pos:${tenantId}:${userId}`, 300, 60);
 
-export const rateLimitAuth = (ip: string) =>
-  rateLimit(`rl:auth:${ip}`, 10, 60);
+export const rateLimitAuth = (ip: string) => rateLimit(`rl:auth:${ip}`, 10, 60);

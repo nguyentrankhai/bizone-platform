@@ -22,11 +22,7 @@ const TRPC_CODE_MAP: Record<ErrorCode, TRPCError["code"]> = {
   INTERNAL_ERROR: "INTERNAL_SERVER_ERROR",
 };
 
-export function bizoneError(
-  code: ErrorCode,
-  message: string,
-  details?: unknown,
-): TRPCError {
+export function bizoneError(code: ErrorCode, message: string, details?: unknown): TRPCError {
   return new TRPCError({
     code: TRPC_CODE_MAP[code],
     message: JSON.stringify({ code, message, details }),

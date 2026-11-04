@@ -11,6 +11,7 @@ services:
         required: false
     environment:
       DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/bizonedb
+      TENANT_DATABASES: ${TENANT_DATABASES:-tenant_demo=bizonedb}
       REDIS_URL: redis://:${REDIS_PASSWORD:-123456}@cache:6379
     depends_on:
       db:

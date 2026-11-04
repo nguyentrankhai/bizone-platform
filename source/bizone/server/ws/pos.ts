@@ -4,8 +4,9 @@
  * Auth: browsers can't set headers on a WebSocket, so the Keycloak access token is
  * sent as the second subprotocol: `new WebSocket(url, ["bizone-pos", token])`, and the
  * tenant as `?tenant=`. The cart lives in Redis (server/services/posCart.ts); every
- * change is published on `bizone:pos:{sessionId}` and fanned out to all sockets of
- * that session on every instance, so the cashier and customer screens stay identical.
+ * change is published on `bizone:pos:{tenantId}:{sessionId}` and fanned out to all sockets
+ * of that session on every instance, so the cashier and customer screens stay identical.
+ * Every DB/Redis access runs inside runWithTenant() → the tenant's own database.
  */
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -15,7 +16,9 @@ import { verifyJwt } from "@/lib/auth";
 import { hasPermission } from "@/lib/rbac";
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
+import { isKnownTenant, runWithTenant } from "@/lib/tenant";
 import {
+  parsePosChannel,
   POS_CHANNEL_PATTERN,
   POS_WS_PATH,
   POS_WS_PROTOCOL,
@@ -46,6 +49,8 @@ const MANAGER_ROLES = ["bizone-admin", "bizone-manager"];
 
 interface Client {
   sessionId: number;
+  /** `${tenantId}:${sessionId}` — session ids are only unique within one tenant DB */
+  room: string;
   user: AuthUser;
   tenantId: string;
   canWrite: boolean;
@@ -53,7 +58,8 @@ interface Client {
 }
 
 const clients = new Map<WebSocket, Client>();
-const rooms = new Map<number, Set<WebSocket>>();
+const rooms = new Map<string, Set<WebSocket>>();
+const roomKey = (tenantId: string, sessionId: number) => `${tenantId}:${sessionId}`;
 const alive = new WeakMap<WebSocket, boolean>();
 
 // ─── HTTP + upgrade (auth before the socket exists) ───────────────────────────
@@ -102,17 +108,21 @@ async function authorize(
   const tenantId = url.searchParams.get("tenant");
   if (!tenantId || tenantId !== verified.user.tenantId)
     return { status: 403, message: "Tenant mismatch" };
+  if (!isKnownTenant(tenantId)) return { status: 403, message: "Tenant is not provisioned" };
   if (!hasPermission(verified.user, "pos:read")) return { status: 403, message: "Forbidden" };
 
-  const session = await getPrisma().cashSession.findUnique({
-    where: { id: sessionId },
-    select: { status: true },
-  });
+  const session = await runWithTenant(tenantId, () =>
+    getPrisma().cashSession.findUnique({
+      where: { id: sessionId },
+      select: { status: true },
+    }),
+  );
   if (!session) return { status: 404, message: "Cash session not found" };
   if (session.status !== "open") return { status: 409, message: "Cash session closed" };
 
   return {
     sessionId,
+    room: roomKey(tenantId, sessionId),
     user: verified.user,
     tenantId,
     canWrite: hasPermission(verified.user, "pos:write"),
@@ -147,23 +157,25 @@ function send(ws: WebSocket, event: PosServerEvent, requestId?: string) {
 
 wss.on("connection", async (ws: WebSocket, client: Client) => {
   clients.set(ws, client);
-  if (!rooms.has(client.sessionId)) rooms.set(client.sessionId, new Set());
-  rooms.get(client.sessionId)!.add(ws);
+  if (!rooms.has(client.room)) rooms.set(client.room, new Set());
+  rooms.get(client.room)!.add(ws);
   alive.set(ws, true);
   ws.on("pong", () => alive.set(ws, true));
   ws.on("close", () => {
     clients.delete(ws);
-    const room = rooms.get(client.sessionId);
+    const room = rooms.get(client.room);
     room?.delete(ws);
-    if (room?.size === 0) rooms.delete(client.sessionId);
+    if (room?.size === 0) rooms.delete(client.room);
   });
   ws.on("message", (raw) => onMessage(ws, client, raw.toString()));
 
   // A screen that (re)connects gets the current state straight away
   send(ws, { type: "session:status", data: { status: "open" } });
   try {
-    const cart = await loadCart(client.sessionId);
-    send(ws, { type: "cart:updated", data: await snapshotCart(client.sessionId, cart) });
+    const snapshot = await runWithTenant(client.tenantId, async () =>
+      snapshotCart(client.sessionId, await loadCart(client.sessionId)),
+    );
+    send(ws, { type: "cart:updated", data: snapshot });
   } catch (err) {
     send(ws, { type: "error", data: { code: "INTERNAL_ERROR", message: errorText(err) } });
   }
@@ -172,8 +184,9 @@ wss.on("connection", async (ws: WebSocket, client: Client) => {
 // Redis → local sockets of that session (covers events from the tRPC app and other instances)
 const subscriber = getRedis().duplicate();
 subscriber.on("pmessage", (_pattern, channel, message) => {
-  const sessionId = Number(channel.split(":").pop());
-  for (const ws of rooms.get(sessionId) ?? []) {
+  const parsed = parsePosChannel(channel);
+  if (!parsed) return;
+  for (const ws of rooms.get(roomKey(parsed.tenantId, parsed.sessionId)) ?? []) {
     if (ws.readyState === WebSocket.OPEN) ws.send(message);
   }
 });
@@ -181,14 +194,16 @@ subscriber.on("pmessage", (_pattern, channel, message) => {
 // ─── Client events ────────────────────────────────────────────────────────────
 
 /** Serialize cart mutations per session so concurrent screens can't lose updates */
-const queues = new Map<number, Promise<unknown>>();
-function serial<T>(sessionId: number, fn: () => Promise<T>): Promise<T> {
-  const prev = queues.get(sessionId) ?? Promise.resolve();
+const queues = new Map<string, Promise<unknown>>();
+function serial<T>(room: string, fn: () => Promise<T>): Promise<T> {
+  const prev = queues.get(room) ?? Promise.resolve();
   const next = prev.then(fn, fn);
-  queues.set(
-    sessionId,
-    next.catch(() => {}),
-  );
+  const tail = next.catch(() => {});
+  queues.set(room, tail);
+  // Drop the entry once idle so the map doesn't grow with every session ever served
+  void tail.then(() => {
+    if (queues.get(room) === tail) queues.delete(room);
+  });
   return next;
 }
 
@@ -378,7 +393,7 @@ function onMessage(ws: WebSocket, client: Client, raw: string) {
       data: { code: "VALIDATION_ERROR", message: "Thông điệp không hợp lệ" },
     });
   }
-  serial(client.sessionId, () => handle(client, msg))
+  serial(client.room, () => runWithTenant(client.tenantId, () => handle(client, msg)))
     .then(() => send(ws, { type: "ack", data: { ok: true } }, msg.requestId))
     .catch((err) =>
       send(

@@ -42,7 +42,12 @@ export const productVariantSchema = z.object({
   sellingPrice: z.number().nonnegative().default(0),
   weight: z.number().nonnegative().nullable().optional(),
   attributes: z
-    .array(z.object({ attributeName: z.string().min(1).max(50), attributeValue: z.string().min(1).max(50) }))
+    .array(
+      z.object({
+        attributeName: z.string().min(1).max(50),
+        attributeValue: z.string().min(1).max(50),
+      }),
+    )
     .default([]),
 });
 
@@ -85,7 +90,9 @@ export const listProductsSchema = z.object({
   search: z.string().optional(),
   categoryId: z.number().int().positive().nullable().optional(),
   status: z.enum(["active", "inactive", "discontinued"]).optional(),
-  sortBy: z.enum(["name", "sku", "sellingPrice", "costPrice", "createdAt", "updatedAt"]).default("createdAt"),
+  sortBy: z
+    .enum(["name", "sku", "sellingPrice", "costPrice", "createdAt", "updatedAt"])
+    .default("createdAt"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
 

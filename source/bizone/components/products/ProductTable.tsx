@@ -2,13 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ProductStatus = "active" | "inactive" | "discontinued";
@@ -40,7 +34,15 @@ interface ProductTableProps {
   onSort: (key: string, dir: "asc" | "desc") => void;
 }
 
-function SortIcon({ col, sortBy, sortDir }: { col: string; sortBy?: string; sortDir?: "asc" | "desc" }) {
+function SortIcon({
+  col,
+  sortBy,
+  sortDir,
+}: {
+  col: string;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
+}) {
   if (sortBy !== col) return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-gray-300" />;
   if (sortDir === "asc") return <ArrowUp className="ml-1 inline h-3.5 w-3.5 text-blue-500" />;
   return <ArrowDown className="ml-1 inline h-3.5 w-3.5 text-blue-500" />;
@@ -107,39 +109,41 @@ export function ProductTable({
                 <input
                   type="checkbox"
                   checked={allChecked}
-                  ref={(el) => { if (el) el.indeterminate = someChecked; }}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someChecked;
+                  }}
                   onChange={toggleAll}
                   className="h-4 w-4 rounded border-gray-300 text-blue-600"
                 />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase">
                 Ảnh
               </th>
               <th
-                className="cursor-pointer px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-700"
+                className="cursor-pointer px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
                 onClick={() => handleSort("name")}
               >
                 Tên sản phẩm <SortIcon col="name" sortBy={sortBy} sortDir={sortDir} />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase">
                 Danh mục
               </th>
               <th
-                className="cursor-pointer px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-700"
+                className="cursor-pointer px-4 py-3 text-right text-xs font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
                 onClick={() => handleSort("sellingPrice")}
               >
                 Giá bán <SortIcon col="sellingPrice" sortBy={sortBy} sortDir={sortDir} />
               </th>
               <th
-                className="cursor-pointer px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-700"
+                className="cursor-pointer px-4 py-3 text-right text-xs font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
                 onClick={() => handleSort("costPrice")}
               >
                 Giá vốn <SortIcon col="costPrice" sortBy={sortBy} sortDir={sortDir} />
               </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-gray-500 uppercase">
                 Tồn kho
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase">
                 Trạng thái
               </th>
             </tr>
@@ -211,11 +215,11 @@ export function ProductTable({
                     <td className="px-4 py-3 text-right text-gray-500">
                       {formatVND(row.costPrice)}
                     </td>
-                    <td className={cn("px-4 py-3 text-right font-medium", lowStock && "text-red-600")}>
+                    <td
+                      className={cn("px-4 py-3 text-right font-medium", lowStock && "text-red-600")}
+                    >
                       {row.currentStock}
-                      {lowStock && (
-                        <span className="ml-1 text-xs text-red-400">(!)</span>
-                      )}
+                      {lowStock && <span className="ml-1 text-xs text-red-400">(!)</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span

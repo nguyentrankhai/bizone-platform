@@ -112,11 +112,24 @@ export function ProductForm({
   }
 
   function addUnit() {
-    set("units", [...form.units, { unitName: "", conversionRate: 1, barcode: "", sellingPrice: null, costPrice: null, isBase: false }]);
+    set("units", [
+      ...form.units,
+      {
+        unitName: "",
+        conversionRate: 1,
+        barcode: "",
+        sellingPrice: null,
+        costPrice: null,
+        isBase: false,
+      },
+    ]);
   }
 
   function removeUnit(i: number) {
-    set("units", form.units.filter((_, idx) => idx !== i));
+    set(
+      "units",
+      form.units.filter((_, idx) => idx !== i),
+    );
   }
 
   function updateUnit(i: number, key: keyof UnitRow, value: unknown) {
@@ -129,12 +142,21 @@ export function ProductForm({
   function addVariant() {
     set("variants", [
       ...form.variants,
-      { sku: `${form.sku}-V${form.variants.length + 1}`, barcode: "", sellingPrice: form.sellingPrice, costPrice: form.costPrice, attributes: [] },
+      {
+        sku: `${form.sku}-V${form.variants.length + 1}`,
+        barcode: "",
+        sellingPrice: form.sellingPrice,
+        costPrice: form.costPrice,
+        attributes: [],
+      },
     ]);
   }
 
   function removeVariant(i: number) {
-    set("variants", form.variants.filter((_, idx) => idx !== i));
+    set(
+      "variants",
+      form.variants.filter((_, idx) => idx !== i),
+    );
   }
 
   function updateVariant(i: number, key: keyof VariantRow, value: unknown) {
@@ -202,12 +224,16 @@ export function ProductForm({
                 <Field label="Danh mục">
                   <select
                     value={form.categoryId ?? ""}
-                    onChange={(e) => set("categoryId", e.target.value ? Number(e.target.value) : null)}
+                    onChange={(e) =>
+                      set("categoryId", e.target.value ? Number(e.target.value) : null)
+                    }
                     className={inputCls(false)}
                   >
                     <option value="">-- Chọn danh mục --</option>
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                 </Field>
@@ -283,7 +309,9 @@ export function ProductForm({
                     type="number"
                     min={0}
                     value={form.maxStock ?? ""}
-                    onChange={(e) => set("maxStock", e.target.value ? Number(e.target.value) : null)}
+                    onChange={(e) =>
+                      set("maxStock", e.target.value ? Number(e.target.value) : null)
+                    }
                     placeholder="Không giới hạn"
                     className={inputCls(false)}
                   />
@@ -320,9 +348,7 @@ export function ProductForm({
         {tab === "Đơn vị tính" && (
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Đa đơn vị tính: thùng → 12 cái, bình → 3 hộp…
-              </p>
+              <p className="text-sm text-gray-500">Đa đơn vị tính: thùng → 12 cái, bình → 3 hộp…</p>
               <button
                 onClick={addUnit}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -337,7 +363,10 @@ export function ProductForm({
             ) : (
               <div className="flex flex-col gap-3">
                 {form.units.map((unit, i) => (
-                  <div key={i} className="grid grid-cols-6 items-center gap-3 rounded-lg border border-gray-200 p-3">
+                  <div
+                    key={i}
+                    className="grid grid-cols-6 items-center gap-3 rounded-lg border border-gray-200 p-3"
+                  >
                     <div className="col-span-2">
                       <label className="mb-1 block text-xs text-gray-500">Tên đơn vị</label>
                       <input
@@ -371,7 +400,13 @@ export function ProductForm({
                         type="number"
                         min={0}
                         value={unit.sellingPrice ?? ""}
-                        onChange={(e) => updateUnit(i, "sellingPrice", e.target.value ? Number(e.target.value) : null)}
+                        onChange={(e) =>
+                          updateUnit(
+                            i,
+                            "sellingPrice",
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
                         className={inputCls(false)}
                       />
                     </div>
@@ -394,9 +429,7 @@ export function ProductForm({
         {tab === "Biến thể" && (
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Biến thể sản phẩm theo màu sắc, kích cỡ, v.v.
-              </p>
+              <p className="text-sm text-gray-500">Biến thể sản phẩm theo màu sắc, kích cỡ, v.v.</p>
               <button
                 onClick={addVariant}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -586,8 +619,6 @@ function inputCls(hasError: boolean) {
   return cn(
     "w-full rounded-lg border px-3 py-2 text-sm outline-none transition-colors",
     "focus:ring-2 focus:ring-blue-100",
-    hasError
-      ? "border-red-400 focus:border-red-500"
-      : "border-gray-200 focus:border-blue-400",
+    hasError ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-blue-400",
   );
 }

@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Column<T> {
@@ -44,20 +51,23 @@ export function DataTable<T extends { id?: string | number }>({
   const filtered = search
     ? data.filter((row) =>
         Object.values(row as Record<string, unknown>).some((v) =>
-          String(v ?? "").toLowerCase().includes(search.toLowerCase()),
+          String(v ?? "")
+            .toLowerCase()
+            .includes(search.toLowerCase()),
         ),
       )
     : data;
 
   // Sort
-  const sorted = sortKey && sortDir
-    ? [...filtered].sort((a, b) => {
-        const av = (a as Record<string, unknown>)[sortKey];
-        const bv = (b as Record<string, unknown>)[sortKey];
-        const cmp = String(av ?? "").localeCompare(String(bv ?? ""), "vi");
-        return sortDir === "asc" ? cmp : -cmp;
-      })
-    : filtered;
+  const sorted =
+    sortKey && sortDir
+      ? [...filtered].sort((a, b) => {
+          const av = (a as Record<string, unknown>)[sortKey];
+          const bv = (b as Record<string, unknown>)[sortKey];
+          const cmp = String(av ?? "").localeCompare(String(bv ?? ""), "vi");
+          return sortDir === "asc" ? cmp : -cmp;
+        })
+      : filtered;
 
   // Paginate
   const total = sorted.length;
@@ -66,9 +76,14 @@ export function DataTable<T extends { id?: string | number }>({
   const paged = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   function toggleSort(key: string) {
-    if (sortKey !== key) { setSortKey(key); setSortDir("asc"); }
-    else if (sortDir === "asc") setSortDir("desc");
-    else { setSortKey(null); setSortDir(null); }
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") setSortDir("desc");
+    else {
+      setSortKey(null);
+      setSortDir(null);
+    }
   }
 
   function SortIcon({ colKey }: { colKey: string }) {
@@ -81,12 +96,15 @@ export function DataTable<T extends { id?: string | number }>({
     <div className="flex flex-col gap-3">
       {searchable && (
         <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            className="w-full rounded-lg border border-gray-200 py-2 pr-3 pl-9 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           />
         </div>
       )}
@@ -99,7 +117,7 @@ export function DataTable<T extends { id?: string | number }>({
                 <th
                   key={String(col.key)}
                   className={cn(
-                    "border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500",
+                    "border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase",
                     col.sortable && "cursor-pointer select-none hover:text-gray-700",
                     col.className,
                   )}
@@ -137,7 +155,10 @@ export function DataTable<T extends { id?: string | number }>({
                   )}
                 >
                   {columns.map((col) => (
-                    <td key={String(col.key)} className={cn("px-4 py-3 text-gray-700", col.className)}>
+                    <td
+                      key={String(col.key)}
+                      className={cn("px-4 py-3 text-gray-700", col.className)}
+                    >
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? "")}
@@ -172,9 +193,7 @@ export function DataTable<T extends { id?: string | number }>({
                   onClick={() => setPage(pg)}
                   className={cn(
                     "h-7 w-7 rounded text-xs font-medium",
-                    pg === safePage
-                      ? "bg-blue-600 text-white"
-                      : "hover:bg-gray-100",
+                    pg === safePage ? "bg-blue-600 text-white" : "hover:bg-gray-100",
                   )}
                 >
                   {pg}

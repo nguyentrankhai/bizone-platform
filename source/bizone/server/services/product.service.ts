@@ -18,12 +18,28 @@ export async function getCategoryTree() {
   const all = await prisma.productCategory.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, slug: true, parentId: true, sortOrder: true, icon: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      parentId: true,
+      sortOrder: true,
+      icon: true,
+      isActive: true,
+    },
   });
   return buildTree(all);
 }
 
-type FlatCategory = { id: number; name: string; slug: string; parentId: number | null; sortOrder: number; icon: string | null; isActive: boolean };
+type FlatCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  parentId: number | null;
+  sortOrder: number;
+  icon: string | null;
+  isActive: boolean;
+};
 type TreeCategory = FlatCategory & { children: TreeCategory[] };
 
 function buildTree(items: FlatCategory[]): TreeCategory[] {
@@ -40,14 +56,31 @@ function buildTree(items: FlatCategory[]): TreeCategory[] {
   return roots;
 }
 
-export async function createCategory(data: { name: string; slug: string; parentId?: number | null; sortOrder?: number; icon?: string | null; isActive?: boolean }) {
+export async function createCategory(data: {
+  name: string;
+  slug: string;
+  parentId?: number | null;
+  sortOrder?: number;
+  icon?: string | null;
+  isActive?: boolean;
+}) {
   const prisma = getPrisma();
   const existing = await prisma.productCategory.findUnique({ where: { slug: data.slug } });
   if (existing) throw conflict(`Slug "${data.slug}" đã tồn tại`);
   return prisma.productCategory.create({ data });
 }
 
-export async function updateCategory(id: number, data: Partial<{ name: string; slug: string; parentId: number | null; sortOrder: number; icon: string | null; isActive: boolean }>) {
+export async function updateCategory(
+  id: number,
+  data: Partial<{
+    name: string;
+    slug: string;
+    parentId: number | null;
+    sortOrder: number;
+    icon: string | null;
+    isActive: boolean;
+  }>,
+) {
   const prisma = getPrisma();
   const cat = await prisma.productCategory.findUnique({ where: { id } });
   if (!cat) throw notFound("ProductCategory", id);
@@ -60,16 +93,28 @@ export async function updateCategory(id: number, data: Partial<{ name: string; s
 
 export async function deleteCategory(id: number) {
   const prisma = getPrisma();
-  const cat = await prisma.productCategory.findUnique({ where: { id }, include: { _count: { select: { products: true, children: true } } } });
+  const cat = await prisma.productCategory.findUnique({
+    where: { id },
+    include: { _count: { select: { products: true, children: true } } },
+  });
   if (!cat) throw notFound("ProductCategory", id);
-  if (cat._count.products > 0) throw conflict(`Danh mục có ${cat._count.products} sản phẩm, không thể xoá`);
-  if (cat._count.children > 0) throw conflict(`Danh mục có ${cat._count.children} danh mục con, không thể xoá`);
+  if (cat._count.products > 0)
+    throw conflict(`Danh mục có ${cat._count.products} sản phẩm, không thể xoá`);
+  if (cat._count.children > 0)
+    throw conflict(`Danh mục có ${cat._count.children} danh mục con, không thể xoá`);
   return prisma.productCategory.delete({ where: { id } });
 }
 
 export async function reorderCategories(items: { id: number; sortOrder: number }[]) {
   const prisma = getPrisma();
-  await prisma.$transaction(items.map((item) => prisma.productCategory.update({ where: { id: item.id }, data: { sortOrder: item.sortOrder } })));
+  await prisma.$transaction(
+    items.map((item) =>
+      prisma.productCategory.update({
+        where: { id: item.id },
+        data: { sortOrder: item.sortOrder },
+      }),
+    ),
+  );
 }
 
 // ─── Product list ─────────────────────────────────────────────────────────────
@@ -100,7 +145,11 @@ export async function listProducts(input: ListProductsInput) {
       include: {
         category: { select: { id: true, name: true } },
         productVariants: { select: { id: true, sku: true, sellingPrice: true, status: true } },
-        productImages: { select: { id: true, imageUrl: true, sortOrder: true }, orderBy: { sortOrder: "asc" }, take: 1 },
+        productImages: {
+          select: { id: true, imageUrl: true, sortOrder: true },
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+        },
         _count: { select: { productVariants: true } },
       },
     }),
@@ -144,14 +193,17 @@ export async function createProduct(input: CreateProductInput, userId: number) {
     throw conflict(`SKU "${input.sku}" đã tồn tại`);
   }
   // Validate barcode unique
-  if (input.barcode && await prisma.product.findFirst({ where: { barcode: input.barcode } })) {
+  if (input.barcode && (await prisma.product.findFirst({ where: { barcode: input.barcode } }))) {
     throw conflict(`Barcode "${input.barcode}" đã tồn tại`);
   }
   // Validate variant SKUs
   const variantSkus = input.variants.map((v) => v.sku);
-  if (variantSkus.length !== new Set(variantSkus).size) throw conflict("Biến thể có SKU trùng nhau");
+  if (variantSkus.length !== new Set(variantSkus).size)
+    throw conflict("Biến thể có SKU trùng nhau");
   if (variantSkus.length > 0) {
-    const dupVariant = await prisma.productVariant.findFirst({ where: { sku: { in: variantSkus } } });
+    const dupVariant = await prisma.productVariant.findFirst({
+      where: { sku: { in: variantSkus } },
+    });
     if (dupVariant) throw conflict(`Variant SKU "${dupVariant.sku}" đã tồn tại`);
   }
 
@@ -206,7 +258,9 @@ export async function updateProduct(id: number, input: UpdateProductInput, userI
 
   // Barcode unique check (excluding self)
   if (input.barcode && input.barcode !== existing.barcode) {
-    const dup = await prisma.product.findFirst({ where: { barcode: input.barcode, id: { not: id } } });
+    const dup = await prisma.product.findFirst({
+      where: { barcode: input.barcode, id: { not: id } },
+    });
     if (dup) throw conflict(`Barcode "${input.barcode}" đã tồn tại`);
   }
 
@@ -226,7 +280,9 @@ export async function deleteProduct(id: number) {
   });
   if (!product) throw notFound("Product", id);
   if (product._count.invoiceItems > 0 || product._count.orderItems > 0) {
-    throw conflict("Sản phẩm đã có giao dịch, không thể xoá. Hãy đổi trạng thái thành 'discontinued'");
+    throw conflict(
+      "Sản phẩm đã có giao dịch, không thể xoá. Hãy đổi trạng thái thành 'discontinued'",
+    );
   }
   return prisma.product.delete({ where: { id } });
 }
@@ -250,11 +306,7 @@ async function _doSearch(input: SearchProductsInput) {
   const { q, limit, categoryId, status } = input;
   return prisma.product.findMany({
     where: {
-      OR: [
-        { name: { contains: q } },
-        { sku: { contains: q } },
-        { barcode: { contains: q } },
-      ],
+      OR: [{ name: { contains: q } }, { sku: { contains: q } }, { barcode: { contains: q } }],
       ...(categoryId !== undefined && categoryId !== null ? { categoryId } : {}),
       ...(status ? { status } : {}),
     },
@@ -283,6 +335,9 @@ async function _doSearch(input: SearchProductsInput) {
 export async function invalidateSearchCache(tenantId: string) {
   const redis = getRedis();
   const pattern = `search:products:${tenantId}:*`;
-  const keys = await redis.keys(pattern);
-  if (keys.length > 0) await redis.del(...keys);
+  // SCAN (not KEYS): KEYS blocks Redis for every client while it walks the whole keyspace.
+  const stream = redis.scanStream({ match: pattern, count: 200 });
+  for await (const keys of stream as AsyncIterable<string[]>) {
+    if (keys.length > 0) await redis.unlink(...keys);
+  }
 }

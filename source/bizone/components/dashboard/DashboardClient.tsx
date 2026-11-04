@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, TrendingUp, TrendingDown, ShoppingCart, Users, Package, AlertTriangle } from "lucide-react";
+import {
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  ShoppingCart,
+  Users,
+  Package,
+  AlertTriangle,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -33,7 +41,7 @@ function RevenueBar({ revenue7d }: { revenue7d: DashboardData["revenue7d"] }) {
   const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
   return (
-    <div className="flex items-end gap-1.5 h-36 pt-2">
+    <div className="flex h-36 items-end gap-1.5 pt-2">
       {revenue7d.map((d, i) => {
         const pct = (d.revenue / max) * 100;
         const dow = new Date(d.date).getDay();
@@ -41,14 +49,16 @@ function RevenueBar({ revenue7d }: { revenue7d: DashboardData["revenue7d"] }) {
         const isToday = d.date === new Date().toISOString().slice(0, 10);
         return (
           <div key={d.date} className="relative flex flex-1 flex-col items-center">
-            <div className="mb-5 text-xs text-slate-400 whitespace-nowrap">
+            <div className="mb-5 text-xs whitespace-nowrap text-slate-400">
               {d.revenue > 0 ? fmtCompact(d.revenue) : ""}
             </div>
             <div
-              className={`w-full rounded-t-sm min-h-2 transition-all ${isToday ? "bg-blue-600" : "bg-blue-200"}`}
+              className={`min-h-2 w-full rounded-t-sm transition-all ${isToday ? "bg-blue-600" : "bg-blue-200"}`}
               style={{ height: `${Math.max(pct, 2)}%` }}
             />
-            <div className={`mt-1.5 text-xs ${isToday ? "font-semibold text-blue-600" : "text-slate-400"}`}>
+            <div
+              className={`mt-1.5 text-xs ${isToday ? "font-semibold text-blue-600" : "text-slate-400"}`}
+            >
               {label}
               {i === revenue7d.length - 1 && <span className="ml-1 text-blue-500">•</span>}
             </div>
@@ -121,7 +131,7 @@ export function DashboardClient({ auth }: Props) {
 
   if (loading) {
     return (
-      <div className="space-y-5 animate-pulse">
+      <div className="animate-pulse space-y-5">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-28 rounded-xl bg-slate-100" />
@@ -147,7 +157,13 @@ export function DashboardClient({ auth }: Props) {
           <h1 className="text-xl font-bold text-slate-800">Dashboard tổng quan</h1>
           {lastUpdated && (
             <p className="mt-0.5 text-xs text-slate-400">
-              Cập nhật lúc {lastUpdated.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} · Cache 5 phút
+              Cập nhật lúc{" "}
+              {lastUpdated.toLocaleTimeString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}{" "}
+              · Cache 5 phút
             </p>
           )}
         </div>
@@ -173,8 +189,14 @@ export function DashboardClient({ auth }: Props) {
             {fmtCompact(todayStats.revenue)}đ
           </div>
           {todayStats.revenueChange !== null && (
-            <div className={`mt-1 flex items-center gap-1 text-xs ${todayStats.revenueChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-              {todayStats.revenueChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            <div
+              className={`mt-1 flex items-center gap-1 text-xs ${todayStats.revenueChange >= 0 ? "text-emerald-600" : "text-red-500"}`}
+            >
+              {todayStats.revenueChange >= 0 ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
               {Math.abs(todayStats.revenueChange)}% so với hôm qua
             </div>
           )}
@@ -201,12 +223,20 @@ export function DashboardClient({ auth }: Props) {
         </div>
 
         {/* Low stock */}
-        <div className={`rounded-xl border p-5 ${todayStats.lowStockCount > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
-          <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${todayStats.lowStockCount > 0 ? "bg-amber-100" : "bg-slate-50"}`}>
-            <AlertTriangle className={`h-5 w-5 ${todayStats.lowStockCount > 0 ? "text-amber-600" : "text-slate-400"}`} />
+        <div
+          className={`rounded-xl border p-5 ${todayStats.lowStockCount > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}
+        >
+          <div
+            className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${todayStats.lowStockCount > 0 ? "bg-amber-100" : "bg-slate-50"}`}
+          >
+            <AlertTriangle
+              className={`h-5 w-5 ${todayStats.lowStockCount > 0 ? "text-amber-600" : "text-slate-400"}`}
+            />
           </div>
           <div className="text-xs text-slate-500">Cảnh báo tồn kho</div>
-          <div className={`mt-1 text-2xl font-bold ${todayStats.lowStockCount > 0 ? "text-amber-700" : "text-slate-800"}`}>
+          <div
+            className={`mt-1 text-2xl font-bold ${todayStats.lowStockCount > 0 ? "text-amber-700" : "text-slate-800"}`}
+          >
             {todayStats.lowStockCount}
           </div>
           <div className="mt-1 text-xs text-slate-400">sản phẩm sắp hết</div>
@@ -245,18 +275,29 @@ export function DashboardClient({ auth }: Props) {
           ) : (
             <div className="space-y-1">
               {topProducts.map((p) => {
-                const rankColors = ["bg-amber-100 text-amber-700", "bg-slate-100 text-slate-600", "bg-orange-100 text-orange-700"];
+                const rankColors = [
+                  "bg-amber-100 text-amber-700",
+                  "bg-slate-100 text-slate-600",
+                  "bg-orange-100 text-orange-700",
+                ];
                 return (
-                  <div key={p.productId} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
-                    <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold ${rankColors[p.rank - 1] ?? "bg-slate-50 text-slate-400"}`}>
+                  <div
+                    key={p.productId}
+                    className="flex items-center gap-3 border-b border-slate-50 py-2 last:border-0"
+                  >
+                    <div
+                      className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-xs font-bold ${rankColors[p.rank - 1] ?? "bg-slate-50 text-slate-400"}`}
+                    >
                       {p.rank}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-slate-800">{p.name}</div>
                       <div className="text-xs text-slate-400">{p.sku}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-700">{fmtMoney(p.revenue)}</div>
+                      <div className="text-sm font-semibold text-slate-700">
+                        {fmtMoney(p.revenue)}
+                      </div>
                       <div className="text-xs text-slate-400">{p.quantity} cái</div>
                     </div>
                   </div>
@@ -294,9 +335,11 @@ export function DashboardClient({ auth }: Props) {
                       onClick={() => router.push(`/orders/${o.id}`)}
                     >
                       <Package className="h-4 w-4 flex-shrink-0 text-slate-400" />
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-blue-600">{o.orderCode}</div>
-                        <div className="truncate text-xs text-slate-400">{ord.customer?.fullName ?? "Khách lẻ"}</div>
+                        <div className="truncate text-xs text-slate-400">
+                          {ord.customer?.fullName ?? "Khách lẻ"}
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold">{fmtMoney(o.totalAmount)}</div>

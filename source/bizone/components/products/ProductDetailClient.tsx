@@ -30,7 +30,10 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
     trpc.product.get
       .query({ id }, { context: { headers } })
       .then((p) => {
-        if (!p) { setError("Không tìm thấy sản phẩm"); return; }
+        if (!p) {
+          setError("Không tìm thấy sản phẩm");
+          return;
+        }
         const data = p as Record<string, unknown>;
         setProduct({
           name: data.name as string,
@@ -63,7 +66,8 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
               barcode: (variant.barcode as string | null) ?? "",
               sellingPrice: Number(variant.sellingPrice),
               costPrice: Number(variant.costPrice),
-              attributes: (variant.attributes as { attributeName: string; attributeValue: string }[]) ?? [],
+              attributes:
+                (variant.attributes as { attributeName: string; attributeValue: string }[]) ?? [],
             };
           }),
         });
@@ -105,7 +109,7 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
           <ArrowLeft className="h-5 w-5" />
         </button>
         <h1 className="text-2xl font-bold text-gray-900">
-          {loading ? "Đang tải..." : product?.name ?? "Sản phẩm"}
+          {loading ? "Đang tải..." : (product?.name ?? "Sản phẩm")}
         </h1>
       </div>
 
@@ -118,12 +122,7 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
           {error}
         </div>
       ) : product ? (
-        <ProductForm
-          initialData={product}
-          categories={[]}
-          isEdit
-          onSave={handleSave}
-        />
+        <ProductForm initialData={product} categories={[]} isEdit onSave={handleSave} />
       ) : null}
     </>
   );

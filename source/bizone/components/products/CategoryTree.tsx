@@ -41,17 +41,24 @@ function CategoryItem({
       <div
         className={cn(
           "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-          isSelected ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-100",
+          isSelected ? "bg-blue-100 font-medium text-blue-700" : "text-gray-700 hover:bg-gray-100",
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={() => onSelect(isSelected ? null : node.id)}
       >
         {hasChildren ? (
           <button
-            onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((o) => !o);
+            }}
             className="shrink-0 text-gray-400 hover:text-gray-600"
           >
-            {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {open ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
           </button>
         ) : (
           <span className="h-3.5 w-3.5 shrink-0" />
@@ -92,14 +99,16 @@ function CategoryItem({
 export function CategoryTree({ categories, selectedId, onSelect, loading }: CategoryTreeProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white">
-      <div className="border-b border-gray-100 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+      <div className="border-b border-gray-100 px-3 py-2.5 text-xs font-semibold tracking-wide text-gray-500 uppercase">
         Danh mục
       </div>
       <div className="p-2">
         <div
           className={cn(
             "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-            selectedId == null ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-100",
+            selectedId == null
+              ? "bg-blue-100 font-medium text-blue-700"
+              : "text-gray-700 hover:bg-gray-100",
           )}
           onClick={() => onSelect(null)}
         >

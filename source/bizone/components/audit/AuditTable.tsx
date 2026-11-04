@@ -139,38 +139,41 @@ export function AuditTable({ auth }: AuditTableProps) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
 
-  const [data, setData] = useState<AuditListOutput | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState("");
+  // Result of the last finished request, tagged with the query it answers: `loading` is
+  // derived (query changed, answer not back yet) instead of set synchronously in the effect.
+  const [result, setResult] = useState<{
+    key: string;
+    data?: AuditListOutput;
+    error?: string;
+  } | null>(null);
 
   const ctx = apiContext(auth);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setFetchError("");
-    try {
-      const result = await trpc.auditLog.list.query(
-        {
-          page,
-          limit: 20,
-          module: filterModule || undefined,
-          action: filterAction || undefined,
-          dateFrom: dateFrom || undefined,
-          dateTo: dateTo || undefined,
-        },
-        ctx,
-      );
-      setData(result);
-    } catch (e) {
-      setFetchError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, filterModule, filterAction, dateFrom, dateTo, auth.authToken, auth.tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const query = {
+    page,
+    limit: 20,
+    module: filterModule || undefined,
+    action: filterAction || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  };
+  const queryKey = JSON.stringify([query, auth.tenantId, auth.authToken]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    const [q] = JSON.parse(queryKey) as [typeof query];
+    trpc.auditLog.list.query(q, apiContext(auth)).then(
+      (data) => !cancelled && setResult({ key: queryKey, data }),
+      (e: unknown) => !cancelled && setResult({ key: queryKey, error: errorMessage(e) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [queryKey]); // eslint-disable-line react-hooks/exhaustive-deps -- queryKey covers auth + filters
+
+  const loading = result?.key !== queryKey;
+  const data = result?.data ?? null;
+  const fetchError = loading ? "" : (result?.error ?? "");
 
   const handleExport = useCallback(async () => {
     setExporting(true);

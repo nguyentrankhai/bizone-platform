@@ -1,5 +1,6 @@
 import { Queue, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { publishLowStockAlerts } from "@/server/services/inventory.service";
+import { currentTenantId, runWithTenant } from "@/lib/tenant";
 
 /**
  * Post-sale inventory work that must not slow down checkout.
@@ -9,6 +10,8 @@ import { publishLowStockAlerts } from "@/server/services/inventory.service";
 export const INVENTORY_QUEUE = "bizone-inventory";
 
 export interface StockChangedJob {
+  /** Tenant whose database the job runs against (filled in by enqueueStockChanged). */
+  tenantId: string;
   warehouseId: number;
   productIds: number[];
   reason: "sale" | "refund" | "cancel";
@@ -43,16 +46,18 @@ export function getInventoryQueue(): Queue<StockChangedJob> {
 }
 
 /** Enqueue without failing the caller: a sale is already committed when this runs */
-export async function enqueueStockChanged(job: StockChangedJob): Promise<void> {
+export async function enqueueStockChanged(job: Omit<StockChangedJob, "tenantId">): Promise<void> {
   try {
-    await getInventoryQueue().add("stock-changed", job);
+    await getInventoryQueue().add("stock-changed", { ...job, tenantId: currentTenantId() });
   } catch (err) {
     console.error("[queue:inventory] enqueue failed:", err instanceof Error ? err.message : err);
   }
 }
 
 export async function processStockChanged(job: Job<StockChangedJob>): Promise<void> {
-  await publishLowStockAlerts(job.data.warehouseId, job.data.productIds);
+  const { tenantId, warehouseId, productIds } = job.data;
+  if (!tenantId) throw new Error(`job ${job.id} has no tenantId`); // pre-isolation job
+  await runWithTenant(tenantId, () => publishLowStockAlerts(warehouseId, productIds));
 }
 
 export function startInventoryWorker(): Worker<StockChangedJob> {
