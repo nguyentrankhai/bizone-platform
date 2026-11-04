@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.4 VietQR Generator — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-04 (P3.5 Partner Config UI — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 2 | 2 | 4 |
+| 3 — Payment Hub MVP | 8 | 2 | 3 | 3 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **20** | **2** | **29** |
+| **Tổng** | **51** | **20** | **3** | **28** |
 
 ---
 
@@ -54,6 +54,9 @@
 | 23 | VietQR đang dùng **tài khoản demo** (`VIETQR_*` trong `.env.development` / `.env.local`: Vietcombank `0011001234567`) → điền tài khoản nhận thật rồi `npm run db:seed` | P3.4 | Người dùng |
 | 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` | P3.4 | P5.4 Đối soát / connector ngân hàng |
 | 25 | `POST /api/v1/transactions` chưa nhận `payment_method: vietqr` (trả kèm `qr_code` như API-Design §5.1) và trang `/pay/{txn}` chưa có lựa chọn VietQR — merchant phải gọi `/api/v1/qr/generate` sau khi tạo GD | P3.4 | P3.8 Route Engine |
+| 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
+| 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
+| 28 | Log thay đổi đối tác lấy IP từ `x-forwarded-for` — tin cậy được khi chạy sau reverse proxy ghi đè header này | P3.5 | Khi triển khai (P6.5) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -118,7 +121,7 @@
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
-| P3.5 | Partner Config UI | ⬜ | — | |
+| P3.5 | Partner Config UI | 🟡 | — | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ⬜ | — | |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
@@ -1074,6 +1077,59 @@ Ngoài plan, theo yêu cầu người dùng.
   - Sinh ảnh ngoài transaction DB (tất định theo payload), chỉ khoá dòng GD trong lúc kiểm tra/ghi → không giữ lock khi render.
 
 - **Vấn đề / lưu ý:** vấn đề mở #23–#25. Để hoàn tất P3.4: quét QR mẫu bằng app ngân hàng (app hiển thị đúng ngân hàng, số TK, số tiền, nội dung là đạt); khi có tài khoản thật, điền `VIETQR_*` + `npm run db:seed`.
+
+
+### P3.5 — Partner Config UI
+
+- **Trạng thái:** 🟡 (2026-11-04) — còn bước test + kích hoạt VNPay với credential thật · **Commit:** — · **Vị trí:** `source/payment-hub/app/partners/`, `app/api/internal/partners/`, `components/ph/Partner*.tsx`, `server/services/partner.service.ts`, `server/routes/partners.ts`, `lib/partner-types.ts`
+- **Đã làm:**
+  - **API admin** (JWT Keycloak qua `proxy.ts`; đọc: `payhub-admin`/`payhub-viewer`, ghi: `payhub-admin`; token gắn `merchant_id` → 403 vì cấu hình đối tác là toàn cục):
+    `GET/POST /api/internal/partners`, `GET/PUT /api/internal/partners/{id}`, `POST …/{id}/test`, `PUT …/{id}/status`, `GET …/{id}/logs`
+  - **Quy tắc trạng thái** (`partner.service.ts`): tạo mới luôn `Inactive`; chỉ kích hoạt khi test kết nối của **cấu hình hiện tại** đạt (409 nếu chưa); sửa trường kết nối (merchant code, môi trường, key, secret, endpoint) → xoá kết quả test, đối tác đang chạy về `Inactive`; test lỗi khi `Active` → `Error` (rời khỏi routing), test đạt khi `Error` → `Active`; không đổi được loại connector; đổi trạng thái dùng `UPDATE … WHERE status = <đã đọc>`; test bị huỷ ghi nếu cấu hình bị sửa trong lúc test
+  - **Bảo mật secret**: API không bao giờ trả secret — VNPay API key `••••1234`, Hash Secret `••••••••`; ô secret trên form để trống = giữ nguyên; log ghi `(đã thay đổi)`. Trường không bí mật của VietQR (BIN, tên chủ TK) hiển thị rõ. Mọi key/secret vẫn mã hoá AES-256-GCM
+  - **Test kết nối thật**:
+    - VNPay — `healthCheck()` đổi từ "GET trang thanh toán" sang gọi `querydr` cho một mã GD không tồn tại: credential đúng thì VNPay trả phản hồi **có chữ ký hợp lệ** mã `91`/`00`; sai TMN/secret → mã lỗi hoặc chữ ký sai ⇒ kiểm được cả TMN code lẫn Hash Secret
+    - VietQR — kiểm định dạng BIN/số TK, sinh payload + CRC, tra BIN trong danh sách ngân hàng NAPAS (`api.vietqr.io/v2/banks`, công khai, đổi được qua `VIETQR_BANKS_URL`)
+    - MoMo/ZaloPay — lưu được cấu hình, test trả "chưa hỗ trợ", không kích hoạt được (connector ở P5.1/P5.2)
+  - **Log thay đổi** `partner_config_logs`: mỗi trường một dòng (cũ → mới), tạo, test (OK/FAIL + thời gian + thông điệp), đổi trạng thái; kèm người thực hiện (`changed_by` = username token) + IP. Migration `1_partner_config_log_actor` thêm cột `changed_by`
+  - **UI** (theo mockup "Quản lý đối tác" / "Cấu hình đối tác"):
+    - `/partners` — card mỗi cấu hình (`PartnerCard`): tên, connector, môi trường, trạng thái có chấm màu, kết quả test gần nhất, nút Sửa / Test / Kích hoạt (tắt khi chưa test đạt) / Vô hiệu (có xác nhận); lọc trạng thái + môi trường; đếm hoạt động / lỗi
+    - `/partners/new`, `/partners/{id}` — `PartnerForm`: 2 cột "Thông tin cơ bản" / "Cấu hình kết nối", nhãn trường đổi theo loại connector (VietQR: Số TK / BIN / Tên chủ TK, ẩn endpoint), điền sẵn endpoint + callback/IPN mặc định, validate tại chỗ + lỗi theo trường từ API, cảnh báo khi sửa kết nối của đối tác đang chạy; khu "Kết nối & kích hoạt" (`TestConnectionButton`, không cho test khi còn thay đổi chưa lưu); bảng lịch sử thay đổi có phân trang (`PartnerLogTable`)
+    - Chế độ chỉ xem cho `payhub-viewer` (ẩn nút ghi); sidebar thêm mục "Đối tác" (`/partners`), mục cũ trỏ `/merchants` đổi tên thành "Merchant"
+  - `registry.ts`: `connectorFromPartnerConfig()` dựng connector từ một dòng bất kỳ (kể cả chưa Active) để test
+  - `paymentdb` dev chưa có lịch sử migration → đã kiểm tra không lệch schema rồi baseline `0_init` (`prisma migrate resolve --applied`) và `migrate deploy`
+  - Test Vitest `tests/partner.test.ts` (2 test): secret không lọt ra view, trường VietQR không bí mật hiển thị rõ
+
+- **Kiểm thử** (`next build` + `next start` :4010, token Keycloak thật của `payhub.admin` / `payhub.viewer` lấy qua PKCE, MariaDB/Redis local):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Thêm VNPay partner → test kết nối → kích hoạt | ✅ với **VietQR** qua UI và API: thêm → `Ngưng`, nút Kích hoạt tắt → Test (Vietcombank, ~160–240 ms) → Kích hoạt → `Hoạt động`. 🟡 **VNPay**: thêm + test chạy thật tới VNPay sandbox nhưng trả lỗi đúng như mong đợi (`03 Invalid data format`, chữ ký phản hồi không hợp lệ) vì TMN/HashSecret là placeholder (#16) → hệ thống chặn kích hoạt (409). Cùng lý do khiến P3.3 còn 🟡 |
+  | Log thay đổi | ✅ tạo / test / trạng thái / tên (cũ → mới) / số TK hiện trong bảng lịch sử, kèm `payhub.admin@bizone.vn` + IP; secret ghi `(đã thay đổi)`; lưu không đổi gì → không thêm log |
+  | Trạng thái hiển thị đúng | ✅ Hoạt động / Ngưng / Lỗi kết nối với màu riêng; lọc "Lỗi kết nối" chỉ còn 2 cấu hình lỗi; `Active` + test lỗi → `Error`; `Error` + test đạt → `Active` |
+  | Vô hiệu hoá / kích hoạt | ✅ **Hot-plug**: vô hiệu VietQR seed → QR tiếp theo dùng ngay tài khoản của cấu hình VietQR còn Active (không restart); test + kích hoạt lại cấu hình seed → QR dùng lại tài khoản cũ |
+  | Phân quyền | ✅ không token → 401; viewer đọc 200, tạo/test → 403; header `x-user-roles` giả không token → 401; UI viewer chỉ có nút "Xem" |
+  | Validate | ✅ BIN 5 số, URL sai, connector lạ, timeout 10, thiếu secret khi tạo, đổi loại connector → 400 (kèm lỗi theo trường); UI hiện "Bắt buộc" / "Mã BIN gồm 6 chữ số" tại ô; id không tồn tại/không phải số → 404 |
+  | Không lộ secret | ✅ Hash Secret VNPay thật trong `.env.local` không xuất hiện trong bất kỳ response nào, không có chuỗi `enc:v1:`; DB lưu `enc:v1:` |
+  | Script e2e API | ✅ 31/31 + hot-plug 3/3 |
+  | Trình duyệt | ✅ danh sách, tạo, validate, test, kích hoạt, đổi tên + log, trang VNPay (secret che), bộ lọc, chế độ viewer; không lỗi console |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (24/24 test) |
+  | Dọn dẹp | ✅ dừng server :4010, xoá 7 cấu hình QA (log cascade), log test trên cấu hình seed #2, GD test, API key test, key Redis; xoá file token tạm |
+
+- **Khác biệt so với plan:**
+  - Đường dẫn API `/api/internal/partners/*` thay vì `/api/admin/partners/*` của API-Design §6.3 — thống nhất với `/api/internal/transactions` (QA-1: `proxy.ts` + `requireAdmin()`).
+  - Danh sách dùng **card** (PLAN cho phép "card/bảng"; mockup là bảng) — đủ chỗ cho kết quả test và các nút thao tác.
+  - Thêm cột `partner_config_logs.changed_by` (migration mới, đã cập nhật `database/schema_paymenthub.sql`): user Keycloak không có trong bảng `users` nên `user_id` không đủ để ghi "người thực hiện" (SRS-PH-PARTNER-01-05).
+  - "Retry policy" lưu `{max_retries, backoff_ms}` theo API-Design; connector chưa dùng (VNPay đang gọi 1 lần) — dùng khi có Route Engine/circuit breaker (P3.8, P7.x).
+  - Chưa có "Upload connector plugin" (SRS-PH-PARTNER-02) — thuộc P7.1.
+
+- **Quyết định thiết kế:**
+  - Kích hoạt gắn với kết quả test **của chính cấu hình đang lưu** (sửa kết nối là xoá kết quả test) — tránh trường hợp test đạt rồi đổi secret sai mà vẫn Active (SRS-PH-PARTNER-01-03).
+  - Đối tác đang chạy bị sửa thông tin kết nối thì về `Inactive` (UI hỏi xác nhận trước): an toàn hơn tiếp tục định tuyến bằng credential chưa kiểm.
+  - Test VNPay bằng `querydr` thay cho ping URL: chỉ cách này mới chứng minh được TMN code + Hash Secret khớp nhau.
+  - Metadata từng loại connector (`lib/partner-types.ts`) dùng chung cho API (validate, che secret) và UI (nhãn, mặc định) — thêm PSP mới chỉ cần khai báo một mục.
+
+- **Vấn đề / lưu ý:** vấn đề mở #26–#28. Khi có credential VNPay sandbox thật (#16): cập nhật trên `/partners/1` → Test → Kích hoạt để hoàn tất tiêu chí VNPay của P3.5 cùng lúc với P3.3.
 
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)

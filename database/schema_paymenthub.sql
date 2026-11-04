@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS partner_config_logs (
   old_value       TEXT,
   new_value       TEXT,
   ip_address      VARCHAR(45),
+  changed_by      VARCHAR(100) COMMENT 'Username từ token admin (P3.5)',
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_pcl_partner (partner_config_id),
   CONSTRAINT fk_pcl_partner FOREIGN KEY (partner_config_id) REFERENCES partner_configs(id) ON DELETE CASCADE

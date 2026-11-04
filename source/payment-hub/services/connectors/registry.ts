@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
+import type { PartnerConfig } from "@/generated/prisma/client";
 import type { ConnectorConfig, PaymentConnector } from "./types";
 import { VNPAY_SANDBOX_API_URL, VNPAY_SANDBOX_PAY_URL, VnpayConnector } from "./vnpay";
 
@@ -62,6 +63,20 @@ export interface ResolvedConnector {
   callbackUrl: string | null;
 }
 
+export function definitionForConnectorType(connectorType: string): ConnectorDefinition | undefined {
+  return DEFINITIONS.find((d) => d.connectorType === connectorType);
+}
+
+/**
+ * Build a connector instance from a partner_configs row regardless of its status
+ * (used by "test connection" before a config is activated). Secrets are decrypted in memory.
+ */
+export function connectorFromPartnerConfig(pc: PartnerConfig): ResolvedConnector {
+  const def = definitionForConnectorType(pc.connectorType);
+  if (!def) throw new ConnectorUnavailableError(`No connector for ${pc.connectorType}`);
+  return buildConnector(def, pc);
+}
+
 async function buildFromPartnerConfig(
   def: ConnectorDefinition,
   partnerConfigId?: number,
@@ -76,6 +91,10 @@ async function buildFromPartnerConfig(
   if (!pc) {
     throw new ConnectorUnavailableError(`No active partner config for ${def.connectorType}`);
   }
+  return buildConnector(def, pc);
+}
+
+function buildConnector(def: ConnectorDefinition, pc: PartnerConfig): ResolvedConnector {
   if (!pc.merchantCode) {
     throw new ConnectorUnavailableError(`Partner config #${pc.id} has no merchant code`);
   }

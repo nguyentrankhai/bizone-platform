@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   CreditCard,
   Users,
+  Landmark,
   Puzzle,
   Webhook,
   BarChart3,
@@ -29,7 +30,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", section: "TỔNG QUAN" },
   { href: "/transactions", icon: CreditCard, label: "Giao dịch", section: "QUẢN LÝ" },
-  { href: "/merchants", icon: Users, label: "Đối tác" },
+  { href: "/partners", icon: Landmark, label: "Đối tác" },
+  { href: "/merchants", icon: Users, label: "Merchant" },
   { href: "/connectors", icon: Puzzle, label: "Connector" },
   { href: "/webhooks", icon: Webhook, label: "Webhook" },
   { href: "/reconciliation", icon: BarChart3, label: "Đối soát" },

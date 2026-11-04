@@ -239,6 +239,8 @@ model PartnerConfigLog {
   oldValue        String?       @map("old_value") @db.Text
   newValue        String?       @map("new_value") @db.Text
   ipAddress       String?       @map("ip_address") @db.VarChar(45)
+  /// Username from the admin token (Keycloak users are not in `users`, so user_id stays null)
+  changedBy       String?       @map("changed_by") @db.VarChar(100)
   createdAt       DateTime      @default(now()) @map("created_at") @db.DateTime(0)
 
   partnerConfig   PartnerConfig @relation(fields: [partnerConfigId], references: [id], onDelete: Cascade, map: "fk_pcl_partner")

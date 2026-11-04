@@ -251,17 +251,31 @@ export class VnpayConnector implements PaymentConnector {
     ];
   }
 
+  /**
+   * Credential probe: querydr for a transaction that cannot exist. With a valid TMN code and
+   * HashSecret VNPay answers with a *signed* response — "91" (transaction not found) or "00".
+   * Bad TMN → "02"/"03"/"99"; bad secret → "97" or an unverifiable signature.
+   */
   async healthCheck(): Promise<HealthResult> {
     const started = Date.now();
     try {
-      const res = await fetch(this.config.endpoint, {
-        method: "GET",
-        redirect: "manual",
-        signal: AbortSignal.timeout(Math.min(this.config.timeoutMs, 10_000)),
+      const status = await this.getStatus({
+        txnCode: `HEALTHCHECK${Date.now()}`,
+        transactionDate: formatVnpDate(new Date()),
+        ipAddress: "127.0.0.1",
       });
       const latencyMs = Date.now() - started;
-      const healthy = res.status < 500;
-      return { healthy, latencyMs, message: `HTTP ${res.status}` };
+      const healthy = status.signatureValid && ["00", "91"].includes(status.responseCode);
+      const detail = status.message ? ` ${status.message}` : "";
+      return {
+        healthy,
+        latencyMs,
+        message: healthy
+          ? `VNPay ${this.config.environment}: kết nối và chữ ký hợp lệ (mã ${status.responseCode})`
+          : `VNPay từ chối: mã ${status.responseCode || "?"}${detail}${
+              status.signatureValid ? "" : " — chữ ký phản hồi không hợp lệ"
+            }`,
+      };
     } catch (e) {
       return {
         healthy: false,

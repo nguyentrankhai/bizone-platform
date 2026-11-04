@@ -6,7 +6,9 @@ import { Bell, Search, ChevronRight } from "lucide-react";
 const ROUTE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/transactions": "Giao dịch",
-  "/merchants": "Đối tác",
+  "/partners": "Đối tác",
+  "/partners/new": "Thêm mới",
+  "/merchants": "Merchant",
   "/connectors": "Connector",
   "/webhooks": "Webhook",
   "/reconciliation": "Đối soát",
