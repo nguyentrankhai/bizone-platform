@@ -29,6 +29,8 @@ prisma/migrations/dev.db
 # ─── Logs ────────────────────────────────────────────────────
 *.log
 logs/
+# …but not App Router route segments named "logs" (e.g. /api/internal/partners/[id]/logs)
+!source/*/app/**/logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
