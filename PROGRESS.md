@@ -175,7 +175,7 @@
 | 2026-11-02 | Dựng Keycloak 23 (Docker, port 8080) với 3 realm: `bizone`, `payment-hub`, `partners` _(đã nâng lên 26.8.1 ngày 2026-11-03)_ | `5eefade` |
 | 2026-11-02 | `.gitignore`, `.env.example`; credentials dev trong `.env.development` (gitignored) | `a7ce8cf` |
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
-| 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | _(điền sau commit)_ |
+| 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
 
 ---
 
@@ -1025,7 +1025,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone`, `source/payment-hub`, `keycloak/realms/payment-hub-realm.json`, `.github/workflows/ci.yml`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `f5c0236` (Payment Hub), `06998b9` (BizOne), `a117bf9` (CI + tài liệu) · **Vị trí:** `source/bizone`, `source/payment-hub`, `keycloak/realms/payment-hub-realm.json`, `.github/workflows/ci.yml`
 - **Bối cảnh:** rà soát toàn dự án sau P3.2/P3.3 (không thuộc task nào trong PLAN). Kết quả rà soát: build/typecheck qua, nhưng lint lỗi (`AuditTable`), 29 file lệch format, không có test/CI, và các lỗi bảo mật/nghiệp vụ dưới đây. Người dùng yêu cầu sửa toàn bộ.
 
 - **Đã làm:**
