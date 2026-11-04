@@ -32,6 +32,12 @@ import {
 } from "@/server/services/invoice.service";
 import { findProductByCode, loadCartLines, quoteCart } from "@/server/services/pricing.service";
 import { ensureDbUserId } from "@/server/services/user.service";
+import {
+  activeBranches,
+  findCustomers,
+  posCatalog,
+  storeInfo,
+} from "@/server/services/posCatalog.service";
 
 /** Managers may act on other cashiers' shifts and invoices */
 const MANAGER_ROLES = ["bizone-admin", "bizone-manager"];
@@ -79,6 +85,30 @@ export const posRouter = router({
     .query(({ input }) => sessionSummary(input.id)),
 
   // ── Selling ────────────────────────────────────────────────────────────────
+
+  /** Chi nhánh đang hoạt động (chọn khi mở ca) */
+  branches: posPermissionProcedure("pos:read").query(() => activeBranches()),
+
+  /** Thông tin cửa hàng + tài khoản ngân hàng cho VietQR */
+  storeInfo: posPermissionProcedure("pos:read").query(() => storeInfo()),
+
+  /** Lưới sản phẩm POS: giá bán + tồn tại kho bán của chi nhánh */
+  catalog: posPermissionProcedure("pos:read")
+    .input(
+      z.object({
+        branchId: z.number().int().positive(),
+        categoryId: z.number().int().positive().optional(),
+        search: z.string().max(100).optional(),
+        page: z.number().int().positive().default(1),
+        pageSize: z.number().int().min(1).max(100).default(48),
+      }),
+    )
+    .query(({ input }) => posCatalog(input)),
+
+  /** Tìm khách theo SĐT / tên / mã */
+  customers: posPermissionProcedure("pos:read")
+    .input(z.object({ q: z.string().trim().min(2).max(100) }))
+    .query(({ input }) => findCustomers(input.q)),
 
   /** Quét mã vạch / SKU → sản phẩm với giá bán hiện tại */
   scan: posPermissionProcedure("pos:read")

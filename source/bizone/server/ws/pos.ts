@@ -336,6 +336,11 @@ async function handle(client: Client, event: PosClientEvent): Promise<void> {
       cart.couponCode = null;
       return commit(sessionId, cart);
     }
+    case "display:qr": {
+      // Pure relay: the cashier asks every screen of the session to show/hide a QR
+      await publishPosEvent(sessionId, { type: "display:qr", data: event.data });
+      return;
+    }
     case "payment:process": {
       const cart = await loadCart(sessionId);
       if (cart.items.length === 0)

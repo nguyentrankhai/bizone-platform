@@ -29,6 +29,15 @@ export interface PaymentCompleted {
   pointsEarned: number;
 }
 
+/** QR the cashier wants the customer to scan (null hides it) */
+export interface DisplayQr {
+  amount: number;
+  payload: string;
+  bankName: string;
+  accountNo: string;
+  accountName: string;
+}
+
 export interface ScannedProduct {
   productId: number;
   variantId: number | null;
@@ -44,6 +53,7 @@ export type PosServerEvent =
   | { type: "payment:completed"; data: PaymentCompleted }
   | { type: "product:scanned"; data: { barcode: string; product: ScannedProduct } }
   | { type: "session:status"; data: { status: "open" | "closed"; summary?: unknown } }
+  | { type: "display:qr"; data: DisplayQr | null }
   | { type: "ack"; data: { ok: true } }
   | { type: "error"; data: { code: string; message: string } };
 
@@ -57,6 +67,7 @@ export type PosClientEvent =
   | { type: "cart:set-customer"; data: { customerId: number | null } }
   | { type: "cart:apply-coupon"; data: { code: string } }
   | { type: "cart:remove-coupon"; data?: Record<string, never> }
+  | { type: "display:qr"; data: DisplayQr | null }
   | {
       type: "payment:process";
       data: {

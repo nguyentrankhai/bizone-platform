@@ -138,8 +138,9 @@ export async function sessionSummary(id: number) {
     discounts,
     received,
     change,
-    refunds: Object.fromEntries(Object.entries(refunds).map(([k, v]) => [k, -v])),
-    refundTotal: -Object.values(refunds).reduce((s, v) => s + v, 0),
+    // Stored negative; report as positive amounts (and avoid -0 when there were none)
+    refunds: Object.fromEntries(Object.entries(refunds).map(([k, v]) => [k, Math.abs(v)])),
+    refundTotal: Math.abs(Object.values(refunds).reduce((s, v) => s + v, 0)),
     expectedCash,
     actualClosingBalance:
       session.actualClosingBalance === null ? null : Number(session.actualClosingBalance),

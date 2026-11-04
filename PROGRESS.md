@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.5)
+**Cập nhật lần cuối:** 2026-11-04 (P2.6)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 5 | 0 | 5 |
+| 2 — BizOne Core MVP | 10 | 6 | 0 | 4 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **13** | **0** | **38** |
+| **Tổng** | **51** | **14** | **0** | **37** |
 
 ---
 
@@ -42,6 +42,8 @@
 | 11 | Seed chưa có chi nhánh/kho mặc định → POS cần tạo chi nhánh + kho (gắn `branch_id`) trước khi mở ca | P2.5 | P4.6 Multi-store (hoặc seed) |
 | 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` | P2.5 | P6.5 / khi triển khai |
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
+| 14 | Chưa có UI cài đặt tài khoản ngân hàng cho VietQR (`store_config.bank_*`) và tên cửa hàng — đang sửa trực tiếp trong DB | P2.6 | Module Cài đặt (P4.x) |
+| 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -84,7 +86,7 @@
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
-| P2.6 | POS Module — UI | ⬜ | — | |
+| P2.6 | POS Module — UI | ✅ | — | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
@@ -642,3 +644,47 @@ Ngoài plan, theo yêu cầu người dùng.
   - P2.6 (POS UI) dùng `lib/pos/sync-client.ts` + `lib/pos/cart.ts`; cần tạo chi nhánh + kho gắn chi nhánh trước khi mở ca (vấn đề mở #11).
   - Chạy nhiều instance WS cần sticky theo phiên (vấn đề mở #13); image Docker chưa chạy process WS/worker (vấn đề mở #12).
   - Nếu Redis không truy cập được thì không tạo được hóa đơn (idempotency là bắt buộc — cố ý chặn thay vì tạo trùng).
+
+---
+
+### P2.6 — POS Module — UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/app/pos/`, `source/bizone/components/pos/`, `source/bizone/hooks/usePosWebSocket.ts`, `source/bizone/hooks/useBarcodeScan.ts`, `source/bizone/lib/pos/vietqr.ts`
+
+- **Đã làm** (theo `mockups-bizone/02-pos.html`):
+  - **`/pos`** (`PosClient`): 2 panel — `ProductGrid` (ô tìm/quét auto-focus, chip danh mục, thẻ SP có giá + tồn tại kho chi nhánh, chọn biến thể, hết hàng bị khóa) và `CartPanel` (±SL nút 44px, xóa, chọn khách theo SĐT/tên, mã giảm giá, tạm tính / giảm theo dòng / ưu đãi hạng / coupon / VAT đã gồm, nút "Thanh toán" lớn + CK/Thẻ/Ví/QR); thanh trên: ca, trạng thái đồng bộ (Trực tuyến/Cục bộ), Màn hình khách, In lại, Khóa ca, Phím tắt; toast khi thêm SP
+  - **`PaymentModal`**: 5 phương thức, nhập tiền bằng bàn phím số POS (`components/pos/NumericKeypad.tsx` bọc keypad P1.7 + nút mệnh giá gợi ý), thanh toán kết hợp, tiền thiếu/tiền thừa, **VietQR** cho chuyển khoản/QR (đồng thời hiện trên màn hình khách), Enter/F9 xác nhận, màn hình thành công (tiền thừa, điểm cộng, In hóa đơn, Đơn mới)
+  - **`/pos/display?session=`** (`CustomerDisplay`, presentation mode): danh sách SP, tổng tiền cỡ lớn, QR thanh toán, lời cảm ơn + tiền thừa sau thanh toán (tự ẩn 8s), báo "Cục bộ" khi mất WS, "Quầy đã đóng ca"
+  - **`/pos/session`** (`SessionClient`): mở ca (chi nhánh, tiền đầu ca), tổng kết ca, khóa ca nhập tiền mặt thực tế với chênh lệch tính trực tiếp, lịch sử ca
+  - **In hóa đơn** (`Receipt`): hóa đơn nhiệt 80mm chỉ hiện khi in (`print:block`, phần POS `print:hidden`) + `window.print()`
+  - **Phím tắt**: F1 trợ giúp, F2 tìm/quét, F3 khách hàng, F4 mã giảm giá, F7 mở màn hình khách, F8 xóa giỏ, F9 thanh toán/xác nhận, F10 in lại, F12 khóa ca, Esc đóng (F5/F11 để lại cho trình duyệt)
+  - **Hooks**: `usePosWebSocket` (WS là nguồn chính; mất WS → giỏ cục bộ tính giá qua `pos.quote`, phát sang màn hình khách bằng BroadcastChannel; kết nối lại → đẩy giỏ cục bộ lên server; thanh toán luôn qua tRPC `createInvoice` nên vẫn chạy khi WS chết), `useBarcodeScan` (bắt máy quét USB toàn trang khi focus không nằm trong ô nhập)
+  - **API bổ sung**: `pos.branches`, `pos.storeInfo`, `pos.catalog` (giá + tồn theo kho của chi nhánh, gồm danh mục con), `pos.customers`; sự kiện WS `display:qr`; `lib/pos/vietqr.ts` (payload EMVCo NAPAS + CRC16); seed thêm khóa `bank_bin`, `bank_name`, `bank_account_no`, `bank_account_name`; cài `qrcode`
+
+- **Kiểm thử** (build production `next start` :3000 + `dist/pos.mjs` :3002, token Keycloak thật, trình duyệt tích hợp — tab thu ngân + tab màn hình khách):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Mở ca → bán hàng → thanh toán → in hóa đơn → khóa ca: full flow < 30s | ✅ **7,3 giây** (gồm ~5s chờ cố định giữa các bước): mở ca 500.000 → quét 2 mã vạch + chọn 1 SP (750.000₫) → F9 → 800.000₫ tiền mặt → Enter (thối 50.000₫) → In hóa đơn (`window.print` gọi 1 lần, hóa đơn 80mm đúng dòng/tổng/thối) → Enter (đơn mới, focus về ô quét) → F12 → nhập 1.250.000 → Khóa ca (chênh lệch 0₫) |
+  | 2 màn hình sync | ✅ Màn hình khách khớp từng dòng với thu ngân; quét → màn hình khách cập nhật **15ms**, giảm SL → **6ms**, thanh toán → lời cảm ơn **57ms**; tắt process WS → cả 2 chuyển "Cục bộ", thêm SP vẫn đồng bộ qua BroadcastChannel **23ms**; bật lại WS → "Trực tuyến", giỏ cục bộ được đẩy lên Redis |
+  | QR code hiển thị | ✅ Chọn Chuyển khoản → VietQR (Vietcombank, số TK, 2.360.000₫) hiện trên modal và màn hình khách; payload kiểm tra độc lập bằng Python: TLV đúng, CRC16 khớp, ghi chú bỏ dấu; thanh toán xong QR tự ẩn |
+  | Phím tắt hoạt động | ✅ F1 mở bảng phím tắt, Esc đóng; F2/F3/F4 focus đúng ô; chọn khách qua F3, áp `P26SALE50K` qua F4 (−50.000₫); F7 mở `/pos/display?session=4`; F8 xóa giỏ; F9 mở thanh toán (giỏ trống thì không); F10 in lại hóa đơn gần nhất; F12 sang khóa ca |
+  | Nút ≥ 44×44px, font 16px+, keypad lớn | ✅ Nút SL/thanh toán/keypad cao 44–56px; ô tìm/nhập tiền 16–24px |
+  | Lint / typecheck / build | ✅ Lint 0 lỗi (3 warning cũ), typecheck sạch, `next build` OK (`/pos`, `/pos/session`, `/pos/display`), `build:jobs` OK; file P2.6 đạt Prettier (22 file cũ chưa — vấn đề mở #9) |
+
+  Sửa trong lúc test: số hoàn trả hiện "−-0₫" (trả `-0`) → service trả số dương, UI chỉ hiện khi > 0; toast che nút "Xác nhận" ở màn hẹp → modal thanh toán `z-[60]`; ở 800–1024px giỏ hàng bị đẩy ra ngoài và tên SP bị cắt → cột trái `minmax(0,1fr)`, giỏ 340/420px, dòng giỏ 2 hàng, nhãn nút thanh trên chỉ hiện từ `xl`.
+  Dọn dẹp: dừng server/WS, xoá dữ liệu test P26 (chi nhánh, kho, SP, khách, coupon, ca, hóa đơn, phiếu kho, user tự tạo), trả `bank_*` về rỗng, xoá key Redis test.
+
+- **Khác biệt so với plan:**
+  - Thêm `app/pos/display/page.tsx`, `components/pos/{PosClient,SessionClient,Receipt,PaymentQr}.tsx` và 4 query `pos.*` mà plan không liệt kê.
+  - Phím tắt F1–F12 trừ F5/F6/F11 (F5 tải lại, F11 toàn màn hình giữ cho trình duyệt; F6 chưa gán).
+  - Mã QR là VietQR tới tài khoản ngân hàng của cửa hàng (cấu hình `store_config`); QR qua Payment Hub (đối soát tự động) thuộc P3.4.
+
+- **Quyết định thiết kế:**
+  - Thanh toán gọi tRPC `pos.createInvoice` (kèm idempotency key sinh mỗi lần mở modal) thay vì `payment:process` qua WS — cùng một đường cho cả chế độ trực tuyến và cục bộ, trả về hóa đơn ngay; server vẫn đẩy `payment:completed` tới màn hình khách.
+  - Hóa đơn in bằng CSS in ấn trong cùng trang (không mở cửa sổ mới) để máy in nhiệt nhận đúng khổ 80mm.
+  - Màn hình khách là trang riêng nhận dữ liệu qua WS (chạy được trên thiết bị khác), BroadcastChannel chỉ là dự phòng khi cùng trình duyệt.
+
+- **Vấn đề / lưu ý:**
+  - Cấu hình ngân hàng/tên cửa hàng chưa có UI (vấn đề mở #14); tên thu ngân hiện là username (#15).
+  - Token dev lấy từ env `DEV_AUTH_TOKEN` hết hạn sau 15 phút (vấn đề mở #7) — WS và API sẽ báo lỗi khi token hết hạn.

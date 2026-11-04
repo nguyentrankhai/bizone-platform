@@ -116,14 +116,16 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── api/inventory/alerts/route.ts  # P2.4 — SSE cảnh báo tồn thấp (relay Redis "bizone:low-stock")
     │   │   ├── products/            # P2.2 — UI sản phẩm
     │   │   ├── warehouse/           # P2.4 — kho: tồn, phiếu nhập/xuất (transactions/new), stock-take, transfer
+    │   │   ├── pos/                 # P2.6 — /pos (bán hàng), /pos/session (mở/khóa ca), /pos/display?session= (màn hình khách)
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
     │   ├── components/ui/           # shadcn/ui components (style base-nova)
     │   ├── components/inventory/    # P2.4 — WarehouseTable, StockTakeForm, TransferForm, BarcodeScanInput…
-    │   ├── hooks/                   # React hooks dùng chung (useLowStockAlerts: đọc SSE bằng fetch + Bearer)
+    │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal, CustomerDisplay, Receipt, SessionClient
+    │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), trpc.ts, dev-auth.ts)
-    │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel)
+    │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
     │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
@@ -167,7 +169,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run dev:realtime` / `npm run dev:worker` | POS WebSocket (port `POS_WS_PORT`, mặc định 3002) / BullMQ worker (tsx watch, đọc `.env.local`) |
 | `npm run build:jobs` | Bundle ESM `dist/pos.mjs` + `dist/worker.mjs` (chạy `node --env-file=.env.local dist/pos.mjs`) |
 
-**Lưu ý POS realtime**: token gửi qua subprotocol `new WebSocket(url, ["bizone-pos", token])` + `?tenant=`; giỏ hàng lưu Redis `pos:cart:{sessionId}`, mọi thay đổi publish `bizone:pos:{sessionId}`. Mutation POS dùng `posPermissionProcedure` (300 req/phút). Bundle phải là ESM vì Prisma 7 client dùng `import.meta.url`.
+**Lưu ý POS realtime**: token gửi qua subprotocol `new WebSocket(url, ["bizone-pos", token])` + `?tenant=`; giỏ hàng lưu Redis `pos:cart:{sessionId}`, mọi thay đổi publish `bizone:pos:{sessionId}`. Mutation POS dùng `posPermissionProcedure` (300 req/phút). Bundle phải là ESM vì Prisma 7 client dùng `import.meta.url`. UI POS (P2.6) cần cả `npm run dev` và `npm run dev:realtime`; QR chuyển khoản lấy tài khoản từ `store_config` (`bank_bin`, `bank_account_no`, `bank_name`, `bank_account_name`).
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 
