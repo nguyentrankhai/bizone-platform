@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (Rà soát chất lượng & sửa lỗi QA-1; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-04 (P3.4 VietQR Generator — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 2 | 1 | 5 |
+| 3 — Payment Hub MVP | 8 | 2 | 2 | 4 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **20** | **1** | **30** |
+| **Tổng** | **51** | **20** | **2** | **29** |
 
 ---
 
@@ -51,6 +51,9 @@
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
 | 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
 | 22 | Mapper `merchant_id` đã có trên client `payhub-admin-console`, nhưng chưa user Keycloak nào được gán thuộc tính này (token admin hiện xem mọi merchant) | QA-1 | Khi có tài khoản merchant |
+| 23 | VietQR đang dùng **tài khoản demo** (`VIETQR_*` trong `.env.development` / `.env.local`: Vietcombank `0011001234567`) → điền tài khoản nhận thật rồi `npm run db:seed` | P3.4 | Người dùng |
+| 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` | P3.4 | P5.4 Đối soát / connector ngân hàng |
+| 25 | `POST /api/v1/transactions` chưa nhận `payment_method: vietqr` (trả kèm `qr_code` như API-Design §5.1) và trang `/pay/{txn}` chưa có lựa chọn VietQR — merchant phải gọi `/api/v1/qr/generate` sau khi tạo GD | P3.4 | P3.8 Route Engine |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -114,7 +117,7 @@
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
-| P3.4 | VietQR Generator | ⬜ | — | |
+| P3.4 | VietQR Generator | 🟡 | — | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | ⬜ | — | |
 | P3.6 | Webhook Engine | ⬜ | — | |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
@@ -1021,6 +1024,56 @@ Ngoài plan, theo yêu cầu người dùng.
   - Khoá mã hoá đặt ở env (`PARTNER_ENCRYPTION_KEY`), chưa dùng Vault/KMS — đủ cho MVP; đổi khoá cần re-encrypt.
 
 - **Vấn đề / lưu ý:** vấn đề mở #16–#19. Để hoàn tất P3.3: điền TMN/HashSecret sandbox thật vào `.env.development` + `source/payment-hub/.env.local`, `npm run db:seed`, tạo GD và thanh toán bằng thẻ test NCB; refund GD đó qua `VnpayConnector.refund()`.
+
+
+### P3.4 — VietQR Generator
+
+- **Trạng thái:** 🟡 (2026-11-04) — còn tiêu chí "app ngân hàng quét được" chờ người dùng quét thử · **Commit:** — · **Vị trí:** `source/payment-hub/services/qr/`, `server/services/qr.service.ts`, `server/routes/qr.ts`, `app/api/v1/qr/`, `app/qr/[file]/`
+- **Đã làm:**
+  - `services/qr/vietqr.ts` — payload EMVCo/VietQR (NAPAS 247, dịch vụ `QRIBFTTA` chuyển đến tài khoản, QR động `01=12`, VND `704`, số tiền tag 54, nội dung tag 62-08), CRC-16/CCITT-FALSE, chuẩn hoá nội dung (bỏ dấu, A–Z/0–9/space, ≤25 ký tự), `parseVietQrPayload()` để tự kiểm, render PNG đúng 200/300/500 px (lib `qrcode`, ECC M)
+  - `server/services/qr.service.ts` — `generateQr()`: GD phải thuộc merchant, `Created`/`Pending`, chưa hết hạn, VND; mỗi (GD, loại, size) **một QR hiện hành** → gọi lại trả QR cũ (Redis → DB), QR hết hạn → sinh QR mới (**auto refresh**), đánh dấu QR cũ `is_expired=1` + xoá ảnh; hạn QR = `min(now + expires_in_seconds, transactions.expired_at)` (mặc định `QR_EXPIRES_SECONDS=900`, 60…86 400 s); khoá dòng `transactions … FOR UPDATE` để request song song không tạo trùng; GD `Created → Pending` (`payment_method = vietqr`, `partner_config_id`), ghi `transaction_logs`, phát event realtime
+  - Lưu `qr_codes` (raw_data, image_base64, image_url, size, expires_at); cache Redis `payhub:qr:{txnId}:{type}:{size}` (TTL = thời gian còn lại); ảnh PNG `payhub:qr:img:{token}` (token 128-bit ngẫu nhiên)
+  - API (API key + HMAC như `/api/v1/transactions`):
+    - `POST /api/v1/qr/generate` — `transaction_id` (txn_code hoặc id số), `type` (`VietQR`; `NapasQR`/`PartnerQR` → 400 chưa hỗ trợ), `size` 200/300/500, `format` `all|base64|url|raw`, `expires_in_seconds`; 201 khi sinh mới, 200 khi trả QR hiện hành (`reused`, `refreshed`); header `Server-Timing`
+    - `GET /api/v1/qr/{transaction_id}?size=&format=` — QR hiện hành, tự refresh khi hết hạn (dùng cho màn hình hiển thị QR)
+    - Public `GET /qr/{token}.png` — ảnh QR, chỉ phục vụ khi QR còn hạn (404 sau đó)
+    - Rate limit riêng 60 req/phút/key (API-Design: "QR Generate")
+  - `server/jobs/expireQrCodes.ts` + worker: mỗi phút (sau job hết hạn GD) đánh dấu QR quá hạn **hoặc** GD đã kết thúc và xoá ảnh (SRS §: dữ liệu QR tạm xoá khi hết hạn/hoàn tất)
+  - `prisma/seed.ts` — upsert partner config `VietQR` từ `VIETQR_BANK_BIN/ACCOUNT_NO/ACCOUNT_NAME` (BIN + tên chủ TK mã hoá AES-256-GCM), bật connector `vietqr`; `.env.example` thêm `VIETQR_*`, `QR_EXPIRES_SECONDS`
+  - Test Vitest `tests/vietqr.test.ts` (8 test): CRC chuẩn (`"123456789"` → `29B1`), cấu trúc TLV, phát hiện payload bị sửa, chuẩn hoá nội dung, input sai, PNG 200/300/500 giải mã lại đúng payload (jsQR)
+
+- **Kiểm thử** (`next build` + `next start` :4010, MariaDB/Redis local, script e2e ký HMAC độc lập với code app, 2 merchant):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Sinh QR thành công | ✅ `POST /api/v1/qr/generate` → 201; GD `Created → Pending`, `payment_method=vietqr`, log `status_changed:pending`, 1 dòng `qr_codes` |
+  | App ngân hàng quét được | 🟡 Payload **trùng khớp từng byte** với QR do img.vietqr.io sinh cho cùng tài khoản/số tiền/nội dung (giải mã ảnh của họ bằng jsQR); ảnh của Hub (base64 và `image_url`, cả 3 kích thước) giải mã lại đúng payload; CRC hợp lệ. **Chưa quét bằng app ngân hàng thật** (tài khoản demo) |
+  | Base64 + URL + raw data trả về | ✅ `format=all` trả cả 3; `base64`/`url`/`raw` chỉ trả phần tương ứng (+ raw); `image_url` → 200 `image/png` |
+  | QR hết hạn tự động refresh | ✅ QR 60 s: sau hạn `image_url` → 404, `GET /api/v1/qr/{txn}` trả QR mới (`refreshed: true`, `qr_id` mới, ảnh mới dùng được), QR cũ `is_expired=1`, ảnh bị xoá — đúng cho cả 2 trường hợp: QR đã bị job đánh dấu trước và QR chưa bị đánh dấu |
+  | Hiệu năng < 1 s | ✅ 20 QR 500 px mới: p50 19 ms, p95 22 ms; QR từ cache 9 ms; 15 request song song max 83 ms |
+  | Cache Redis | ✅ gọi lại → 200 `reused`, cùng `qr_id` |
+  | Lỗi | ✅ GD không tồn tại → 404; GD của merchant khác → 404; size 250 / thiếu `transaction_id` / `expires_in_seconds` 10 / type `NapasQR` → 400; sai chữ ký / không header → 401; GD `Success` → 409; GD quá hạn → 409; partner VietQR Inactive → 503 và GD giữ `Created`; token ảnh sai → 404; > 60 req/phút → 429 |
+  | Tranh chấp | ✅ 15 request song song cùng GD → 1 `qr_id`, 1 dòng `qr_codes` |
+  | Hạn QR không vượt hạn GD | ✅ `expires_in_seconds=3600` với GD hạn 2 phút → `expires_at` = hạn GD |
+  | Job hết hạn | ✅ QR quá hạn → `is_expired=1`, ảnh `NULL`; GD chuyển `Success` → cả 3 QR của GD bị đánh dấu |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (22/22 test; 3 route mới đều `ƒ`) |
+  | Dọn dẹp | ✅ dừng server :4010, xoá 56 GD test (QR/log cascade), API key test, merchant QA34, 108 key Redis test; giữ partner config VietQR (dữ liệu seed) |
+
+- **Khác biệt so với plan:**
+  - Không tạo model `qr_codes` mới — model `QrCode` đã có từ P1.4 (đúng `schema_paymenthub.sql`).
+  - Input/response theo **PLAN + API-Design §5.2** (`transaction_id`, snake_case), không theo `OpenAPI` (`externalId`, `partnerId`, `amount` — tự tạo GD). Hai tài liệu mâu thuẫn; PLAN là tiêu chí nghiệm thu.
+  - `image_url` phục vụ từ Payment Hub (`/qr/{token}.png`, Redis) thay vì MinIO/S3 như SRS §2: ảnh QR là dữ liệu tạm, cần biến mất khi hết hạn — Redis TTL làm điều đó, không phải dọn bucket.
+  - "Tự động refresh" làm ở phía server: QR hết hạn được thay khi có request tiếp theo (`GET /api/v1/qr/{txn}` hoặc `generate`); chưa có màn hình nào tự poll (trang `/pay` chưa có VietQR — vấn đề #25).
+  - Chỉ hỗ trợ `VietQR`; `NapasQR` (GĐ 2 theo SRS §8.3) và `PartnerQR` (MoMo/ZaloPay — P5.x) trả 400.
+  - Không dùng API vietqr.io (`VIETQR_CLIENT_ID/API_KEY` trong `.env.development`) — chuẩn EMVCo sinh được cục bộ, không phụ thuộc dịch vụ ngoài, nhanh hơn.
+
+- **Quyết định thiết kế:**
+  - Tài khoản nhận lưu trong `partner_configs` (`connector_type='VietQR'`) để P3.5 quản lý chung với các đối tác khác: `api_key` = BIN, `merchant_code` = số TK, `secret_key` = tên chủ TK (`VIETQR_CONFIG_FIELDS`). Bảng không có cột cấu hình tuỳ biến nên tái dụng cột có sẵn thay vì thêm migration.
+  - Nội dung chuyển khoản = `txn_code` bỏ dấu `-` (vd. `TXN20261104A1B2C3`, 17 ký tự): ngân hàng hay bỏ ký tự đặc biệt, chuỗi chữ-số liền là khoá đối soát ổn định nhất.
+  - VietQR/EMVCo không có trường hạn dùng → hạn QR do Hub quản lý; tiền chuyển vào sau hạn vẫn tới tài khoản → cần đối soát (vấn đề #24).
+  - Sinh ảnh ngoài transaction DB (tất định theo payload), chỉ khoá dòng GD trong lúc kiểm tra/ghi → không giữ lock khi render.
+
+- **Vấn đề / lưu ý:** vấn đề mở #23–#25. Để hoàn tất P3.4: quét QR mẫu bằng app ngân hàng (app hiển thị đúng ngân hàng, số TK, số tiền, nội dung là đạt); khi có tài khoản thật, điền `VIETQR_*` + `npm run db:seed`.
 
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)

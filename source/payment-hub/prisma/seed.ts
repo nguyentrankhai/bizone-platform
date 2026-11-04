@@ -122,7 +122,35 @@ async function main() {
     vnpay = "VNPay Sandbox partner config upserted";
   }
 
-  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}`);
+  // VietQR partner config (P3.4) — beneficiary bank account for bank-transfer QR.
+  // api_key = bank BIN, merchant_code = account number, secret_key = account holder name
+  // (see VIETQR_CONFIG_FIELDS in server/services/qr.service.ts).
+  let vietqr = "skipped (VIETQR_BANK_BIN / VIETQR_ACCOUNT_NO / VIETQR_ACCOUNT_NAME not set)";
+  const bin = process.env.VIETQR_BANK_BIN;
+  const accountNo = process.env.VIETQR_ACCOUNT_NO;
+  const accountName = process.env.VIETQR_ACCOUNT_NAME;
+  if (bin && accountNo && accountName && process.env.PARTNER_ENCRYPTION_KEY) {
+    const data = {
+      connectorType: "VietQR",
+      name: process.env.VIETQR_CONFIG_NAME ?? "VietQR",
+      apiKey: encryptSecret(bin),
+      secretKey: encryptSecret(accountName),
+      merchantCode: accountNo,
+      timeout: 30000,
+      status: "Active" as const,
+      environment: "Production" as const, // no sandbox: VietQR is a static NAPAS standard
+    };
+    const existing = await prisma.partnerConfig.findFirst({ where: { connectorType: "VietQR" } });
+    if (existing) await prisma.partnerConfig.update({ where: { id: existing.id }, data });
+    else await prisma.partnerConfig.create({ data });
+    await prisma.connector.update({
+      where: { code: "vietqr" },
+      data: { status: "Installed", isActive: true },
+    });
+    vietqr = "VietQR partner config upserted";
+  }
+
+  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}; ${vietqr}`);
 }
 
 main()

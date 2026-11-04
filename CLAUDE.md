@@ -150,10 +150,13 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── components/ui/           # shadcn/ui
         ├── app/api/ipn/vnpay/       # P3.3 — IPN VNPay (public, verify HMAC-SHA512)
         ├── app/pay/                 # P3.3 — /pay/{txnCode} (chọn PT → PSP), /pay/vnpay/return (redirect)
+        ├── app/api/v1/qr/           # P3.4 — POST generate, GET {transaction_id} (QR hiện hành, tự refresh khi hết hạn)
+        ├── app/qr/[file]/           # P3.4 — ảnh QR public /qr/{token}.png (từ Redis, hết hạn cùng QR)
         ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
-        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN)
+        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4)
         ├── services/
         │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
+        │   ├── qr/vietqr.ts         # P3.4 — payload EMVCo/VietQR (NAPAS 247), CRC16, render PNG 200/300/500
         │   ├── queue/               # BullMQ connection, queues, enqueueWebhook()
         │   ├── webhook/deliver.ts   # gửi webhook ký HMAC-SHA256
         │   └── worker.ts            # process worker (BullMQ)
@@ -195,6 +198,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `docker compose up -d --build` | app :4000, realtime :4001, worker, MariaDB 10.11 (host 3308), Redis (host 6381) |
 
 **Lưu ý connector (P3.3)**: secret đối tác trong `partner_configs` mã hoá bằng `PARTNER_ENCRYPTION_KEY` (base64 32 byte, có trong `.env.local`); `npm run db:seed` tạo partner config "VNPay Sandbox" từ `VNPAY_*`. `/api/ipn/*` public (không JWT); `/api/v1/*` có `X-Api-Key` xác thực HMAC ở route handler. IPN là nguồn sự thật — redirect không đổi trạng thái.
+
+**Lưu ý VietQR (P3.4)**: tài khoản nhận lấy từ `partner_configs` `connector_type='VietQR'` Active — `api_key` = BIN ngân hàng (mã hoá), `merchant_code` = số tài khoản, `secret_key` = tên chủ TK (mã hoá); seed từ `VIETQR_BANK_BIN/ACCOUNT_NO/ACCOUNT_NAME` (hiện là **tài khoản demo**). Nội dung CK = `txn_code` bỏ dấu `-`. Mỗi (GD, loại, size) có 1 QR hiện hành; cache Redis `payhub:qr:{txnId}:{type}:{size}`, ảnh `payhub:qr:img:{token}`; worker đánh dấu QR hết hạn mỗi phút. Rate limit QR 60 req/phút/key.
 
 **Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub (mọi event phải có `merchantId`). WS yêu cầu token qua subprotocol `["payhub-events", token]`, role `payhub-admin`/`payhub-viewer`.
 

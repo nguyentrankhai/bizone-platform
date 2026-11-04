@@ -4,6 +4,7 @@ import { queueConnection } from "./queue/connection";
 import { QUEUE_NAMES } from "./queue/queues";
 import { deliverWebhook, type WebhookJob } from "./webhook/deliver";
 import { runExpireJob } from "@/server/jobs/expireTransactions";
+import { runExpireQrJob } from "@/server/jobs/expireQrCodes";
 
 const webhookWorker = new Worker<WebhookJob>(QUEUE_NAMES.webhookDelivery, deliverWebhook, {
   connection: queueConnection(),
@@ -32,16 +33,20 @@ webhookWorker
     process.exit(1);
   });
 
-// Run expire job every minute
+// Expire overdue transactions, then their QR codes, every minute
 const EXPIRE_INTERVAL_MS = 60_000;
-setInterval(() => {
-  runExpireJob().catch((err: unknown) =>
+async function runExpiryJobs(): Promise<void> {
+  await runExpireJob().catch((err: unknown) =>
     console.error("[expire-job] error:", err instanceof Error ? err.message : err),
   );
-}, EXPIRE_INTERVAL_MS);
+  await runExpireQrJob().catch((err: unknown) =>
+    console.error("[qr-expire-job] error:", err instanceof Error ? err.message : err),
+  );
+}
+setInterval(() => void runExpiryJobs(), EXPIRE_INTERVAL_MS);
 
-// Run once at startup to catch any already-expired transactions
-void runExpireJob().catch(() => {});
+// Run once at startup to catch anything that expired while the worker was down
+void runExpiryJobs();
 
 let shuttingDown = false;
 
