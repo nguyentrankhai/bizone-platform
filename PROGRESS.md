@@ -104,7 +104,7 @@
 |----|------|------------|--------|---------|
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
-| P3.3 | VNPay Connector | 🟡 | _(điền sau commit)_ | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
+| P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | ⬜ | — | |
 | P3.5 | Partner Config UI | ⬜ | — | |
 | P3.6 | Webhook Engine | ⬜ | — | |
@@ -968,7 +968,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.3 — VNPay Connector
 
-- **Trạng thái:** 🟡 (2026-11-04) · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/payment-hub/services/connectors/`, `server/routes/vnpay-*.ts`, `server/services/payment.service.ts`
+- **Trạng thái:** 🟡 (2026-11-04) · **Commit:** `c83a1e2` · **Vị trí:** `source/payment-hub/services/connectors/`, `server/routes/vnpay-*.ts`, `server/services/payment.service.ts`
 - **Đã làm:**
   - `services/connectors/types.ts` — interface `PaymentConnector` theo SRS §3.3.2 (`createTransaction`, `processResult`, `verifySignature`, `refund`, `getStatus`, `getConfigSchema`, `healthCheck`) + Core DTO (`PaymentRequest`, `PaymentResult`, `RefundRequest`…)
   - `services/connectors/vnpay/vnpay.util.ts` — chuẩn hoá tham số VNPay 2.1.0 (sort key, `encodeURIComponent` + `%20→+`), HMAC-SHA512, checksum `|` cho merchant_webapi, ngày `yyyyMMddHHmmss` GMT+7, bỏ dấu `vnp_OrderInfo`, map `vnpay_qr/atm/card` → `vnp_BankCode`
