@@ -15,6 +15,7 @@ const STATUSES: { value: string; label: string }[] = [
 
 const METHODS: { value: string; label: string }[] = [
   { value: "", label: "Tất cả phương thức" },
+  { value: "vnpay", label: "VNPay" },
   { value: "vnpay_qr", label: "VNPay QR" },
   { value: "vnpay_atm", label: "VNPay ATM" },
   { value: "momo_qr", label: "MoMo" },

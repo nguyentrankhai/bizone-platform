@@ -4,6 +4,7 @@ import { extractBearerToken, verifyJwt } from "@/lib/auth";
 const PUBLIC_PATHS = [
   "/api/health",
   "/api/v1/webhooks", // inbound partner webhooks (verified by HMAC, not JWT)
+  "/api/ipn/", // PSP IPN callbacks (verified by the connector's signature, not JWT)
   "/_next",
   "/favicon.ico",
 ];
@@ -22,6 +23,16 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (isPublicPath(pathname)) return NextResponse.next();
 
   if (!pathname.startsWith("/api/")) return NextResponse.next();
+
+  // Merchant API (/api/v1/*) authenticates with API key + HMAC in the route handler.
+  // Strip identity headers so a merchant request can never impersonate a JWT user.
+  if (pathname.startsWith("/api/v1/") && request.headers.has("x-api-key")) {
+    const headers = new Headers(request.headers);
+    for (const h of ["x-user-id", "x-user-username", "x-user-roles", "x-merchant-id"]) {
+      headers.delete(h);
+    }
+    return NextResponse.next({ request: { headers } });
+  }
 
   const authHeader = request.headers.get("authorization");
   const token = extractBearerToken(authHeader);

@@ -10,6 +10,12 @@ import {
   listTransactions,
   type ListTransactionsInput,
 } from "@/server/services/transaction.service";
+import { PaymentError, initiatePayment } from "@/server/services/payment.service";
+import {
+  ConnectorUnavailableError,
+  resolveConnectorForMethod,
+  supportedPaymentMethods,
+} from "@/services/connectors/registry";
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
@@ -25,6 +31,12 @@ const createTxnSchema = z.object({
   customer_phone: z.string().max(50).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   expiry_minutes: z.number().int().min(1).max(1440).default(15),
+  /** Optional: go straight to a PSP (payment_url = PSP URL). Omit → hosted method picker. */
+  payment_method: z
+    .string()
+    .refine((m) => supportedPaymentMethods().includes(m), "Unsupported payment_method")
+    .optional(),
+  customer_ip: z.string().max(45).optional(),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -82,6 +94,18 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     if (cached) return ok(cached);
   }
 
+  // Fail fast if the requested PSP is not configured (before creating the transaction)
+  if (input.payment_method) {
+    try {
+      await resolveConnectorForMethod(input.payment_method);
+    } catch (e) {
+      if (e instanceof ConnectorUnavailableError) {
+        return err("SERVICE_UNAVAILABLE", "Payment method is not available", 503);
+      }
+      throw e;
+    }
+  }
+
   const txn = await createTransaction(
     {
       merchantTxnId: input.merchant_txn_id,
@@ -102,13 +126,32 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     merchant.apiKeyId,
   );
 
+  let paymentUrl = txn.paymentUrl;
+  let status: string = txn.status;
+  if (input.payment_method) {
+    try {
+      const initiated = await initiatePayment(
+        txn.txnCode,
+        input.payment_method,
+        input.customer_ip ?? getClientIp(req),
+      );
+      paymentUrl = initiated.paymentUrl;
+      status = "Pending";
+    } catch (e) {
+      if (!(e instanceof PaymentError)) throw e;
+      // Transaction exists; the customer can still pick a method on the hosted page.
+      console.error(`[transactions] initiatePayment failed for ${txn.txnCode}: ${e.message}`);
+    }
+  }
+
   const response = {
     transaction_id: txn.id,
     txn_code: txn.txnCode,
-    status: txn.status,
+    status,
     amount: txn.amount.toString(),
     currency: txn.currency,
-    payment_url: txn.paymentUrl,
+    payment_method: input.payment_method ?? null,
+    payment_url: paymentUrl,
     expired_at: txn.expiredAt?.toISOString(),
     created_at: txn.createdAt.toISOString(),
   };

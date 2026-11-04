@@ -146,8 +146,12 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     └── payment-hub/                 # P1.2 — Payment Hub (NextJS 16 + BullMQ + WebSocket)
         ├── app/                     # App Router; api/health/route.ts kiểm tra MariaDB + Redis
         ├── components/ui/           # shadcn/ui
-        ├── lib/                     # db.ts (pool mariadb), redis.ts (ioredis), events.ts (publishEvent)
+        ├── app/api/ipn/vnpay/       # P3.3 — IPN VNPay (public, verify HMAC-SHA512)
+        ├── app/pay/                 # P3.3 — /pay/{txnCode} (chọn PT → PSP), /pay/vnpay/return (redirect)
+        ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent), crypto.ts (AES-256-GCM secret đối tác)
+        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN)
         ├── services/
+        │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
         │   ├── queue/               # BullMQ connection, queues, enqueueWebhook()
         │   ├── webhook/deliver.ts   # gửi webhook ký HMAC-SHA256
         │   └── worker.ts            # process worker (BullMQ)
@@ -181,6 +185,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run dev:worker` / `npm run dev:realtime` | BullMQ worker / WebSocket relay (tsx watch, đọc `.env.local`) |
 | `npm run build` + `npm run build:jobs` | Build Next + bundle worker/relay ra `dist/` |
 | `docker compose up -d --build` | app :4000, realtime :4001, worker, MariaDB 10.11 (host 3308), Redis (host 6381) |
+
+**Lưu ý connector (P3.3)**: secret đối tác trong `partner_configs` mã hoá bằng `PARTNER_ENCRYPTION_KEY` (base64 32 byte, có trong `.env.local`); `npm run db:seed` tạo partner config "VNPay Sandbox" từ `VNPAY_*`. `/api/ipn/*` public (không JWT); `/api/v1/*` có `X-Api-Key` xác thực HMAC ở route handler. IPN là nguồn sự thật — redirect không đổi trạng thái.
 
 **Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub. WebSocket chưa có auth (chờ P1.5).
 

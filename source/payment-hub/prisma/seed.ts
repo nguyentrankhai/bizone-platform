@@ -2,6 +2,7 @@ import { PrismaClient } from "../generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { createPool } from "mariadb";
 import { existsSync } from "node:fs";
+import { encryptSecret } from "../lib/crypto";
 
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 
@@ -87,7 +88,41 @@ async function main() {
     });
   }
 
-  console.log("Seed completed: 1 admin, 1 merchant, 4 connectors");
+  // VNPay sandbox partner config (P3.3) — only when credentials + encryption key exist.
+  // TMN code / HashSecret are stored AES-256-GCM encrypted (lib/crypto.ts).
+  let vnpay = "skipped (VNPAY_TMN_CODE / VNPAY_HASH_SECRET / PARTNER_ENCRYPTION_KEY not set)";
+  const tmn = process.env.VNPAY_TMN_CODE;
+  const hashSecret = process.env.VNPAY_HASH_SECRET;
+  if (tmn && hashSecret && process.env.PARTNER_ENCRYPTION_KEY) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:4000";
+    const data = {
+      connectorType: "VNPay",
+      name: "VNPay Sandbox",
+      apiKey: encryptSecret(tmn),
+      secretKey: encryptSecret(hashSecret),
+      merchantCode: tmn,
+      endpointSandbox:
+        process.env.VNPAY_URL ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+      endpointProduction: "https://pay.vnpay.vn/vpcpay.html",
+      callbackUrl: `${appUrl}/pay/vnpay/return`,
+      webhookUrl: `${appUrl}/api/ipn/vnpay`,
+      timeout: 30000,
+      status: "Active" as const,
+      environment: "Sandbox" as const,
+    };
+    const existing = await prisma.partnerConfig.findFirst({
+      where: { connectorType: "VNPay", environment: "Sandbox" },
+    });
+    if (existing) await prisma.partnerConfig.update({ where: { id: existing.id }, data });
+    else await prisma.partnerConfig.create({ data });
+    await prisma.connector.update({
+      where: { code: "vnpay" },
+      data: { status: "Installed", isActive: true },
+    });
+    vnpay = "VNPay Sandbox partner config upserted";
+  }
+
+  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}`);
 }
 
 main()

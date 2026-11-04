@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.2)
+**Cập nhật lần cuối:** 2026-11-04 (P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 2 | 0 | 6 |
+| 3 — Payment Hub MVP | 8 | 2 | 1 | 5 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **20** | **0** | **31** |
+| **Tổng** | **51** | **20** | **1** | **30** |
 
 ---
 
@@ -44,6 +44,10 @@
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
 | 14 | Chưa có UI cài đặt tài khoản ngân hàng cho VietQR (`store_config.bank_*`) và tên cửa hàng — đang sửa trực tiếp trong DB | P2.6 | Module Cài đặt (P4.x) |
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
+| 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
+| 17 | Sau IPN chưa gửi webhook cho merchant (`payment.success` / `payment.failed`) | P3.3 | P3.6 |
+| 18 | `VnpayConnector.refund()` đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
+| 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -60,6 +64,7 @@
 | 2026-11-03 | Port 3000 bị Metabase chiếm | Metabase không thuộc dự án (người dùng đã dừng); BizOne dùng port 3000 |
 | 2026-11-04 | `mariadbtest` không publish cổng 3306 ra host (`docker port` rỗng dù cấu hình `3306:3306`) → app dev không kết nối DB | Restart container (cổng publish lại); đặt restart policy `unless-stopped` để tự chạy cùng Docker Desktop |
 | 2026-11-04 | Token Keycloak (`bizone-frontend`) thiếu claim `tenant_id`, `realm_access.roles`, `preferred_username` → mọi API trả 401/403 | Thêm 3 protocol mapper vào client (Keycloak đang chạy + `keycloak/realms/bizone-realm.json`) (P2.4) |
+| 2026-11-04 | `proxy.ts` Payment Hub bắt JWT cho cả `/api/v1/*` → API merchant (API Key + HMAC, P3.1) không gọi được | Request `/api/v1/*` có `X-Api-Key` đi thẳng tới route (HMAC kiểm ở handler), xoá header `x-user-*` để chống giả mạo (P3.3) |
 | 2026-11-04 | tRPC client không gửi header `Authorization`/`X-Tenant-ID` truyền qua `context` | `lib/trpc.ts` lấy header từ `opList[0].context` (P2.4) |
 
 ---
@@ -99,7 +104,7 @@
 |----|------|------------|--------|---------|
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
-| P3.3 | VNPay Connector | ⬜ | — | |
+| P3.3 | VNPay Connector | 🟡 | _(điền sau commit)_ | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
 | P3.4 | VietQR Generator | ⬜ | — | |
 | P3.5 | Partner Config UI | ⬜ | — | |
 | P3.6 | Webhook Engine | ⬜ | — | |
@@ -958,4 +963,52 @@ Ngoài plan, theo yêu cầu người dùng.
 - API internal `/api/internal/transactions` không có auth — cần bảo vệ khi deploy production (ít nhất session check hoặc same-origin).
 - Nút "Hoàn tiền" và "Tra soát" hiện chỉ là UI placeholder — logic gọi API sẽ implement ở P5.3 (Refund) và task Dispute.
 - Export là CSV (không phải Excel .xlsx) — đủ để mở bằng Excel với UTF-8 BOM.
+
+---
+
+### P3.3 — VNPay Connector
+
+- **Trạng thái:** 🟡 (2026-11-04) · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/payment-hub/services/connectors/`, `server/routes/vnpay-*.ts`, `server/services/payment.service.ts`
+- **Đã làm:**
+  - `services/connectors/types.ts` — interface `PaymentConnector` theo SRS §3.3.2 (`createTransaction`, `processResult`, `verifySignature`, `refund`, `getStatus`, `getConfigSchema`, `healthCheck`) + Core DTO (`PaymentRequest`, `PaymentResult`, `RefundRequest`…)
+  - `services/connectors/vnpay/vnpay.util.ts` — chuẩn hoá tham số VNPay 2.1.0 (sort key, `encodeURIComponent` + `%20→+`), HMAC-SHA512, checksum `|` cho merchant_webapi, ngày `yyyyMMddHHmmss` GMT+7, bỏ dấu `vnp_OrderInfo`, map `vnpay_qr/atm/card` → `vnp_BankCode`
+  - `services/connectors/vnpay/index.ts` — `VnpayConnector`: tạo payment URL (có `vnp_ExpireDate` = hạn GD), xử lý kết quả (thành công khi `ResponseCode=00` và `TransactionStatus=00`), refund (`02` toàn phần / `03` một phần), querydr, health check; xác thực chữ ký response của API
+  - `services/connectors/registry.ts` — registry connector ↔ `payment_method`; dựng connector từ `partner_configs` Active (giải mã secret trong bộ nhớ); IPN/redirect dùng đúng `partner_config_id` của GD
+  - `lib/crypto.ts` — AES-256-GCM (`enc:v1:…`) cho `api_key`/`secret_key` của `partner_configs`, khoá `PARTNER_ENCRYPTION_KEY`
+  - `server/services/payment.service.ts` — `initiatePayment` (Created→Pending, lưu `payment_method`, `partner_config_id`, raw request) và `applyPaymentResult` (UPDATE có điều kiện `status='Pending'` trong transaction → chống trùng/race IPN)
+  - `server/routes/vnpay-ipn.ts` + `app/api/ipn/vnpay/route.ts` — IPN `GET /api/ipn/vnpay`, luôn HTTP 200 + `{RspCode, Message}` (00/01/02/04/97/99)
+  - `server/routes/vnpay-redirect.ts` + `app/pay/vnpay/return/route.ts` — verify chữ ký → 302 về `return_url` của merchant (kèm `txn_code`, `merchant_txn_id`, `status`, `result`); không có `return_url` → trang kết quả HTML
+  - `server/routes/pay-page.ts` + `app/pay/[txnCode]/route.ts` — `payment_url` của Hub (`/pay/{txn}`) giờ hoạt động: chọn phương thức hoặc `?method=` → 302 sang VNPay
+  - `POST /api/v1/transactions` nhận thêm `payment_method` (tuỳ chọn, trả thẳng URL VNPay) và `customer_ip`; trả 503 nếu đối tác chưa cấu hình
+  - `proxy.ts` — `/api/ipn/` public; `/api/v1/*` có `X-Api-Key` bỏ qua JWT (xem *Đã giải quyết*)
+  - `prisma/seed.ts` — upsert partner config "VNPay Sandbox" (mã hoá) từ `VNPAY_*` + bật connector `vnpay`; `.env.example` thêm `PARTNER_ENCRYPTION_KEY`, `VNPAY_*`; bộ lọc phương thức UI thêm "VNPay"
+
+- **Kiểm thử** (`next start` :4000 + MariaDB/Redis local, script e2e ký HMAC độc lập với code):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo GD → redirect VNPay sandbox | 🟡 `POST /api/v1/transactions` (`payment_method: vnpay`) → 201, `Pending`, URL `sandbox.vnpayment.vn/...vpcpay.html` đủ tham số, chữ ký khớp bản ký độc lập; `/pay/{txn}?method=vnpay_qr` → 302 sang VNPay (`vnp_BankCode=VNPAYQR`). VNPay trả `Error.html?code=72` (không tìm thấy merchant) vì TMN code là placeholder — **chưa thấy được trang thanh toán thật** |
+  | IPN: nhận + verify + update status <2s | ✅ IPN ký hợp lệ → `00`, GD `Pending→Success`, lưu `partner_txn_id`, `paid_at` (GMT+7→UTC đúng), log + raw data; **9–11 ms**. IPN thật từ VNPay chưa thử (cần URL public + TMN thật) |
+  | Refund qua API VNPay | 🟡 Gọi thật `merchant_webapi` sandbox (~150 ms): TMN `SANDBOX_TMN` → `03 Invalid data format`; TMN 8 ký tự giả → `99` (qua bước kiểm định dạng) ⇒ request hợp lệ về cấu trúc, **chưa refund thành công được** khi chưa có merchant sandbox. querydr cùng kết quả |
+  | Test case success | ✅ `00 Confirm Success` → `Success`; redirect → 302 `return_url?...&status=Success&result=success` |
+  | Test case failed | ✅ `vnp_ResponseCode=24` → `Failed`, log "Khách hàng hủy giao dịch"; redirect không có `return_url` → trang "Thanh toán không thành công" |
+  | Test case invalid signature | ✅ IPN sai secret → `97`; thiếu hash → `97`; redirect sai hash → HTTP 400 |
+  | Lỗi khác | ✅ sai số tiền → `04`; GD không tồn tại → `01`; IPN lặp → `02` (không log trùng); GD `Expired` nhận IPN thành công → `02` + log `late_payment`; đối tác Inactive → tạo GD 503, IPN GD cũ vẫn xử lý theo `partner_config_id`; `payment_method` lạ → 400; `/pay` cho GD đã `Success` → 409; `GET /api/v1/transactions` không JWT vẫn 401 |
+  | HashSecret lưu mã hoá | ✅ `partner_configs.secret_key` = `enc:v1:…` (AES-256-GCM) |
+  | format:check / lint / typecheck / build | ✅ (3 route mới đều `ƒ`) |
+
+- **Khác biệt so với plan:**
+  - Chữ ký dùng **HMAC-SHA512** (chuẩn VNPay 2.1.0), không phải SHA256 như prompt.
+  - IPN xử lý **đồng bộ** (vài câu lệnh DB, ~10 ms) thay vì qua queue như API-Design §12: `RspCode` phải phản ánh kết quả xử lý; việc "retry" dựa vào VNPay tự gửi lại khi nhận mã khác `00`/`02`.
+  - Redirect **không** cập nhật trạng thái (IPN là nguồn sự thật) — chỉ verify + chuyển hướng.
+  - Route Engine chưa có (P3.8): registry lấy partner config Active đầu tiên theo loại connector.
+  - Refund mới ở mức connector (chưa ghi bảng `refunds`) — luồng nghiệp vụ thuộc P5.3.
+
+- **Quyết định thiết kế:**
+  - Connector thuần (không đụng DB); DB/state machine nằm ở `payment.service.ts` → thêm PSP mới chỉ cần implement interface + đăng ký trong `registry.ts`.
+  - `vnp_TxnRef` = `txn_code`; `vnp_CreateDate` của lần tạo URL lưu trong `transaction_raw_data` (`endpoint = vnpay:pay`) để dùng cho refund/querydr (`getLatestPartnerRequest`).
+  - URL API (refund/querydr) suy ra theo môi trường (sandbox: `VNPAY_API_URL`, production: `merchant.vnpay.vn`) vì `partner_configs` không có cột riêng.
+  - Khoá mã hoá đặt ở env (`PARTNER_ENCRYPTION_KEY`), chưa dùng Vault/KMS — đủ cho MVP; đổi khoá cần re-encrypt.
+
+- **Vấn đề / lưu ý:** vấn đề mở #16–#19. Để hoàn tất P3.3: điền TMN/HashSecret sandbox thật vào `.env.development` + `source/payment-hub/.env.local`, `npm run db:seed`, tạo GD và thanh toán bằng thẻ test NCB; refund GD đó qua `VnpayConnector.refund()`.
 
