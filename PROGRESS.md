@@ -89,7 +89,7 @@
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ✅ | 3866a5f | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
-| P2.9 | Dashboard — API & UI | ✅ | — | Xem [kết quả P2.9](#p29--dashboard--api--ui) |
+| P2.9 | Dashboard — API & UI | ✅ | `1fa131f` | Xem [kết quả P2.9](#p29--dashboard--api--ui) |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
 
 
@@ -789,7 +789,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.9 — Dashboard — API & UI
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `1fa131f` · **Vị trí:** `source/bizone/`
 - **Đã làm:**
   - `server/services/dashboard.service.ts`:
     - `cached<T>(key, fn)` — helper Redis cache 5 phút (TTL 300s), đọc từ `getRedis()`
