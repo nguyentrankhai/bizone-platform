@@ -50,6 +50,8 @@ export type Permission =
   | "order:read"
   | "crm:write"
   | "crm:read"
+  | "crm:manage_points"
+  | "crm:manage_debt"
   | "report:read"
   | "staff:write"
   | "staff:read"

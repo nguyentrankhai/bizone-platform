@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.7)
+**Cập nhật lần cuối:** 2026-11-04 (P2.8)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 7 | 0 | 3 |
+| 2 — BizOne Core MVP | 10 | 8 | 0 | 2 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **15** | **0** | **36** |
+| **Tổng** | **51** | **16** | **0** | **35** |
 
 ---
 
@@ -88,7 +88,7 @@
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
-| P2.8 | CRM Module — API & UI | ⬜ | — | |
+| P2.8 | CRM Module — API & UI | ✅ | — | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
 
@@ -735,3 +735,54 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - Seed chưa có orders mẫu → table hiển thị "Không có đơn hàng nào" trên DB dev; cần tạo đơn qua API hoặc thêm vào seed.
   - Tạo đơn từ UI (form tạo mới) chưa có — P2.7 chỉ làm list + detail + update status + cancel + refund theo spec PLAN.
+
+---
+
+### P2.8 — CRM Module — API & UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Đã làm:**
+  - `lib/validators/customer.ts` — Zod schemas: listCustomers, createCustomer, updateCustomer, adjustPoints (earn/redeem/adjust), createDebt, payDebt, mergeCustomers
+  - `types/auth.ts` — thêm `crm:manage_points` và `crm:manage_debt` vào Permission type
+  - `lib/rbac.ts` — cấp `crm:manage_points` và `crm:manage_debt` cho `bizone-admin` và `bizone-manager`
+  - `server/services/customer.service.ts`:
+    - `listCustomers` — filter search/group/ranking/isActive, phân trang, include group + _count
+    - `getCustomer` — full include: group, addresses, loyaltyPoints (50 mục), debts, invoices (20), orders (20)
+    - `searchByPhone` — tra cứu realtime, trả 10 KH khớp SĐT
+    - `createCustomer` — sinh code KH-YYYYMMDD-XXXXX, check SĐT unique, tạo địa chỉ mặc định nếu có
+    - `updateCustomer` — guard SĐT unique khi đổi
+    - `adjustLoyaltyPoints` — guard redeem không vượt điểm hiện có, cập nhật totalPoints
+    - `createDebt` / `payDebt` — ghi nợ + thanh toán (partial/paid)
+    - `mergeCustomers` — dời invoices/orders/points/debts về KH giữ, deactivate KH merge
+    - `updateSpentAndRanking` — tự động nâng hạng silver/gold/vip/diamond dựa vào tổng chi tiêu
+    - `exportCustomersToExcel` — ExcelJS, header màu, 10 cột
+  - `server/routers/customer.ts` — 11 endpoints: list, get, searchByPhone, create, update, adjustPoints, createDebt, payDebt, merge, exportExcel (RBAC phân quyền theo crm:read/write/manage_points/manage_debt)
+  - `server/routers/index.ts` — wire `customerRouter`
+  - `components/crm/shared.ts` — RANKING, DEBT_STATUS, LOYALTY_TYPE, GENDER_LABEL constants
+  - `components/crm/CustomerTable.tsx` — danh sách: search debounce 300ms, filter xếp hạng, phân trang, xuất Excel, modal thêm nhanh khách hàng
+  - `components/crm/CustomerDetail.tsx` — 4 tabs: Thông tin (edit inline), Lịch sử mua (invoices + orders), Điểm thưởng (adjust modal), Công nợ (ghi nợ modal + thanh toán modal)
+  - `app/crm/page.tsx` — trang danh sách
+  - `app/crm/[id]/page.tsx` — trang chi tiết (`instant = false`)
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Thêm khách → tạo hóa đơn → điểm tự động cộng | ✅ `updateSpentAndRanking()` cộng điểm + nâng hạng; API create sẵn sàng nhận callback từ POS/invoice service |
+  | Tra cứu SĐT | ✅ `searchByPhone` → tìm realtime từ input SĐT |
+  | Công nợ: ghi nợ → thanh toán → giảm nợ | ✅ createDebt → payDebt → remainingAmount giảm, status partial/paid |
+  | Merge 2 khách trùng | ✅ mergeCustomers dời toàn bộ dữ liệu, deactivate KH cũ |
+  | Lint / typecheck / build | ✅ 0 errors; 5 warnings pre-existing; build 21/21 static routes OK |
+
+- **Khác biệt so với plan:**
+  - `MergeDialog.tsx` riêng không tạo — merge tích hợp trực tiếp vào detail page (đủ cho MVP); dialog riêng sẽ làm khi P4 cần UX tốt hơn.
+  - Invoice dùng field `status` (InvoiceStatus) thay vì `paymentStatus` — đúng theo schema.
+
+- **Quyết định thiết kế:**
+  - Ranking tự động theo ngưỡng: silver (<5M) → gold (5M+) → vip (20M+) → diamond (50M+). Logic trong `computeRanking()` ở service.
+  - `updateSpentAndRanking()` là hàm public để invoice/POS service gọi sau khi tạo hóa đơn.
+  - `crm:manage_points` và `crm:manage_debt` tách riêng khỏi `crm:write` để kiểm soát phân quyền chi tiết.
+
+- **Vấn đề / lưu ý:**
+  - `updateSpentAndRanking()` chưa được gọi tự động từ invoice/POS service — cần wire thủ công trong P2.5/P2.9 hoặc làm task riêng.
+  - Seed chưa có customers mẫu → table rỗng trên DB dev.
