@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.6)
+**Cập nhật lần cuối:** 2026-11-04 (P2.7)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 6 | 0 | 4 |
+| 2 — BizOne Core MVP | 10 | 7 | 0 | 3 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **14** | **0** | **37** |
+| **Tổng** | **51** | **15** | **0** | **36** |
 
 ---
 
@@ -87,7 +87,7 @@
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
-| P2.7 | Order Module — API & UI | ⬜ | — | |
+| P2.7 | Order Module — API & UI | ✅ | — | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
@@ -688,3 +688,50 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - Cấu hình ngân hàng/tên cửa hàng chưa có UI (vấn đề mở #14); tên thu ngân hiện là username (#15).
   - Token dev lấy từ env `DEV_AUTH_TOKEN` hết hạn sau 15 phút (vấn đề mở #7) — WS và API sẽ báo lỗi khi token hết hạn.
+
+---
+
+### P2.7 — Order Module — API & UI
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Đã làm:**
+  - `lib/validators/order.ts` — Zod schemas: listOrdersSchema (filter channel/status/payment/date/branch), createOrderSchema (items + shipping + payment), updateOrderStatusSchema, cancelOrderSchema, createRefundSchema
+  - `server/services/order.service.ts`:
+    - `listOrders` — filter đa điều kiện, phân trang, include customer + orderItems preview
+    - `getOrder` — đầy đủ include: customer, orderItems (product+variant), orderTracking, orderRefunds, branch, createdByUser
+    - `createOrder` — tính subtotal/totalAmount, sinh orderCode ORD-YYYYMMDD-XXXXX, tạo tracking "pending" đồng thời
+    - `updateOrderStatus` — state machine (pending→confirmed→preparing→shipping→delivered→completed; nhánh cancelled/returned), tracking theo từng bước
+    - `cancelOrder` — guard chỉ huỷ được ở pending/confirmed/preparing
+    - `createRefund` — guard trạng thái completed/delivered/returned, sinh refundCode REF-YYYYMMDD-XXXXX
+    - `exportOrdersToExcel` — xuất Excel ExcelJS với header màu BizOne primary, nhãn tiếng Việt
+  - `server/routers/order.ts` — 7 endpoints: list, get, create, updateStatus, cancel, refund, exportExcel (RBAC: `order:read` / `order:write`)
+  - `server/routers/index.ts` — wire `orderRouter` vào `appRouter`
+  - `components/orders/shared.ts` — constants: ORDER_STATUS (8 trạng thái + màu), PAYMENT_STATUS (3), CHANNEL_LABEL, NEXT_STATUS state machine, NEXT_STATUS_LABEL
+  - `components/orders/OrderTable.tsx` — danh sách đơn: search debounce 300ms, filter kênh/trạng thái/thời gian, phân trang, xuất Excel base64
+  - `components/orders/OrderDetail.tsx` — chi tiết: thông tin đơn, khách hàng, bảng SP (qty/unitPrice/discount/total), vận chuyển, thanh toán tổng hợp, timeline tracking, modal huỷ, modal hoàn trả
+  - `app/orders/page.tsx` — trang danh sách
+  - `app/orders/[id]/page.tsx` — trang chi tiết (`instant = false` cho PPR)
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo đơn online → xác nhận → giao hàng → hoàn thành flow | ✅ State machine: pending→confirmed→preparing→shipping→delivered→completed; guard transition hợp lệ |
+  | Filter đúng (channel, status, date, search) | ✅ listOrders filter + search fullName/phone/orderCode |
+  | Xuất Excel | ✅ ExcelJS, header màu, 12 cột, download base64 |
+  | Theo dõi tracking number | ✅ updateOrderStatus nhận trackingCode + shippingProvider, lưu vào Order |
+  | Lint / typecheck / build | ✅ 0 errors; 3 warnings pre-existing; build 19/19 static routes OK |
+
+- **Khác biệt so với plan:**
+  - `Customer` trong schema có field `fullName` (không phải `name`) + không có `address` trực tiếp (quan hệ `customerAddresses`) → UI hiển thị họ tên/SĐT/email.
+  - `ProductVariant` không có `name` (chỉ `sku`) → hiển thị `SKU: xxx` thay vì tên variant.
+  - Refund UI hoàn trả toàn bộ order (tất cả items) thay vì chọn từng item — đủ cho MVP; chọn từng item sẽ làm ở P4.5.
+
+- **Quyết định thiết kế:**
+  - State machine transition validation trong service (`VALID_TRANSITIONS` map) — không cho phép skip bước hoặc chuyển ngược.
+  - Export Excel qua tRPC mutation (không route handler riêng) vì cần auth + filter giống list query; trả base64 để tương thích với pattern hiện tại (P2.1).
+  - Không tích hợp GHN/GHTK trong P2.7 — shipping_provider/tracking_code lưu dạng string tự do; tích hợp API vận chuyển thuộc P4.x.
+
+- **Vấn đề / lưu ý:**
+  - Seed chưa có orders mẫu → table hiển thị "Không có đơn hàng nào" trên DB dev; cần tạo đơn qua API hoặc thêm vào seed.
+  - Tạo đơn từ UI (form tạo mới) chưa có — P2.7 chỉ làm list + detail + update status + cancel + refund theo spec PLAN.
