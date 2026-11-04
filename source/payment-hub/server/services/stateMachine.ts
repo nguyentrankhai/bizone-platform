@@ -12,13 +12,7 @@
  */
 
 export type TxnStatus =
-  | "Created"
-  | "Pending"
-  | "Success"
-  | "Failed"
-  | "Expired"
-  | "Refunded"
-  | "PartiallyRefunded";
+  "Created" | "Pending" | "Success" | "Failed" | "Expired" | "Refunded" | "PartiallyRefunded";
 
 const VALID_TRANSITIONS: Record<TxnStatus, TxnStatus[]> = {
   Created: ["Pending", "Expired"],

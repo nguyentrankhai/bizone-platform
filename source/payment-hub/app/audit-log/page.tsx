@@ -1,11 +1,46 @@
 import { PHLayout } from "@/components/ph/PHLayout";
 
 const LOG_ENTRIES = [
-  { id: "AL-001", time: "14:32:01", actor: "system", action: "transaction.created", resource: "TXN-20260801-001", ip: "10.0.0.1" },
-  { id: "AL-002", time: "14:32:05", actor: "system", action: "transaction.status_changed", resource: "TXN-20260801-001 → Success", ip: "10.0.0.1" },
-  { id: "AL-003", time: "14:32:06", actor: "system", action: "webhook.delivered", resource: "WH-001", ip: "10.0.0.1" },
-  { id: "AL-004", time: "14:18:22", actor: "admin@bizone", action: "merchant.updated", resource: "BZNE-HN", ip: "172.16.0.5" },
-  { id: "AL-005", time: "14:05:00", actor: "system", action: "reconciliation.started", resource: "2026-07-31", ip: "10.0.0.1" },
+  {
+    id: "AL-001",
+    time: "14:32:01",
+    actor: "system",
+    action: "transaction.created",
+    resource: "TXN-20260801-001",
+    ip: "10.0.0.1",
+  },
+  {
+    id: "AL-002",
+    time: "14:32:05",
+    actor: "system",
+    action: "transaction.status_changed",
+    resource: "TXN-20260801-001 → Success",
+    ip: "10.0.0.1",
+  },
+  {
+    id: "AL-003",
+    time: "14:32:06",
+    actor: "system",
+    action: "webhook.delivered",
+    resource: "WH-001",
+    ip: "10.0.0.1",
+  },
+  {
+    id: "AL-004",
+    time: "14:18:22",
+    actor: "admin@bizone",
+    action: "merchant.updated",
+    resource: "BZNE-HN",
+    ip: "172.16.0.5",
+  },
+  {
+    id: "AL-005",
+    time: "14:05:00",
+    actor: "system",
+    action: "reconciliation.started",
+    resource: "2026-07-31",
+    ip: "10.0.0.1",
+  },
 ];
 
 export default function AuditLogPage() {
@@ -15,7 +50,9 @@ export default function AuditLogPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Audit Log</h1>
-            <p className="text-xs text-gray-400">Append-only · Lưu trữ 90 ngày · Không thể xoá/sửa</p>
+            <p className="text-xs text-gray-400">
+              Append-only · Lưu trữ 90 ngày · Không thể xoá/sửa
+            </p>
           </div>
           <button className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Xuất CSV
@@ -27,7 +64,9 @@ export default function AuditLogPage() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-left">
                 {["ID", "THỜI GIAN", "TÁC NHÂN", "HÀNH ĐỘNG", "TÀI NGUYÊN", "IP"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-xs font-medium text-gray-500">{h}</th>
+                  <th key={h} className="px-5 py-3 text-xs font-medium text-gray-500">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>

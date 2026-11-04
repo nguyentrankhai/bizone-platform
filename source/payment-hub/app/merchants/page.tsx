@@ -1,9 +1,30 @@
 import { PHLayout } from "@/components/ph/PHLayout";
 
 const MERCHANTS = [
-  { id: "BZNE-HCM", name: "BizOne POS - HCM", code: "BZNE-HCM", txns: 483, revenue: "₫72.3M", rate: "98.3%" },
-  { id: "BZNE-HN", name: "BizOne POS - HN", code: "BZNE-HN", txns: 362, revenue: "₫54.1M", rate: "94.2%" },
-  { id: "BZNE-ONL", name: "BizOne Online", code: "BZNE-ONL", txns: 215, revenue: "₫42.8M", rate: "97.5%" },
+  {
+    id: "BZNE-HCM",
+    name: "BizOne POS - HCM",
+    code: "BZNE-HCM",
+    txns: 483,
+    revenue: "₫72.3M",
+    rate: "98.3%",
+  },
+  {
+    id: "BZNE-HN",
+    name: "BizOne POS - HN",
+    code: "BZNE-HN",
+    txns: 362,
+    revenue: "₫54.1M",
+    rate: "94.2%",
+  },
+  {
+    id: "BZNE-ONL",
+    name: "BizOne Online",
+    code: "BZNE-ONL",
+    txns: 215,
+    revenue: "₫42.8M",
+    rate: "97.5%",
+  },
 ];
 
 export default function MerchantsPage() {
@@ -21,9 +42,13 @@ export default function MerchantsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                {["TÊN ĐỐI TÁC", "MÃ", "SỐ GD", "DOANH THU", "TỶ LỆ THÀNH CÔNG", "THAO TÁC"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-xs font-medium text-gray-500">{h}</th>
-                ))}
+                {["TÊN ĐỐI TÁC", "MÃ", "SỐ GD", "DOANH THU", "TỶ LỆ THÀNH CÔNG", "THAO TÁC"].map(
+                  (h) => (
+                    <th key={h} className="px-5 py-3 text-xs font-medium text-gray-500">
+                      {h}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

@@ -42,7 +42,10 @@ export async function verifyApiRequest(
   const signature = req.headers.get("x-signature");
 
   if (!apiKey || !timestamp || !signature) {
-    throw new ApiAuthError("UNAUTHORIZED", "Missing authentication headers (X-Api-Key, X-Timestamp, X-Signature)");
+    throw new ApiAuthError(
+      "UNAUTHORIZED",
+      "Missing authentication headers (X-Api-Key, X-Timestamp, X-Signature)",
+    );
   }
 
   // Timestamp drift check (±5 minutes)
@@ -77,10 +80,12 @@ export async function verifyApiRequest(
   await enforceRateLimit(apiKey, key.rateLimit);
 
   // Update lastUsedAt in background (fire-and-forget)
-  void prisma.apiKey.update({
-    where: { id: key.id },
-    data: { lastUsedAt: new Date() },
-  }).catch(() => {});
+  void prisma.apiKey
+    .update({
+      where: { id: key.id },
+      data: { lastUsedAt: new Date() },
+    })
+    .catch(() => {});
 
   return {
     merchantId: key.merchant.id,
@@ -115,6 +120,10 @@ async function enforceRateLimit(apiKey: string, limit: number): Promise<void> {
     await redis.expire(key, RATE_WINDOW_SECONDS);
   }
   if (count > limit) {
-    throw new ApiAuthError("RATE_LIMITED", `Rate limit exceeded: max ${limit} requests/minute`, 429);
+    throw new ApiAuthError(
+      "RATE_LIMITED",
+      `Rate limit exceeded: max ${limit} requests/minute`,
+      429,
+    );
   }
 }

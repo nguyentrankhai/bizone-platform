@@ -3,7 +3,7 @@ import { extractBearerToken, verifyJwt } from "@/lib/auth";
 
 const PUBLIC_PATHS = [
   "/api/health",
-  "/api/v1/webhooks",   // inbound partner webhooks (verified by HMAC, not JWT)
+  "/api/v1/webhooks", // inbound partner webhooks (verified by HMAC, not JWT)
   "/_next",
   "/favicon.ico",
 ];

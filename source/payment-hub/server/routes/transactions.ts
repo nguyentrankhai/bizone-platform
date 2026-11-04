@@ -122,10 +122,7 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
 
 // ─── GET /api/v1/transactions/[id] ────────────────────────────────────────────
 
-export async function handleGetTransaction(
-  req: NextRequest,
-  id: string,
-): Promise<Response> {
+export async function handleGetTransaction(req: NextRequest, id: string): Promise<Response> {
   let merchant;
   try {
     merchant = await verifyApiRequest(req, "");

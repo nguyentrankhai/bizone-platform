@@ -37,7 +37,9 @@ export function PHHeader() {
         {crumbs.map((crumb, i) => (
           <span key={crumb.href} className="flex items-center gap-1.5">
             {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
-            <span className={i === crumbs.length - 1 ? "font-semibold text-gray-800" : "text-gray-400"}>
+            <span
+              className={i === crumbs.length - 1 ? "font-semibold text-gray-800" : "text-gray-400"}
+            >
               {crumb.label}
             </span>
           </span>
@@ -47,17 +49,17 @@ export function PHHeader() {
       {/* Actions */}
       <div className="flex items-center gap-3">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="search"
             placeholder="Tìm giao dịch, đối tác..."
-            className="h-8 w-60 rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="h-8 w-60 rounded-lg border border-gray-200 bg-gray-50 pr-3 pl-8 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:outline-none"
           />
         </div>
 
         <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100">
           <Bell className="h-4.5 w-4.5" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
         </button>
 
         <button className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">

@@ -17,7 +17,10 @@ export default function SettingsPage() {
                 { label: "Ngưỡng cảnh báo thất bại", value: "5%" },
                 { label: "Timeout giao dịch", value: "900 giây (15 phút)" },
               ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div
+                  key={s.label}
+                  className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+                >
                   <span className="text-sm text-gray-500">{s.label}</span>
                   <span className="text-sm font-medium text-gray-800">{s.value}</span>
                 </div>
@@ -35,7 +38,10 @@ export default function SettingsPage() {
                 { label: "Rate limit (auth)", value: "10 req/min" },
                 { label: "Idempotency key TTL", value: "24 giờ" },
               ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div
+                  key={s.label}
+                  className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+                >
                   <span className="text-sm text-gray-500">{s.label}</span>
                   <span className="text-sm font-medium text-gray-800">{s.value}</span>
                 </div>
@@ -53,7 +59,10 @@ export default function SettingsPage() {
                 { label: "Signature algorithm", value: "HMAC-SHA256" },
                 { label: "Timeout mỗi request", value: "30 giây" },
               ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div
+                  key={s.label}
+                  className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0"
+                >
                   <span className="text-sm text-gray-500">{s.label}</span>
                   <span className="text-sm font-medium text-gray-800">{s.value}</span>
                 </div>

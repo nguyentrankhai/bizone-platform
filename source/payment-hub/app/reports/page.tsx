@@ -18,16 +18,28 @@ export default function ReportsPage() {
 
         <div className="grid grid-cols-3 gap-4">
           {[
-            { title: "Báo cáo giao dịch", desc: "Tổng hợp giao dịch theo ngày/tuần/tháng", icon: "📊" },
-            { title: "Báo cáo doanh thu", desc: "Doanh thu theo phương thức thanh toán", icon: "💰" },
+            {
+              title: "Báo cáo giao dịch",
+              desc: "Tổng hợp giao dịch theo ngày/tuần/tháng",
+              icon: "📊",
+            },
+            {
+              title: "Báo cáo doanh thu",
+              desc: "Doanh thu theo phương thức thanh toán",
+              icon: "💰",
+            },
             { title: "Báo cáo đối soát", desc: "Kết quả đối soát tự động hàng ngày", icon: "✅" },
             { title: "Báo cáo hoàn tiền", desc: "Giao dịch hoàn tiền (full/partial)", icon: "↩️" },
-            { title: "Báo cáo lỗi", desc: "Phân tích giao dịch thất bại theo nguyên nhân", icon: "⚠️" },
+            {
+              title: "Báo cáo lỗi",
+              desc: "Phân tích giao dịch thất bại theo nguyên nhân",
+              icon: "⚠️",
+            },
             { title: "Báo cáo hiệu suất", desc: "Latency, uptime của từng connector", icon: "⚡" },
           ].map((r) => (
             <button
               key={r.title}
-              className="flex flex-col items-start gap-2 rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-blue-300 hover:shadow-md transition-all"
+              className="flex flex-col items-start gap-2 rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
             >
               <span className="text-2xl">{r.icon}</span>
               <span className="text-sm font-semibold text-gray-800">{r.title}</span>

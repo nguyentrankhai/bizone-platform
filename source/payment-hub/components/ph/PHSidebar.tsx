@@ -58,9 +58,7 @@ export function PHSidebar() {
       >
         <Zap className="h-6 w-6 flex-shrink-0 text-blue-400" />
         {!collapsed && (
-          <span className="truncate text-sm font-bold tracking-wide text-white">
-            Payment Hub
-          </span>
+          <span className="truncate text-sm font-bold tracking-wide text-white">Payment Hub</span>
         )}
       </div>
 
@@ -76,7 +74,7 @@ export function PHSidebar() {
           return (
             <div key={item.href}>
               {showSection && !collapsed && (
-                <p className="mt-4 px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                <p className="mt-4 px-4 pb-1 text-[10px] font-semibold tracking-widest text-slate-500 uppercase">
                   {item.section}
                 </p>
               )}
@@ -88,7 +86,7 @@ export function PHSidebar() {
                 className={cn(
                   "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
                   isActive
-                    ? "bg-blue-600/20 text-blue-400 font-semibold"
+                    ? "bg-blue-600/20 font-semibold text-blue-400"
                     : "text-slate-300 hover:bg-slate-800 hover:text-white",
                   collapsed && "justify-center px-2",
                 )}
@@ -105,10 +103,14 @@ export function PHSidebar() {
       {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-16 flex h-6 w-6 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-400 hover:text-white"
+        className="absolute top-16 -right-3 flex h-6 w-6 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-400 hover:text-white"
         aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
       >
-        {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        {collapsed ? (
+          <ChevronRight className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronLeft className="h-3.5 w-3.5" />
+        )}
       </button>
     </aside>
   );

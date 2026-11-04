@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.1)
+**Cập nhật lần cuối:** 2026-11-04 (P3.2)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 1 | 0 | 7 |
+| 3 — Payment Hub MVP | 8 | 2 | 0 | 6 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **19** | **0** | **32** |
+| **Tổng** | **51** | **20** | **0** | **31** |
 
 ---
 
@@ -98,7 +98,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
-| P3.2 | Transaction UI — Danh sách & Chi tiết | ⬜ | — | |
+| P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | (pending) | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | ⬜ | — | |
 | P3.4 | VietQR Generator | ⬜ | — | |
 | P3.5 | Partner Config UI | ⬜ | — | |
@@ -918,5 +918,44 @@ Ngoài plan, theo yêu cầu người dùng.
 
 - **Vấn đề / lưu ý:**
   - `handleListTransactions` chưa xác thực — cần tích hợp Keycloak JWT middleware Payment Hub (P1.5-payhub hoặc P3.x).
-  - Chưa có UI cho Transaction Engine — xây ở P3.2.
+  - UI Transaction Engine đã xây ở P3.2.
+
+---
+
+### P3.2 — Transaction UI — Danh sách & Chi tiết
+
+- **Hoàn thành** 2026-11-04 · **Commit** (pending) · **Vị trí** `source/payment-hub/app/transactions/`, `source/payment-hub/components/ph/`
+
+**Đã làm:**
+- API internal route `/api/internal/transactions` (GET list, không cần HMAC) và `/api/internal/transactions/[id]`
+- Thêm filter `paymentMethod`, `amountMin`, `amountMax` vào `ListTransactionsInput` và `listTransactions()`
+- Hàm `serializeTxn` refactor sang generic để preserve TypeScript types
+- Component `TransactionTable` — bảng danh sách, cột: Mã GD (link), Thời gian, Số tiền, Trạng thái (badge), Phương thức, Merchant
+- Component `TransactionLog` — timeline log với màu theo event
+- Component `RawDataViewer` — accordion collapsible hiển thị JSON + nút copy
+- Component `TransactionDetail` — chi tiết GD: thông tin cơ bản, merchant, khách hàng, log, metadata; nút Hoàn tiền (nếu Success), Tra soát (nếu Failed/Expired)
+- Component `TransactionsClient` — client component với state filter, pagination, export CSV
+- Page `app/transactions/page.tsx` — Server Component tải initial data, dùng `await connection()` + `instant = false`
+- Page `app/transactions/[id]/page.tsx` — Server Component chi tiết GD với breadcrumb
+- `StatusBadge` thêm `PartiallyRefunded`
+- Sửa `dashboard/page.tsx` dùng `Link` thay `<a>` (fix lint)
+
+**Kiểm thử:**
+
+| Tiêu chí (PLAN) | Kết quả |
+|-----------------|---------|
+| Danh sách load <2s | ✅ Server-rendered initial data, client filter async |
+| Filter hoạt động | ✅ Status, Method, Date range, Search (mã GD/email/tên) |
+| Chi tiết GD hiển thị đúng | ✅ Tất cả field, 2-column layout |
+| Log giao dịch | ✅ Timeline với màu theo event type |
+| Raw data request/response xem được | ✅ RawDataViewer accordion + copy |
+| `npm run format:check` | ✅ |
+| `npm run lint` | ✅ Không lỗi |
+| `npm run typecheck` | ✅ Không lỗi |
+| `npm run build` | ✅ Build thành công |
+
+**Vấn đề / lưu ý:**
+- API internal `/api/internal/transactions` không có auth — cần bảo vệ khi deploy production (ít nhất session check hoặc same-origin).
+- Nút "Hoàn tiền" và "Tra soát" hiện chỉ là UI placeholder — logic gọi API sẽ implement ở P5.3 (Refund) và task Dispute.
+- Export là CSV (không phải Excel .xlsx) — đủ để mở bằng Excel với UTF-8 BOM.
 

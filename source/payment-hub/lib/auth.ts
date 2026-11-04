@@ -14,9 +14,7 @@ const getJWKS = (() => {
   };
 })();
 
-export type JwtVerifyResult =
-  | { ok: true; user: PayhubAuthUser }
-  | { ok: false; reason: string };
+export type JwtVerifyResult = { ok: true; user: PayhubAuthUser } | { ok: false; reason: string };
 
 export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
   try {

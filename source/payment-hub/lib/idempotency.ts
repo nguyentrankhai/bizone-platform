@@ -8,9 +8,7 @@ export interface IdempotencyRecord<T = unknown> {
   createdAt: number;
 }
 
-export async function getIdempotencyRecord<T>(
-  key: string,
-): Promise<IdempotencyRecord<T> | null> {
+export async function getIdempotencyRecord<T>(key: string): Promise<IdempotencyRecord<T> | null> {
   const raw = await getRedis().get(`idem:${key}`);
   if (!raw) return null;
   return JSON.parse(raw) as IdempotencyRecord<T>;

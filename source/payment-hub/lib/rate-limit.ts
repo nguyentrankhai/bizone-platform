@@ -33,5 +33,4 @@ export async function rateLimit(
 }
 
 // 100 req/min per API key
-export const rateLimitApiKey = (apiKey: string) =>
-  rateLimit(`rl:payhub:${apiKey}`, 100, 60);
+export const rateLimitApiKey = (apiKey: string) => rateLimit(`rl:payhub:${apiKey}`, 100, 60);

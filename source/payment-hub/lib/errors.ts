@@ -21,11 +21,7 @@ const STATUS_MAP: Record<ErrorCode, number> = {
   INTERNAL_ERROR: 500,
 };
 
-export function errorResponse(
-  code: ErrorCode,
-  message: string,
-  details?: unknown,
-): NextResponse {
+export function errorResponse(code: ErrorCode, message: string, details?: unknown): NextResponse {
   return NextResponse.json(
     { success: false, error: { code, message, ...(details ? { details } : {}) } },
     { status: STATUS_MAP[code] },
@@ -33,8 +29,5 @@ export function errorResponse(
 }
 
 export function notFoundResponse(entity: string, id?: string): NextResponse {
-  return errorResponse(
-    "NOT_FOUND",
-    id ? `${entity} "${id}" not found` : `${entity} not found`,
-  );
+  return errorResponse("NOT_FOUND", id ? `${entity} "${id}" not found` : `${entity} not found`);
 }

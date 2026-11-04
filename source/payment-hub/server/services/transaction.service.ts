@@ -42,9 +42,7 @@ export async function createTransaction(
   const prisma = getPrisma();
 
   const txnCode = generateTxnCode();
-  const expiredAt = new Date(
-    Date.now() + (input.expiryMinutes ?? DEFAULT_EXPIRY_MINUTES) * 60_000,
-  );
+  const expiredAt = new Date(Date.now() + (input.expiryMinutes ?? DEFAULT_EXPIRY_MINUTES) * 60_000);
 
   const txn = await prisma.transaction.create({
     data: {
@@ -79,7 +77,9 @@ export async function createTransaction(
     },
   });
 
-  void publishEvent("transaction.created", { txnCode, merchantId, amount: txn.amount }).catch(() => {});
+  void publishEvent("transaction.created", { txnCode, merchantId, amount: txn.amount }).catch(
+    () => {},
+  );
 
   const paymentUrl = `${BASE_PAYMENT_URL}/pay/${txnCode}`;
   return { ...txn, paymentUrl };
@@ -109,10 +109,7 @@ export async function getTransactionByCode(txnCode: string, merchantId?: number)
   return txn;
 }
 
-export async function getTransactionByMerchantTxnId(
-  merchantTxnId: string,
-  merchantId: number,
-) {
+export async function getTransactionByMerchantTxnId(merchantTxnId: string, merchantId: number) {
   const prisma = getPrisma();
   return prisma.transaction.findFirst({
     where: { merchantTxnId, merchantId },
@@ -127,6 +124,9 @@ export interface ListTransactionsInput {
   limit?: number;
   status?: TxnStatus;
   merchantId?: number;
+  paymentMethod?: string;
+  amountMin?: number;
+  amountMax?: number;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
@@ -134,11 +134,28 @@ export interface ListTransactionsInput {
 
 export async function listTransactions(input: ListTransactionsInput) {
   const prisma = getPrisma();
-  const { page = 1, limit = 20, status, merchantId, dateFrom, dateTo, search } = input;
+  const {
+    page = 1,
+    limit = 20,
+    status,
+    merchantId,
+    paymentMethod,
+    amountMin,
+    amountMax,
+    dateFrom,
+    dateTo,
+    search,
+  } = input;
 
   const where: Prisma.TransactionWhereInput = {};
   if (status) where.status = status;
   if (merchantId) where.merchantId = merchantId;
+  if (paymentMethod) where.paymentMethod = paymentMethod;
+  if (amountMin !== undefined || amountMax !== undefined) {
+    where.amount = {};
+    if (amountMin !== undefined) (where.amount as Prisma.DecimalFilter).gte = amountMin;
+    if (amountMax !== undefined) (where.amount as Prisma.DecimalFilter).lte = amountMax;
+  }
   if (search) {
     where.OR = [
       { txnCode: { contains: search } },
@@ -277,7 +294,9 @@ export async function expireOverdueTransactions(): Promise<number> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function serializeTxn(txn: { amount: { toString(): string }; refundedAmount: { toString(): string }; [k: string]: unknown }) {
+function serializeTxn<
+  T extends { amount: { toString(): string }; refundedAmount: { toString(): string } },
+>(txn: T): Omit<T, "amount" | "refundedAmount"> & { amount: string; refundedAmount: string } {
   return {
     ...txn,
     amount: txn.amount.toString(),

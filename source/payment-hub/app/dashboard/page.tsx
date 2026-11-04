@@ -1,12 +1,43 @@
+import Link from "next/link";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { StatusBadge } from "@/components/ph/StatusBadge";
 
 const RECENT_TXN = [
-  { id: "TXN-20260801-001", time: "14:32:22", amount: "₫1,990,000", status: "Success" as const, method: "VNPay" },
-  { id: "TXN-20260801-002", time: "14:18:15", amount: "₫350,000", status: "Failed" as const, method: "MoMo" },
-  { id: "TXN-20260801-003", time: "14:22:33", amount: "₫890,000", status: "Pending" as const, method: "ZaloPay" },
-  { id: "TXN-20260801-004", time: "14:22:59", amount: "₫5,900,000", status: "Success" as const, method: "VietQR" },
-  { id: "TXN-20260801-005", time: "14:19:50", amount: "₫320,000", status: "Success" as const, method: "MoMo" },
+  {
+    id: "TXN-20260801-001",
+    time: "14:32:22",
+    amount: "₫1,990,000",
+    status: "Success" as const,
+    method: "VNPay",
+  },
+  {
+    id: "TXN-20260801-002",
+    time: "14:18:15",
+    amount: "₫350,000",
+    status: "Failed" as const,
+    method: "MoMo",
+  },
+  {
+    id: "TXN-20260801-003",
+    time: "14:22:33",
+    amount: "₫890,000",
+    status: "Pending" as const,
+    method: "ZaloPay",
+  },
+  {
+    id: "TXN-20260801-004",
+    time: "14:22:59",
+    amount: "₫5,900,000",
+    status: "Success" as const,
+    method: "VietQR",
+  },
+  {
+    id: "TXN-20260801-005",
+    time: "14:19:50",
+    amount: "₫320,000",
+    status: "Success" as const,
+    method: "MoMo",
+  },
 ];
 
 export default function DashboardPage() {
@@ -26,7 +57,11 @@ export default function DashboardPage() {
             <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <p className="text-xs text-gray-500">{s.label}</p>
               <p className="mt-1 text-2xl font-bold text-gray-900">{s.value}</p>
-              <p className={`mt-1 text-xs font-medium ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.sub}</p>
+              <p
+                className={`mt-1 text-xs font-medium ${s.up ? "text-emerald-600" : "text-red-500"}`}
+              >
+                {s.sub}
+              </p>
             </div>
           ))}
         </div>
@@ -35,9 +70,9 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-gray-700">Giao dịch gần đây</h2>
-            <a href="/transactions" className="text-xs text-blue-600 hover:underline">
+            <Link href="/transactions" className="text-xs text-blue-600 hover:underline">
               Xem tất cả →
-            </a>
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
