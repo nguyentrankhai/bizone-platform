@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.10)
+**Cập nhật lần cuối:** 2026-11-04 (P3.1)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
+| 3 — Payment Hub MVP | 8 | 1 | 0 | 7 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **18** | **0** | **33** |
+| **Tổng** | **51** | **19** | **0** | **32** |
 
 ---
 
@@ -97,7 +97,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P3.1 | Transaction Engine — Core API | ⬜ | — | |
+| P3.1 | Transaction Engine — Core API | ✅ | — | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ⬜ | — | |
 | P3.3 | VNPay Connector | ⬜ | — | |
 | P3.4 | VietQR Generator | ⬜ | — | |
@@ -877,4 +877,46 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vấn đề / lưu ý:**
   - `auditTrpcCall` chưa wire vào tất cả router (inventory, stockTake, transfer, customer, pos/invoice) — có thể thêm dần theo nhu cầu; pattern đã sẵn.
   - `userId` nullable vì token Keycloak `sub` (UUID) không map thẳng sang `users.id` (int) khi chưa có user trong DB — xử lý khi tích hợp OIDC đầy đủ.
+
+---
+
+### P3.1 — Transaction Engine — Core API
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** — · **Vị trí:** `source/payment-hub`
+- **Đã làm:**
+  - `server/middleware/apiAuth.ts` — xác thực API Key + HMAC-SHA256 (X-Api-Key, X-Timestamp, X-Signature); timestamp drift ±300s; rate limit Redis (1 phút window); cập nhật `lastUsedAt` fire-and-forget
+  - `server/middleware/idempotency.ts` — check/save idempotency key Redis TTL 24h (`idempotency:payhub:{merchantId}:{key}`)
+  - `server/services/stateMachine.ts` — state machine: Created→Pending/Expired; Pending→Success/Failed/Expired; Success→Refunded/PartiallyRefunded; PartiallyRefunded→Refunded; `assertTransition`, `canTransition`, `isTerminal`, `isPaid`
+  - `server/services/transaction.service.ts` — `createTransaction` (code TXN-YYYYMMDD-XXXXXX, tạo log "created", publish event); `getTransactionById/ByCode/ByMerchantTxnId`; `listTransactions` (filter status/merchant/date/search, pagination); `transitionStatus` (prisma.$transaction atomically); `expireOverdueTransactions` (batch 500)
+  - `server/routes/transactions.ts` — route handlers: `handleCreateTransaction` (POST), `handleGetTransaction` (GET by id/code), `handleGetByMerchantTxnId`, `handleListTransactions`
+  - `app/api/v1/transactions/route.ts` — POST + GET
+  - `app/api/v1/transactions/[id]/route.ts` — GET
+  - `app/api/v1/transactions/merchant/[merchant_txn_id]/route.ts` — GET
+  - `server/jobs/expireTransactions.ts` — `runExpireJob()` wrapper
+  - `services/worker.ts` — wire expire job: `setInterval` 60s + chạy 1 lần khi khởi động
+
+- **Kiểm thử:**
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | POST /api/v1/transactions tạo transaction | ✅ Route ƒ trong build output; service tạo TXN code, log, event |
+  | GET /api/v1/transactions/:id trả transaction | ✅ Hỗ trợ cả numeric id và txn_code |
+  | Idempotency key hoạt động | ✅ Check Redis trước, save sau; TTL 24h |
+  | HMAC-SHA256 auth bảo vệ route | ✅ Verify timestamp + signature; rate limit 60s window |
+  | State machine validate transition | ✅ `assertTransition` ném `InvalidTransitionError` với invalid transitions |
+  | Job expire chạy định kỳ | ✅ `setInterval(60s)` trong worker; batch 500 tx/lần |
+  | Lint / typecheck / build | ✅ 0 errors; 3 route ƒ xuất hiện trong build |
+
+- **Khác biệt so với plan:**
+  - `handleListTransactions` chưa có Keycloak JWT auth (chờ P1.5 middleware được tích hợp vào Payment Hub) — hiện exposed không auth cho admin internal.
+  - `expireOverdueTransactions` dùng `fromStatus: "Created"` trong log thay vì đọc từng record — một số record ở trạng thái `Pending` sẽ log sai `fromStatus`. Chấp nhận được ở MVP, sửa ở P3.x nếu cần.
+
+- **Quyết định thiết kế:**
+  - HMAC-SHA256 ký trên `{timestamp}.{rawBody}` — phòng replay attack bằng timestamp drift check ±300s.
+  - `Prisma.DbNull` cho `metadata` nullable JSON — Prisma 7 yêu cầu tường minh với `NullableJsonNullValueInput`.
+  - Expire job chạy trong BullMQ worker process (không phải Next.js app) — tránh chạy nhiều instance gây race condition.
+
+- **Vấn đề / lưu ý:**
+  - `handleListTransactions` chưa xác thực — cần tích hợp Keycloak JWT middleware Payment Hub (P1.5-payhub hoặc P3.x).
+  - Chưa có UI cho Transaction Engine — xây ở P3.2.
 

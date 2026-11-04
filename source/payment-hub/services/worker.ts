@@ -3,6 +3,7 @@ import { describeError } from "@/lib/redis";
 import { queueConnection } from "./queue/connection";
 import { QUEUE_NAMES } from "./queue/queues";
 import { deliverWebhook, type WebhookJob } from "./webhook/deliver";
+import { runExpireJob } from "@/server/jobs/expireTransactions";
 
 const webhookWorker = new Worker<WebhookJob>(QUEUE_NAMES.webhookDelivery, deliverWebhook, {
   connection: queueConnection(),
@@ -30,6 +31,17 @@ webhookWorker
     console.error("[worker] failed to connect to Redis:", err);
     process.exit(1);
   });
+
+// Run expire job every minute
+const EXPIRE_INTERVAL_MS = 60_000;
+setInterval(() => {
+  runExpireJob().catch((err: unknown) =>
+    console.error("[expire-job] error:", err instanceof Error ? err.message : err),
+  );
+}, EXPIRE_INTERVAL_MS);
+
+// Run once at startup to catch any already-expired transactions
+void runExpireJob().catch(() => {});
 
 let shuttingDown = false;
 
