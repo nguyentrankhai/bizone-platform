@@ -117,7 +117,7 @@
 | P3.1 | Transaction Engine — Core API | ✅ | `0e47fcd` | Xem [kết quả P3.1](#p31--transaction-engine--core-api) |
 | P3.2 | Transaction UI — Danh sách & Chi tiết | ✅ | `9e5bf92` | Xem [kết quả P3.2](#p32--transaction-ui--danh-sách--chi-tiết) |
 | P3.3 | VNPay Connector | 🟡 | `c83a1e2` | Code + kiểm thử local xong; chờ TMN/HashSecret sandbox thật để nghiệm thu redirect thanh toán & refund. Xem [kết quả P3.3](#p33--vnpay-connector) |
-| P3.4 | VietQR Generator | 🟡 | — | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
+| P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | ⬜ | — | |
 | P3.6 | Webhook Engine | ⬜ | — | |
 | P3.7 | Payment Hub Dashboard | ⬜ | — | |
@@ -1028,7 +1028,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.4 — VietQR Generator
 
-- **Trạng thái:** 🟡 (2026-11-04) — còn tiêu chí "app ngân hàng quét được" chờ người dùng quét thử · **Commit:** — · **Vị trí:** `source/payment-hub/services/qr/`, `server/services/qr.service.ts`, `server/routes/qr.ts`, `app/api/v1/qr/`, `app/qr/[file]/`
+- **Trạng thái:** 🟡 (2026-11-04) — còn tiêu chí "app ngân hàng quét được" chờ người dùng quét thử · **Commit:** `9d7da3b` · **Vị trí:** `source/payment-hub/services/qr/`, `server/services/qr.service.ts`, `server/routes/qr.ts`, `app/api/v1/qr/`, `app/qr/[file]/`
 - **Đã làm:**
   - `services/qr/vietqr.ts` — payload EMVCo/VietQR (NAPAS 247, dịch vụ `QRIBFTTA` chuyển đến tài khoản, QR động `01=12`, VND `704`, số tiền tag 54, nội dung tag 62-08), CRC-16/CCITT-FALSE, chuẩn hoá nội dung (bỏ dấu, A–Z/0–9/space, ≤25 ký tự), `parseVietQrPayload()` để tự kiểm, render PNG đúng 200/300/500 px (lib `qrcode`, ECC M)
   - `server/services/qr.service.ts` — `generateQr()`: GD phải thuộc merchant, `Created`/`Pending`, chưa hết hạn, VND; mỗi (GD, loại, size) **một QR hiện hành** → gọi lại trả QR cũ (Redis → DB), QR hết hạn → sinh QR mới (**auto refresh**), đánh dấu QR cũ `is_expired=1` + xoá ảnh; hạn QR = `min(now + expires_in_seconds, transactions.expired_at)` (mặc định `QR_EXPIRES_SECONDS=900`, 60…86 400 s); khoá dòng `transactions … FOR UPDATE` để request song song không tạo trùng; GD `Created → Pending` (`payment_method = vietqr`, `partner_config_id`), ghi `transaction_logs`, phát event realtime
