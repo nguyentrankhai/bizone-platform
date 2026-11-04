@@ -90,7 +90,7 @@
 | P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ✅ | 3866a5f | Xem [kết quả P2.8](#p28--crm-module--api--ui) |
 | P2.9 | Dashboard — API & UI | ✅ | `1fa131f` | Xem [kết quả P2.9](#p29--dashboard--api--ui) |
-| P2.10 | Audit Log — API & UI | ⬜ | — | |
+| P2.10 | Audit Log — API & UI | 🟡 | — | Đang xây dựng |
 
 
 ## Giai đoạn 3 — Payment Hub MVP (Tuần 4–8)

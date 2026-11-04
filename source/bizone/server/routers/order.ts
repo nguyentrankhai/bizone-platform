@@ -16,6 +16,7 @@ import {
   cancelOrderSchema,
   createRefundSchema,
 } from "@/lib/validators/order";
+import { auditTrpcCall } from "@/server/middleware/auditLog";
 
 export const orderRouter = router({
   /** GET /trpc/order.list */
@@ -37,7 +38,9 @@ export const orderRouter = router({
     .input(createOrderSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user ? parseInt(ctx.user.id) || null : null;
-      return createOrder(input, userId);
+      const result = await createOrder(input, userId);
+      void auditTrpcCall("order.create", ctx, result.id, null, { channel: result.channel });
+      return result;
     }),
 
   /** PUT /trpc/order.updateStatus */
@@ -45,7 +48,9 @@ export const orderRouter = router({
     .input(z.object({ id: z.number().int().positive(), data: updateOrderStatusSchema }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user ? parseInt(ctx.user.id) || null : null;
-      return updateOrderStatus(input.id, input.data, userId);
+      const result = await updateOrderStatus(input.id, input.data, userId);
+      void auditTrpcCall("order.updateStatus", ctx, input.id, null, { status: input.data.status });
+      return result;
     }),
 
   /** POST /trpc/order.cancel */
@@ -53,7 +58,9 @@ export const orderRouter = router({
     .input(z.object({ id: z.number().int().positive(), data: cancelOrderSchema }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user ? parseInt(ctx.user.id) || null : null;
-      return cancelOrder(input.id, input.data, userId);
+      const result = await cancelOrder(input.id, input.data, userId);
+      void auditTrpcCall("order.cancel", ctx, input.id, null, { reason: input.data.reason });
+      return result;
     }),
 
   /** POST /trpc/order.refund */
@@ -61,7 +68,11 @@ export const orderRouter = router({
     .input(z.object({ id: z.number().int().positive(), data: createRefundSchema }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user ? parseInt(ctx.user.id) || null : null;
-      return createRefund(input.id, input.data, userId);
+      const result = await createRefund(input.id, input.data, userId);
+      void auditTrpcCall("order.refund", ctx, input.id, null, {
+        itemCount: input.data.items.length,
+      });
+      return result;
     }),
 
   /** POST /trpc/order.exportExcel — returns base64 xlsx */

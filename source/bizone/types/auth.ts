@@ -55,4 +55,5 @@ export type Permission =
   | "report:read"
   | "staff:write"
   | "staff:read"
+  | "staff:view_audit_log"
   | "admin:*";

@@ -13,8 +13,13 @@ import {
   createProductSchema,
   updateProductSchema,
 } from "@/lib/validators/product";
-import { parseProductImport, exportProductsToExcel, generateProductTemplate } from "@/lib/excel/product";
+import {
+  parseProductImport,
+  exportProductsToExcel,
+  generateProductTemplate,
+} from "@/lib/excel/product";
 import { getPrisma } from "@/lib/prisma";
+import { auditTrpcCall } from "@/server/middleware/auditLog";
 
 export const productRouter = router({
   /** GET /trpc/product.list */
@@ -37,6 +42,10 @@ export const productRouter = router({
     .mutation(async ({ input, ctx }) => {
       const product = await createProduct(input, Number(ctx.user!.id));
       await invalidateSearchCache(ctx.tenantId!);
+      void auditTrpcCall("product.create", ctx, product.id, null, {
+        name: product.name,
+        sku: product.sku,
+      });
       return product;
     }),
 
@@ -46,6 +55,9 @@ export const productRouter = router({
     .mutation(async ({ input, ctx }) => {
       const product = await updateProduct(input.id, input.data, Number(ctx.user!.id));
       await invalidateSearchCache(ctx.tenantId!);
+      void auditTrpcCall("product.update", ctx, input.id, null, {
+        fields: Object.keys(input.data),
+      });
       return product;
     }),
 
@@ -55,6 +67,7 @@ export const productRouter = router({
     .mutation(async ({ input, ctx }) => {
       await deleteProduct(input.id);
       await invalidateSearchCache(ctx.tenantId!);
+      void auditTrpcCall("product.delete", ctx, input.id);
       return { success: true };
     }),
 
@@ -77,7 +90,11 @@ export const productRouter = router({
         try {
           const existing = await prisma.product.findUnique({ where: { sku: row.sku } });
           if (existing) {
-            errors.push({ row: idx + 2, sku: row.sku, errors: [`SKU "${row.sku}" đã tồn tại, bỏ qua`] });
+            errors.push({
+              row: idx + 2,
+              sku: row.sku,
+              errors: [`SKU "${row.sku}" đã tồn tại, bỏ qua`],
+            });
             continue;
           }
           let categoryId: number | null = null;

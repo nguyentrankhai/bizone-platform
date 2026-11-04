@@ -19,6 +19,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ScrollText,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -44,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Omni Channel", href: "/omni", icon: Globe },
   { label: "Marketing", href: "/marketing", icon: Megaphone },
   { label: "Kế toán", href: "/accounting", icon: Calculator },
+  { label: "Audit Log", href: "/audit-log", icon: ScrollText },
   { label: "Cài đặt", href: "/settings", icon: Settings },
 ];
 
@@ -66,9 +68,9 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Logo */}
       <div className="flex h-14 items-center border-b border-gray-200 px-4">
         {collapsed ? (
-          <span className="text-primary text-xl font-black">B</span>
+          <span className="text-xl font-black text-primary">B</span>
         ) : (
-          <span className="text-primary text-xl font-black tracking-tight">
+          <span className="text-xl font-black tracking-tight text-primary">
             Biz<span className="text-gray-800">One</span>
           </span>
         )}
@@ -87,7 +89,7 @@ export function Sidebar({ className }: SidebarProps) {
                 </p>
               )}
               {item.section && collapsed && i > 0 && (
-                <div className="my-2 mx-3 border-t border-gray-200" />
+                <div className="mx-3 my-2 border-t border-gray-200" />
               )}
               <Link
                 href={item.href}
@@ -121,7 +123,7 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="absolute -right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm hover:text-gray-700"
+        className="absolute top-1/2 -right-3 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm hover:text-gray-700"
         aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
