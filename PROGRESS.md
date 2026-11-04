@@ -87,7 +87,7 @@
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
 | P2.5 | POS Module — API & WebSocket | ✅ | `6b88230` | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ✅ | `49147ea` | Xem [kết quả P2.6](#p26--pos-module--ui) |
-| P2.7 | Order Module — API & UI | ✅ | — | Xem [kết quả P2.7](#p27--order-module--api--ui) |
+| P2.7 | Order Module — API & UI | ✅ | 862000e | Xem [kết quả P2.7](#p27--order-module--api--ui) |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
 | P2.9 | Dashboard — API & UI | ⬜ | — | |
 | P2.10 | Audit Log — API & UI | ⬜ | — | |
@@ -693,7 +693,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P2.7 — Order Module — API & UI
 
-- **Hoàn thành:** 2026-11-04 · **Commit:** _(sẽ cập nhật)_ · **Vị trí:** `source/bizone/`
+- **Hoàn thành:** 2026-11-04 · **Commit:** `862000e` · **Vị trí:** `source/bizone/`
 - **Đã làm:**
   - `lib/validators/order.ts` — Zod schemas: listOrdersSchema (filter channel/status/payment/date/branch), createOrderSchema (items + shipping + payment), updateOrderStatusSchema, cancelOrderSchema, createRefundSchema
   - `server/services/order.service.ts`:
