@@ -487,7 +487,7 @@ export async function cancelTransaction(id: number) {
 
 // ─── Low-stock alerts ─────────────────────────────────────────────────────────
 
-async function publishLowStockAlerts(warehouseId: number, productIds: number[]) {
+export async function publishLowStockAlerts(warehouseId: number, productIds: number[]) {
   try {
     const prisma = getPrisma();
     const redis = getRedis();

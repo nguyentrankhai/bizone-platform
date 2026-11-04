@@ -130,7 +130,7 @@ npm run dev
 ```
 
 **Default ports:**
-- BizOne: http://localhost:3000
+- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; BullMQ worker — `npm run dev:worker`)
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
@@ -255,7 +255,7 @@ npm run dev
 ```
 
 **Cổng mặc định:**
-- BizOne: http://localhost:3000
+- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; worker BullMQ — `npm run dev:worker`)
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
@@ -295,6 +295,8 @@ bizone/
 │   │   ├── components/ui/              # shadcn/ui components
 │   │   ├── prisma/                     # Prisma schema (70 models), migrations, seed
 │   │   ├── hooks/  lib/  server/  types/
+│   │   ├── server/ws/pos.ts            # POS 2-screen WebSocket (:3002/ws/pos/{sessionId})
+│   │   ├── server/worker.ts            # BullMQ worker (inventory follow-ups)
 │   │   ├── Dockerfile                  # Standalone production image
 │   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7
 │   └── payment-hub/                    # Payment Hub — NextJS 16 (P1.2)

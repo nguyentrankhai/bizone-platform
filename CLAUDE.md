@@ -123,10 +123,16 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/inventory/    # P2.4 — WarehouseTable, StockTakeForm, TransferForm, BarcodeScanInput…
     │   ├── hooks/                   # React hooks dùng chung (useLowStockAlerts: đọc SSE bằng fetch + Bearer)
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), trpc.ts, dev-auth.ts)
+    │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel)
     │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
     │   ├── server/                  # tRPC routers, services, middleware (P1.6)
+    │   │   ├── routers/pos.ts       # P2.5 — ca, hóa đơn, thanh toán, đổi/trả, quote, scan
+    │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…
+    │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
+    │   │   ├── ws/pos.ts            # P2.5 — process WebSocket POS 2 màn hình :3002/ws/pos/{sessionId}
+    │   │   └── worker.ts            # P2.5 — process worker BullMQ
     │   ├── types/                   # TypeScript types dùng chung
     │   ├── public/                  # static assets
     │   ├── Dockerfile               # multi-stage, output standalone, node:24-alpine
@@ -158,6 +164,10 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 | `npm run lint` / `npm run typecheck` / `npm run format` | ESLint / tsc / Prettier |
 | `docker compose up -d --build` | app + MariaDB 10.11 (host 3307) + Redis (host 6380); `APP_PORT=3010` để đổi port app |
 | `npm run db:push` / `db:migrate` / `db:seed` / `db:studio` | Prisma: đồng bộ schema / chạy migration / seed dữ liệu mẫu / Prisma Studio |
+| `npm run dev:realtime` / `npm run dev:worker` | POS WebSocket (port `POS_WS_PORT`, mặc định 3002) / BullMQ worker (tsx watch, đọc `.env.local`) |
+| `npm run build:jobs` | Bundle ESM `dist/pos.mjs` + `dist/worker.mjs` (chạy `node --env-file=.env.local dist/pos.mjs`) |
+
+**Lưu ý POS realtime**: token gửi qua subprotocol `new WebSocket(url, ["bizone-pos", token])` + `?tenant=`; giỏ hàng lưu Redis `pos:cart:{sessionId}`, mọi thay đổi publish `bizone:pos:{sessionId}`. Mutation POS dùng `posPermissionProcedure` (300 req/phút). Bundle phải là ESM vì Prisma 7 client dùng `import.meta.url`.
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 
@@ -176,7 +186,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 
-**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
+**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3002 (BizOne POS WebSocket), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
 
 **Metabase**: không thuộc dự án (không có trong BRD/SRS/PLAN). Báo cáo được xây trong app (P2.9, P4.2, P5.5). Container `metabase` trên máy đã dừng — không khởi động lại, không phụ thuộc vào nó.
 

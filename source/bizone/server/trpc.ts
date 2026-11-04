@@ -129,3 +129,7 @@ export const posProcedure = t.procedure
 /** Factory: protectedProcedure + specific RBAC permission check */
 export const permissionProcedure = (permission: Permission) =>
   protectedProcedure.use(enforcePermission(permission));
+
+/** posProcedure (300 req/min) + specific RBAC permission check */
+export const posPermissionProcedure = (permission: Permission) =>
+  posProcedure.use(enforcePermission(permission));

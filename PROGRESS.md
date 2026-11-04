@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P2.4)
+**Cập nhật lần cuối:** 2026-11-04 (P2.5)
 
 ---
 
@@ -14,13 +14,13 @@
 | Giai đoạn | Tổng task | ✅ | 🟡 | ⬜ |
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
-| 2 — BizOne Core MVP | 10 | 4 | 0 | 6 |
+| 2 — BizOne Core MVP | 10 | 5 | 0 | 5 |
 | 3 — Payment Hub MVP | 8 | 0 | 0 | 8 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **12** | **0** | **39** |
+| **Tổng** | **51** | **13** | **0** | **38** |
 
 ---
 
@@ -39,6 +39,9 @@
 | 8 | Router `product.ts` còn dùng `Number(ctx.user.id)` (Keycloak `sub` là UUID → NaN khi tạo/sửa SP) → đổi sang `resolveDbUserId()` | P2.4 | P2.5 |
 | 9 | 25 file của P1.x–P2.3 chưa đạt `npm run format:check` | P2.4 | Commit `chore: format` riêng |
 | 10 | Lỗi nghiệp vụ (`CONFLICT`/`NOT_FOUND`) ném dạng `Error` thường → tRPC trả 500 và log như lỗi server; client vẫn đọc được `bizoneMessage` | P2.1/P2.3 | P2.5 (chuẩn hoá `TRPCError`) |
+| 11 | Seed chưa có chi nhánh/kho mặc định → POS cần tạo chi nhánh + kho (gắn `branch_id`) trước khi mở ca | P2.5 | P4.6 Multi-store (hoặc seed) |
+| 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` | P2.5 | P6.5 / khi triển khai |
+| 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -80,7 +83,7 @@
 | P2.2 | Product Module — UI | ✅ | `488dbbd` | CategoryTree, ProductTable, ProductForm (tabs), ImportDialog, ProductsClient, pages |
 | P2.3 | Inventory Module — API | ✅ | `a2b729f` | Xem [kết quả P2.3](#p23--inventory-module--api) |
 | P2.4 | Inventory Module — UI | ✅ | `f41f1a0` | Xem [kết quả P2.4](#p24--inventory-module--ui) |
-| P2.5 | POS Module — API & WebSocket | ⬜ | — | |
+| P2.5 | POS Module — API & WebSocket | ✅ | — | Xem [kết quả P2.5](#p25--pos-module--api--websocket) |
 | P2.6 | POS Module — UI | ⬜ | — | |
 | P2.7 | Order Module — API & UI | ⬜ | — | |
 | P2.8 | CRM Module — API & UI | ⬜ | — | |
@@ -584,3 +587,58 @@ Ngoài plan, theo yêu cầu người dùng.
   - Next 16 không cho chạy 2 `next dev` cùng thư mục — khi đã có dev server ở :3000 thì test bằng `next build && next start -p 3001`.
   - Bấm "Xác nhận" lại sau khi xác nhận lỗi sẽ tạo thêm một phiếu nháp mới.
   - `listWarehouses` vẫn chưa lọc theo tenant (DB hiện là single-tenant).
+
+---
+
+### P2.5 — POS Module — API & WebSocket
+
+- **Hoàn thành:** 2026-11-04 · **Commit:** _(điền sau)_ · **Vị trí:** `source/bizone/server/routers/pos.ts`, `source/bizone/server/services/{cashSession,invoice,payment,pricing,posCart,posEvents}.ts`, `source/bizone/server/ws/pos.ts`, `source/bizone/server/queue/inventory.ts`, `source/bizone/server/worker.ts`, `source/bizone/lib/pos/`
+
+- **Đã làm:**
+  - **tRPC `pos`** (`posPermissionProcedure`: rate limit POS 300/phút + RBAC `pos:read`/`pos:write`): `openSession`, `currentSession`, `closeSession`, `sessions`, `session`, `sessionSummary`, `scan`, `quote`, `createInvoice`, `invoices`, `invoice`, `print`, `cancelInvoice`, `refundInvoice`
+  - **Ca (`cashSession.service`)**: mở ca (1 ca mở/người), tổng kết (doanh thu, tiền theo phương thức, tiền thối, hoàn trả, tiền mặt dự kiến), khóa ca ghi `closing_balance` dự kiến + `difference` = thực tế − dự kiến; khóa ca phát `session:status`
+  - **Hóa đơn (`invoice.service`)**: tạo trong 1 transaction — giá lấy từ DB (không tin giá client), thanh toán hỗn hợp, mã `HD{yyMMdd}{0001}` (retry khi trùng), snapshot giá vốn, coupon (khóa lượt bằng update có điều kiện), **trừ tồn** kho đầu tiên của chi nhánh bằng `UPDATE … WHERE quantity >= n` (không bao giờ bán vượt), phiếu kho `sales_issue` tham chiếu hóa đơn, **tích điểm** + xếp hạng lại; **idempotency key** bắt buộc (Redis `SET NX` 24h); hủy (trong ca đang mở: hoàn tồn, trả lượt coupon, thu hồi điểm); đổi/trả một phần/toàn bộ (tiền hoàn theo giá thực trả sau giảm giá, hoàn tồn `return_in`, thu hồi điểm tỷ lệ); dữ liệu in hóa đơn
+  - **Thanh toán (`payment.service`)**: 5 phương thức `cash/transfer/card/wallet/qr`; chặn thiếu tiền; chỉ tiền mặt được trả dư (thối lại)
+  - **Giá & khuyến mãi (`pricing.service`, `lib/pos/cart.ts`)**: thứ tự giảm giá dòng → giảm theo hạng (Gold 5% / VIP 10% / Diamond 15%) → coupon; **auto-apply coupon** (coupon có điều kiện `auto_apply=true`, chọn mức giảm cao nhất) khi không nhập mã; kiểm tra coupon (hạn, lượt, lượt/khách, đơn tối thiểu, kênh `pos`); VAT tách từ giá đã gồm thuế; điểm = tổng/1.000 × `loyalty_rate` × hệ số hạng (1/1.2/1.5/2)
+  - **WebSocket `/ws/pos/{sessionId}`** (`server/ws/pos.ts`, process riêng :3002): xác thực Keycloak qua subprotocol + `?tenant=`, kiểm tra ca đang mở; giỏ hàng lưu Redis theo ca; sự kiện client `cart:add/scan/update/remove/clear/set-customer/apply-coupon/remove-coupon`, `payment:process`; server phát `cart:updated`, `cart:cleared`, `product:scanned`, `payment:completed`, `session:status`, `ack`/`error` (theo `requestId`); fan-out qua Redis `bizone:pos:{sessionId}` (tRPC tạo hóa đơn cũng đẩy được tới màn hình khách); heartbeat 30s
+  - **Fallback BroadcastChannel** (`lib/pos/sync-client.ts`): client WS tự kết nối lại (backoff ≤ 10s); khi mất WS chuyển `mode=local`, cửa sổ thu ngân phát trạng thái giỏ sang màn hình khách qua `BroadcastChannel`
+  - **Queue** `server/queue/inventory.ts` (BullMQ `bizone-inventory`) + `server/worker.ts`: sau bán/trả/hủy chạy kiểm tra tồn thấp → publish `bizone:low-stock` (luồng SSE của P2.4)
+  - `user.service.ensureDbUserId()`: tự tạo bản ghi `users` cho user Keycloak lần đầu (cột `user_id` của ca/hóa đơn bắt buộc); scripts `dev:realtime`, `dev:worker`, `build:jobs`; cài `bullmq`, `ws`
+
+- **Kiểm thử** (Next dev :3000 + `dist/pos.mjs` :3002 + `dist/worker.mjs`, DB `bizonedb`, token Keycloak thật; script mô phỏng 2 màn hình bằng 2 WebSocket):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo hóa đơn < 5 giây | ✅ tRPC `createInvoice` 84ms; thanh toán qua WS → màn hình khách nhận `payment:completed` sau 53ms |
+  | 2 màn hình sync real-time < 500ms | ✅ Màn hình khách nhận `cart:updated` sau 22ms (quét), 4–8ms (thêm SP) |
+  | WebSocket: thêm SP → giỏ cập nhật trên cả 2 màn hình | ✅ Thêm/sửa SL/đặt khách/áp mã đều đồng bộ; 3 dòng, tạm tính 174.000 → sửa SL → 154.000 |
+  | Quét mã vạch → thêm SP < 1s | ✅ `cart:scan` ack sau 22ms, phát `product:scanned` + `cart:updated` |
+  | Tồn kho tự trừ khi thanh toán | ✅ Bánh mì 8 → 7 → 0; SP không theo dõi tồn (cà phê) không trừ; phiếu `sales_issue` ghi nhận; bán khi hết hàng → "chỉ còn 0 trong kho" |
+  | Tính điểm thưởng | ✅ Khách Gold: 131.670₫ → +158 điểm (×1.2); trả hàng → −21 điểm; tổng chi tiêu và hạng cập nhật |
+  | Auto-apply coupon | ✅ Đơn ≥ 100k tự áp `P25AUTO5K` (−5.000); nhập `P25SALE10` thay thế (−10%, trần 20k); mã sai báo lỗi; hủy hóa đơn trả lại lượt coupon |
+  | Idempotency key | ✅ Gửi lại cùng key → cùng hóa đơn; 3 request đồng thời cùng key → 1 hóa đơn, 2 request còn lại nhận "đang được xử lý" |
+  | Ca: mở / tổng kết / khóa | ✅ Mở ca lần 2 bị chặn; tổng kết đúng (tiền mặt dự kiến 592.900 = 500.000 + 210.000 − 100.000 thối − 17.100 hoàn); khóa ca với tiền thực tế thiếu 2.000 → `difference −2000`, màn hình nhận `session:status closed` |
+  | Hủy / đổi-trả | ✅ Trả 2 chai nước → hoàn 17.100 (đã chia giảm giá), tồn +2; trả quá số lượng bị chặn; hủy hóa đơn → tồn hoàn lại |
+  | BroadcastChannel fallback | ✅ WS không tới được → `mode=local`, màn hình khách nhận `cart:cleared` qua BroadcastChannel; `send()` báo lỗi rõ ràng |
+  | Trường hợp lỗi | ✅ Thiếu tiền; thẻ trả dư; WS token sai → 401; WS vào ca đã khóa → 409; worker phát `bizone:low-stock` khi bánh mì về 0 |
+  | Lint / typecheck / build | ✅ Lint 0 lỗi (3 warning cũ), typecheck sạch, `next build` OK, `build:jobs` OK; file P2.5 đạt Prettier (24 file cũ vẫn chưa — vấn đề mở #9) |
+
+  Dọn dẹp: dừng 3 process, xoá toàn bộ dữ liệu test P25 (chi nhánh, kho, SP, khách, coupon, ca, hóa đơn, phiếu kho, user tạo tự động) và key Redis test.
+
+- **Khác biệt so với plan:**
+  - Tồn kho trừ **đồng bộ** trong transaction tạo hóa đơn (đảm bảo không bán vượt); `server/queue/inventory.ts` chỉ xử lý việc phía sau (cảnh báo tồn thấp) — plan để ngỏ việc trừ tồn qua queue.
+  - Thêm sự kiện `cart:scan`, `cart:set-customer`, `cart:clear` và `ack`/`error` theo `requestId` ngoài danh sách API-Design §3.3.
+  - Đường dẫn WS `/ws/pos/{sessionId}` chạy ở process riêng :3002 (Route Handler Next không giữ được WebSocket — theo quyết định P1.2).
+  - Gửi email/SMS hóa đơn (API-Design) chưa làm — thuộc P4.7 Thông báo.
+
+- **Quyết định thiết kế:**
+  - Giỏ hàng là trạng thái server (Redis) để 2 màn hình và lần kết nối lại luôn giống nhau; mọi thay đổi trong một ca được xử lý tuần tự.
+  - Tiền hoàn trả ghi thành `invoice_payments` âm, `notes = cash_session:{id}` của ca đang chi tiền → tổng kết ca tính đúng tiền mặt trong két kể cả khi trả hàng của ca khác. Đổi/trả bắt buộc có ca đang mở.
+  - Hủy hóa đơn chỉ trong ca đang mở; sau khi khóa ca phải dùng đổi/trả.
+  - Lỗi nghiệp vụ POS dùng `bizoneError` (`TRPCError` có mã HTTP đúng: 400/404/409) thay vì `Error` thường.
+  - Bundle job dạng ESM (`.mjs`) vì Prisma 7 client dùng `import.meta.url`.
+
+- **Vấn đề / lưu ý:**
+  - P2.6 (POS UI) dùng `lib/pos/sync-client.ts` + `lib/pos/cart.ts`; cần tạo chi nhánh + kho gắn chi nhánh trước khi mở ca (vấn đề mở #11).
+  - Chạy nhiều instance WS cần sticky theo phiên (vấn đề mở #13); image Docker chưa chạy process WS/worker (vấn đề mở #12).
+  - Nếu Redis không truy cập được thì không tạo được hóa đơn (idempotency là bắt buộc — cố ý chặn thay vì tạo trùng).
