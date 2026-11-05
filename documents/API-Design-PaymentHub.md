@@ -274,7 +274,8 @@ Header: Idempotency-Key: <UUID v4>
 | `amount` | number | Có | Số tiền (VND, nguyên dương) |
 | `currency` | string | Không | Mặc định "VND" |
 | `description` | string | Không | Mô tả thanh toán |
-| `payment_method` | string | Không | null = để Payment Hub chọn phương thức phù hợp |
+| `payment_method` | string | Không | `vnpay_qr`, `vnpay_atm`, `vnpay_card`, `vnpay`, `vietqr`, `momo_qr`, `zalopay_qr` (`services/routing/routeMap.ts`). null = khách chọn trên trang `payment_url` (chỉ liệt kê phương thức đang khả dụng). Route Engine chọn đối tác theo ưu tiên của merchant, fallback khi đối tác lỗi (P3.8) |
+| `qr_size` | number | Không | Kích thước QR khi `payment_method = vietqr`: 200 / 300 (mặc định) / 500 |
 | `return_url` | string | Không | URL redirect sau khi thanh toán |
 | `webhook_url` | string | Không | URL nhận webhook kết quả (ghi đè config) |
 | `customer` | object | Không | Thông tin khách hàng |
@@ -307,8 +308,13 @@ Header: Idempotency-Key: <UUID v4>
 |-------|------|-------|
 | `transaction_id` | string | Mã giao dịch nội bộ Payment Hub |
 | `payment_url` | string | URL trang thanh toán (nếu thanh toán online) |
-| `qr_code` | object | QR Code (nếu phương thức hỗ trợ) |
+| `qr_code` | object | QR Code khi `payment_method = vietqr` (còn lại `null`); `payment_url` khi đó là trang QR của Hub |
+| `partner` | string | Loại đối tác Route Engine đã chọn (`VNPay`, `VietQR`…) |
+| `fallback_used` | boolean | Có khi đối tác ưu tiên lỗi và GD được chuyển sang đối tác kế tiếp |
+| `payment_error` | object | Có khi mọi đối tác của phương thức lỗi lúc tạo — GD vẫn `Created`, khách chọn phương thức khác trên `payment_url` |
 | `expired_at` | datetime | Thời gian hết hạn giao dịch |
+
+> Phương thức không còn đối tác khả dụng (đối tác Inactive/Error, connector tắt, circuit mở) → **503 `SERVICE_UNAVAILABLE`**, không tạo GD; `error.details` có `skipped` (lý do từng đối tác) và `available_methods`.
 
 **Error:**
 ```json
@@ -689,6 +695,19 @@ Giống response trên, tra cứu dựa trên `merchant_txn_id + merchant_id` (t
 ```
 
 ---
+
+### 6.2b. Route Engine (P3.8)
+
+Định tuyến `payment_method` → đối tác (`partner_configs`). Thứ tự: danh sách ưu tiên của merchant (`merchant_routes`), sau đó các đối tác Active còn lại theo id (fallback). Bỏ qua đối tác `Inactive`/`Error`, connector tắt (`connectors.is_active = 0`), đối tác bị merchant tắt và đối tác đang mở circuit (≥ 5 lỗi liên tiếp trong 60 s → bỏ qua 30 s). Đối tác lỗi khi tạo thanh toán → thử đối tác kế tiếp.
+
+| Method | Endpoint | Quyền | Mô tả |
+|--------|----------|-------|-------|
+| GET | `/api/internal/routes` | admin, viewer | Định tuyến mặc định (không có ưu tiên merchant) + trạng thái circuit từng đối tác |
+| GET | `/api/internal/routes/{merchantId}` | admin, viewer | Ưu tiên đã cấu hình, route hiệu lực (`route`), đối tác bị bỏ qua + lý do (`skipped`) cho 7 phương thức |
+| PUT | `/api/internal/routes/{merchantId}` | admin | `{ "routes": [{ "payment_method": "vnpay_qr", "partners": [{ "partner_config_id": 3 }, { "partner_config_id": 1, "enabled": false }] }] }` — thứ tự mảng = ưu tiên; `partners: []` xoá cấu hình của phương thức đó |
+| DELETE | `/api/internal/routes/circuits/{partnerConfigId}` | admin (không gắn merchant) | Đóng circuit, xoá bộ đếm lỗi |
+
+Lý do bỏ qua (`skipped[].reason`): `inactive`, `error_status`, `connector_disabled`, `connector_not_implemented`, `disabled_for_merchant`, `circuit_open`.
 
 ### 6.3. Partners Management
 

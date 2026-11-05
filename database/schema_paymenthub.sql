@@ -458,6 +458,27 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 ) ENGINE=InnoDB;
 
 -- ============================================================
+-- 21. MERCHANT ROUTES (Route Engine — P3.8)
+-- Ưu tiên đối tác theo merchant + phương thức. priority nhỏ chạy trước; is_enabled = 0
+-- loại đối tác khỏi định tuyến của merchant. Đối tác Active chưa liệt kê vẫn được dùng
+-- (sau các dòng đã cấu hình) để fallback.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS merchant_routes (
+  id                INT AUTO_INCREMENT PRIMARY KEY,
+  merchant_id       INT NOT NULL,
+  payment_method    VARCHAR(50) NOT NULL,
+  partner_config_id INT NOT NULL,
+  priority          INT NOT NULL DEFAULT 0,
+  is_enabled        TINYINT(1) NOT NULL DEFAULT 1,
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_mroute (merchant_id, payment_method, partner_config_id),
+  INDEX idx_mroute_partner (partner_config_id),
+  CONSTRAINT fk_mroute_merchant FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_mroute_partner FOREIGN KEY (partner_config_id) REFERENCES partner_configs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ============================================================
 -- SEED DATA
 -- ============================================================
 

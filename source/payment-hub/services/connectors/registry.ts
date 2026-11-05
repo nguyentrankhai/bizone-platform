@@ -5,10 +5,11 @@ import type { ConnectorConfig, PaymentConnector } from "./types";
 import { VNPAY_SANDBOX_API_URL, VNPAY_SANDBOX_PAY_URL, VnpayConnector } from "./vnpay";
 
 /**
- * Connector registry — maps a connector code to its implementation and builds an
- * instance from the Active partner_configs row (secrets decrypted in memory only).
- * Partner selection by rules/priority/failover is the Route Engine's job (P3.8);
- * here we take the first Active config for the connector type.
+ * Connector registry — maps a connector code / partner_configs.connector_type to its
+ * implementation and builds an instance from a partner_configs row (secrets decrypted in
+ * memory only). Which payment_method goes to which connector lives in
+ * services/routing/routeMap.ts; which partner config serves a request (merchant priority,
+ * fallback, circuit breaker) is decided by services/routing/routeEngine.ts (P3.8).
  */
 
 const VNPAY_PRODUCTION_API_URL = "https://merchant.vnpay.vn/merchant_webapi/api/transaction";
@@ -17,8 +18,6 @@ interface ConnectorDefinition {
   code: string;
   /** partner_configs.connector_type value */
   connectorType: string;
-  /** payment_method values handled by this connector */
-  methods: string[];
   create(config: ConnectorConfig): PaymentConnector;
   defaultEndpoint: string;
   apiEndpoint(env: ConnectorConfig["environment"]): string;
@@ -28,7 +27,6 @@ const DEFINITIONS: ConnectorDefinition[] = [
   {
     code: "vnpay",
     connectorType: "VNPay",
-    methods: ["vnpay", "vnpay_qr", "vnpay_atm", "vnpay_card"],
     create: (config) => new VnpayConnector(config),
     defaultEndpoint: VNPAY_SANDBOX_PAY_URL,
     apiEndpoint: (env) =>
@@ -45,16 +43,8 @@ export class ConnectorUnavailableError extends Error {
   }
 }
 
-export function definitionForMethod(method: string): ConnectorDefinition | undefined {
-  return DEFINITIONS.find((d) => d.methods.includes(method));
-}
-
 export function definitionForCode(code: string): ConnectorDefinition | undefined {
   return DEFINITIONS.find((d) => d.code === code);
-}
-
-export function supportedPaymentMethods(): string[] {
-  return DEFINITIONS.flatMap((d) => d.methods);
 }
 
 export interface ResolvedConnector {
@@ -114,13 +104,6 @@ function buildConnector(def: ConnectorDefinition, pc: PartnerConfig): ResolvedCo
     timeoutMs: pc.timeout,
   };
   return { connector: def.create(config), partnerConfigId: pc.id, callbackUrl: pc.callbackUrl };
-}
-
-/** Resolve the connector for a payment method (first Active partner config). */
-export async function resolveConnectorForMethod(method: string): Promise<ResolvedConnector> {
-  const def = definitionForMethod(method);
-  if (!def) throw new ConnectorUnavailableError(`Unsupported payment method: ${method}`);
-  return buildFromPartnerConfig(def);
 }
 
 /**

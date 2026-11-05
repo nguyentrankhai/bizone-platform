@@ -156,11 +156,13 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── app/partners/            # P3.5 — /partners (card), /partners/new, /partners/{id} (form, test, kích hoạt, lịch sử)
         ├── app/api/internal/partners/ # P3.5 — CRUD, /test, /status, /logs (JWT + role)
         ├── app/api/internal/webhooks/ + webhook-logs/ # P3.6 — CRUD, ping, status, rotate-secret, stats; lịch sử, chi tiết, replay
+        ├── app/api/internal/routes/ # P3.8 — GET mặc định, GET/PUT /{merchantId} (ưu tiên đối tác), DELETE circuits/{partnerId} (server/routes/route-config.ts)
         ├── app/webhooks/            # P3.6 — UI thống kê, endpoint, lịch sử gửi + replay
         ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
         ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5), webhook.service (P3.6: outbox, CRUD, replay, stats), dashboard.service (P3.7: số liệu + cảnh báo, cache Redis 15 s)
         ├── services/
         │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
+        │   ├── routing/             # P3.8 — routeMap.ts (payment_method → connector), routeEngine.ts (ưu tiên merchant, fallback, circuit breaker)
         │   ├── qr/vietqr.ts         # P3.4 — payload EMVCo/VietQR (NAPAS 247), CRC16, render PNG 200/300/500
         │   ├── queue/connection.ts  # kết nối BullMQ
         │   ├── webhook/             # P3.6 — sender.ts (ký HMAC, chặn SSRF), queue.ts (BullMQ, backoff), deliver.ts (processor worker)
@@ -210,6 +212,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý VietQR (P3.4)**: tài khoản nhận lấy từ `partner_configs` `connector_type='VietQR'` Active — `api_key` = BIN ngân hàng (mã hoá), `merchant_code` = số tài khoản, `secret_key` = tên chủ TK (mã hoá); seed từ `VIETQR_BANK_BIN/ACCOUNT_NO/ACCOUNT_NAME` (hiện là **tài khoản demo**). Nội dung CK = `txn_code` bỏ dấu `-`. Mỗi (GD, loại, size) có 1 QR hiện hành; cache Redis `payhub:qr:{txnId}:{type}:{size}`, ảnh `payhub:qr:img:{token}`; worker đánh dấu QR hết hạn mỗi phút. Rate limit QR 60 req/phút/key.
 
 **Lưu ý đối tác (P3.5)**: cấu hình mới luôn `Inactive`; chỉ kích hoạt khi test kết nối của cấu hình hiện tại đạt; sửa trường kết nối → xoá kết quả test và về `Inactive`. API không bao giờ trả secret (che `••••`). Metadata từng loại connector ở `lib/partner-types.ts`. Log `partner_config_logs.changed_by` = username token.
+
+**Lưu ý Route Engine (P3.8)**: mọi chọn đối tác đi qua `services/routing/routeEngine.ts` (`planRoute` + `executeRoute`) — không lấy "partner Active đầu tiên" trực tiếp. Phương thức mới khai báo trong `routeMap.ts` (`kind: redirect | qr`). Thứ tự: `merchant_routes` của merchant (priority nhỏ trước, `is_enabled=0` loại) → các partner Active còn lại theo id. Bỏ qua partner Inactive/Error, `connectors.is_active=0`, connector chưa có code, circuit mở (Redis `payhub:route:fail|open:{id}`, `ROUTE_CB_*`). Lỗi nghiệp vụ (có `code` NOT_FOUND/CONFLICT/VALIDATION_ERROR) không fallback; lỗi khác → thử partner kế. `POST /api/v1/transactions` với `vietqr` trả `qr_code`; `/pay/{txn}` chỉ liệt kê phương thức khả dụng, VietQR hiển thị QR + tự reload 15 s. IPN/redirect vẫn dùng `transactions.partner_config_id`.
 
 **Lưu ý webhook (P3.6)**: đổi trạng thái cuối của GD phải đặt `OUTBOX_PENDING` (`notify_webhook=1, webhook_sent_at=NULL`) trong cùng DB transaction rồi gọi `dispatchSoon(txnId)` sau commit; worker quét outbox mỗi 30 s. Ký `X-Signature = HMAC-SHA256(secret, X-Timestamp + "." + body)`, `X-Webhook-Id` giữ nguyên qua retry/replay. Job BullMQ không mang secret. Dev cần `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` (Payment Hub) và `PAYHUB_WEBHOOK_SECRET` (BizOne).
 

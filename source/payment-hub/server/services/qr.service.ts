@@ -4,6 +4,13 @@ import type { TransactionStatus } from "@/generated/prisma/client";
 import { getRedis } from "@/lib/redis";
 import { publishEvent } from "@/lib/events";
 import { decryptSecret } from "@/lib/crypto";
+import type { PartnerConfig } from "@/generated/prisma/client";
+import {
+  NoRouteError,
+  executeRoute,
+  planRoute,
+  type RouteAttempt,
+} from "@/services/routing/routeEngine";
 import {
   buildVietQrPayload,
   noteForTxnCode,
@@ -24,8 +31,9 @@ import {
  *   with the QR's TTL — the public URL `/qr/{token}.png` stops working when the QR expires.
  * - Generating a QR moves the transaction Created → Pending (payment_method = vietqr).
  *
- * The bank account comes from the Active partner config `connector_type = 'VietQR'`
- * (see VIETQR_CONFIG_FIELDS for how its columns are used).
+ * The bank account comes from a VietQR partner config chosen by the Route Engine (P3.8):
+ * the merchant's priority list, then any other Active VietQR config; an invalid config is
+ * skipped (fallback). See VIETQR_CONFIG_FIELDS for how its columns are used.
  */
 
 export const QR_TYPES = ["VietQR", "NapasQR", "PartnerQR"] as const;
@@ -58,6 +66,7 @@ export class QrError extends Error {
   constructor(
     public readonly code: "NOT_FOUND" | "CONFLICT" | "VALIDATION_ERROR" | "SERVICE_UNAVAILABLE",
     message: string,
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = "QrError";
@@ -93,6 +102,8 @@ export interface GenerateQrResult {
   refreshed: boolean;
   cached: boolean;
   transactionStatus: string;
+  /** Set when this call selected the receiving account (new QR) */
+  routing?: { partnerConfigId: number; fallbackUsed: boolean; attempts: RouteAttempt[] };
 }
 
 const cacheKey = (txnId: number, type: string, size: number) =>
@@ -108,14 +119,8 @@ async function bestEffort<T>(fn: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-async function loadVietQrAccount(): Promise<{ account: VietQrAccount; partnerConfigId: number }> {
-  const pc = await getPrisma().partnerConfig.findFirst({
-    where: { connectorType: "VietQR", status: "Active" },
-    orderBy: { id: "asc" },
-  });
-  if (!pc || !pc.merchantCode) {
-    throw new QrError("SERVICE_UNAVAILABLE", "VietQR is not configured");
-  }
+function accountFromPartner(pc: PartnerConfig): VietQrAccount {
+  if (!pc.merchantCode) throw new Error(`Partner config #${pc.id} has no account number`);
   const account: VietQrAccount = {
     bin: decryptSecret(pc.apiKey),
     accountNo: pc.merchantCode,
@@ -124,10 +129,32 @@ async function loadVietQrAccount(): Promise<{ account: VietQrAccount; partnerCon
   try {
     validateAccount(account);
   } catch (e) {
-    console.error(`[qr] partner config #${pc.id} is invalid: ${(e as Error).message}`);
-    throw new QrError("SERVICE_UNAVAILABLE", "VietQR is not configured correctly");
+    // Plain Error (not a business error) → the Route Engine falls back to the next account.
+    throw new Error(`Partner config #${pc.id} is invalid: ${(e as Error).message}`);
   }
-  return { account, partnerConfigId: pc.id };
+  return account;
+}
+
+async function routeVietQrAccount(merchantId: number) {
+  try {
+    const plan = await planRoute(merchantId, "vietqr");
+    const outcome = await executeRoute(plan, async (pc) => accountFromPartner(pc));
+    return {
+      account: outcome.result,
+      partnerConfigId: outcome.partner.id,
+      fallbackUsed: outcome.fallbackUsed,
+      attempts: outcome.attempts,
+    };
+  } catch (e) {
+    if (e instanceof NoRouteError) {
+      throw new QrError("SERVICE_UNAVAILABLE", "VietQR is not configured", {
+        payment_method: "vietqr",
+        reason: e.reason,
+        skipped: e.skipped.map((x) => ({ partner_config_id: x.partnerConfigId, reason: x.reason })),
+      });
+    }
+    throw e;
+  }
 }
 
 async function findTransaction(merchantId: number, ref: string) {
@@ -178,7 +205,8 @@ export async function generateQr(
     }
   }
 
-  const { account, partnerConfigId } = await loadVietQrAccount();
+  const routed = await routeVietQrAccount(txn.merchantId);
+  const { account, partnerConfigId } = routed;
   const amount = Number(txn.amount);
   const note = noteForTxnCode(txn.txnCode);
   let payload: string;
@@ -313,6 +341,10 @@ export async function generateQr(
     refreshed: outcome.kind === "created" && outcome.refreshed,
     cached: false,
     transactionStatus: "Pending",
+    routing:
+      outcome.kind === "created"
+        ? { partnerConfigId, fallbackUsed: routed.fallbackUsed, attempts: routed.attempts }
+        : undefined,
   };
 }
 

@@ -131,23 +131,23 @@ enum NotificationChannel {
 // ============================================================
 
 model User {
-  id          Int        @id @default(autoincrement())
-  username    String     @unique @db.VarChar(100)
-  email       String     @unique @db.VarChar(255)
-  passwordHash String   @map("password_hash") @db.VarChar(255)
-  fullName    String     @map("full_name") @db.VarChar(255)
-  role        UserRole   @default(Operations)
-  status      UserStatus @default(Active)
-  avatarUrl   String?    @map("avatar_url") @db.VarChar(500)
-  lastLoginAt DateTime?  @map("last_login_at") @db.DateTime(0)
-  createdAt   DateTime   @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt   DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+  id           Int        @id @default(autoincrement())
+  username     String     @unique @db.VarChar(100)
+  email        String     @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  fullName     String     @map("full_name") @db.VarChar(255)
+  role         UserRole   @default(Operations)
+  status       UserStatus @default(Active)
+  avatarUrl    String?    @map("avatar_url") @db.VarChar(500)
+  lastLoginAt  DateTime?  @map("last_login_at") @db.DateTime(0)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
 
-  refundsProcessed    Refund[]    @relation("RefundProcessor")
-  disputesCreated     Dispute[]   @relation("DisputeCreator")
-  disputesResolved    Dispute[]   @relation("DisputeResolver")
-  partnerConfigLogs   PartnerConfigLog[]
-  notifications       Notification[]
+  refundsProcessed  Refund[]           @relation("RefundProcessor")
+  disputesCreated   Dispute[]          @relation("DisputeCreator")
+  disputesResolved  Dispute[]          @relation("DisputeResolver")
+  partnerConfigLogs PartnerConfigLog[]
+  notifications     Notification[]
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
@@ -156,23 +156,24 @@ model User {
 }
 
 model Merchant {
-  id                 Int            @id @default(autoincrement())
-  name               String         @db.VarChar(255)
-  code               String         @unique @db.VarChar(100)
-  contactName        String?        @map("contact_name") @db.VarChar(255)
-  contactEmail       String?        @map("contact_email") @db.VarChar(255)
-  contactPhone       String?        @map("contact_phone") @db.VarChar(50)
-  status             MerchantStatus @default(Active)
-  defaultWebhookUrl  String?        @map("default_webhook_url") @db.VarChar(500)
-  webhookSecret      String?        @map("webhook_secret") @db.VarChar(500)
-  ipWhitelist        Json?          @map("ip_whitelist")
-  monthlyLimit       Decimal?       @map("monthly_limit") @db.Decimal(15, 0)
-  createdAt          DateTime       @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt          DateTime       @updatedAt @map("updated_at") @db.DateTime(0)
+  id                Int            @id @default(autoincrement())
+  name              String         @db.VarChar(255)
+  code              String         @unique @db.VarChar(100)
+  contactName       String?        @map("contact_name") @db.VarChar(255)
+  contactEmail      String?        @map("contact_email") @db.VarChar(255)
+  contactPhone      String?        @map("contact_phone") @db.VarChar(50)
+  status            MerchantStatus @default(Active)
+  defaultWebhookUrl String?        @map("default_webhook_url") @db.VarChar(500)
+  webhookSecret     String?        @map("webhook_secret") @db.VarChar(500)
+  ipWhitelist       Json?          @map("ip_whitelist")
+  monthlyLimit      Decimal?       @map("monthly_limit") @db.Decimal(15, 0)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.DateTime(0)
 
   apiKeys        ApiKey[]
   transactions   Transaction[]
   webhookConfigs WebhookConfig[]
+  routes         MerchantRoute[]
 
   @@index([code], map: "idx_merchants_code")
   @@index([status], map: "idx_merchants_status")
@@ -180,17 +181,17 @@ model Merchant {
 }
 
 model ApiKey {
-  id          Int          @id @default(autoincrement())
-  merchantId  Int          @map("merchant_id")
-  apiKey      String       @unique @map("api_key") @db.VarChar(255)
-  apiSecret   String       @map("api_secret") @db.VarChar(255)
-  name        String       @db.VarChar(200)
-  status      ApiKeyStatus @default(Active)
-  rateLimit   Int          @default(100) @map("rate_limit")
-  lastUsedAt  DateTime?    @map("last_used_at") @db.DateTime(0)
-  expiresAt   DateTime?    @map("expires_at") @db.DateTime(0)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
+  id         Int          @id @default(autoincrement())
+  merchantId Int          @map("merchant_id")
+  apiKey     String       @unique @map("api_key") @db.VarChar(255)
+  apiSecret  String       @map("api_secret") @db.VarChar(255)
+  name       String       @db.VarChar(200)
+  status     ApiKeyStatus @default(Active)
+  rateLimit  Int          @default(100) @map("rate_limit")
+  lastUsedAt DateTime?    @map("last_used_at") @db.DateTime(0)
+  expiresAt  DateTime?    @map("expires_at") @db.DateTime(0)
+  createdAt  DateTime     @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt  DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
 
   merchant     Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade, map: "fk_apikeys_merchant")
   transactions Transaction[]
@@ -202,28 +203,29 @@ model ApiKey {
 }
 
 model PartnerConfig {
-  id                  Int                 @id @default(autoincrement())
-  connectorType       String              @map("connector_type") @db.VarChar(50)
-  name                String              @db.VarChar(255)
-  apiKey              String              @map("api_key") @db.VarChar(500)
-  secretKey           String              @map("secret_key") @db.VarChar(500)
-  merchantCode        String?             @map("merchant_code") @db.VarChar(255)
-  endpointSandbox     String?             @map("endpoint_sandbox") @db.VarChar(500)
-  endpointProduction  String?             @map("endpoint_production") @db.VarChar(500)
-  callbackUrl         String?             @map("callback_url") @db.VarChar(500)
-  webhookUrl          String?             @map("webhook_url") @db.VarChar(500)
-  timeout             Int                 @default(30000)
-  retryPolicy         Json?               @map("retry_policy")
-  status              PartnerConfigStatus @default(Inactive)
-  environment         PartnerEnvironment  @default(Sandbox)
-  testResult          Json?               @map("test_result")
-  lastTestedAt        DateTime?           @map("last_tested_at") @db.DateTime(0)
-  createdAt           DateTime            @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt           DateTime            @updatedAt @map("updated_at") @db.DateTime(0)
+  id                 Int                 @id @default(autoincrement())
+  connectorType      String              @map("connector_type") @db.VarChar(50)
+  name               String              @db.VarChar(255)
+  apiKey             String              @map("api_key") @db.VarChar(500)
+  secretKey          String              @map("secret_key") @db.VarChar(500)
+  merchantCode       String?             @map("merchant_code") @db.VarChar(255)
+  endpointSandbox    String?             @map("endpoint_sandbox") @db.VarChar(500)
+  endpointProduction String?             @map("endpoint_production") @db.VarChar(500)
+  callbackUrl        String?             @map("callback_url") @db.VarChar(500)
+  webhookUrl         String?             @map("webhook_url") @db.VarChar(500)
+  timeout            Int                 @default(30000)
+  retryPolicy        Json?               @map("retry_policy")
+  status             PartnerConfigStatus @default(Inactive)
+  environment        PartnerEnvironment  @default(Sandbox)
+  testResult         Json?               @map("test_result")
+  lastTestedAt       DateTime?           @map("last_tested_at") @db.DateTime(0)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.DateTime(0)
 
-  logs                  PartnerConfigLog[]
-  transactions          Transaction[]
-  reconciliationRuns    ReconciliationRun[]
+  logs               PartnerConfigLog[]
+  transactions       Transaction[]
+  reconciliationRuns ReconciliationRun[]
+  merchantRoutes     MerchantRoute[]
 
   @@index([connectorType], map: "idx_partner_type")
   @@index([status], map: "idx_partner_status")
@@ -232,19 +234,19 @@ model PartnerConfig {
 }
 
 model PartnerConfigLog {
-  id              BigInt        @id @default(autoincrement())
-  partnerConfigId Int           @map("partner_config_id")
-  userId          Int?          @map("user_id")
-  fieldChanged    String        @map("field_changed") @db.VarChar(100)
-  oldValue        String?       @map("old_value") @db.Text
-  newValue        String?       @map("new_value") @db.Text
-  ipAddress       String?       @map("ip_address") @db.VarChar(45)
+  id              BigInt   @id @default(autoincrement())
+  partnerConfigId Int      @map("partner_config_id")
+  userId          Int?     @map("user_id")
+  fieldChanged    String   @map("field_changed") @db.VarChar(100)
+  oldValue        String?  @map("old_value") @db.Text
+  newValue        String?  @map("new_value") @db.Text
+  ipAddress       String?  @map("ip_address") @db.VarChar(45)
   /// Username from the admin token (Keycloak users are not in `users`, so user_id stays null)
-  changedBy       String?       @map("changed_by") @db.VarChar(100)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  changedBy       String?  @map("changed_by") @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(0)
 
-  partnerConfig   PartnerConfig @relation(fields: [partnerConfigId], references: [id], onDelete: Cascade, map: "fk_pcl_partner")
-  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull, map: "fk_pcl_user")
+  partnerConfig PartnerConfig @relation(fields: [partnerConfigId], references: [id], onDelete: Cascade, map: "fk_pcl_partner")
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull, map: "fk_pcl_user")
 
   @@index([partnerConfigId], map: "idx_pcl_partner")
   @@map("partner_config_logs")
@@ -268,37 +270,37 @@ model Connector {
 }
 
 model Transaction {
-  id               Int               @id @default(autoincrement())
-  txnCode          String            @unique @map("txn_code") @db.VarChar(100)
-  merchantId       Int               @map("merchant_id")
-  merchantTxnId    String?           @map("merchant_txn_id") @db.VarChar(255)
-  apiKeyId         Int?              @map("api_key_id")
-  amount           Decimal           @db.Decimal(15, 0)
-  refundedAmount   Decimal           @default(0) @map("refunded_amount") @db.Decimal(15, 0)
-  currency         String            @default("VND") @db.VarChar(10)
-  description      String?           @db.Text
-  status           TransactionStatus @default(Created)
-  paymentMethod    String?           @map("payment_method") @db.VarChar(50)
-  partnerConfigId  Int?              @map("partner_config_id")
-  partnerTxnId     String?           @map("partner_txn_id") @db.VarChar(255)
-  returnUrl        String?           @map("return_url") @db.VarChar(500)
-  webhookUrl       String?           @map("webhook_url") @db.VarChar(500)
-  customerName     String?           @map("customer_name") @db.VarChar(255)
-  customerEmail    String?           @map("customer_email") @db.VarChar(255)
-  customerPhone    String?           @map("customer_phone") @db.VarChar(50)
-  ipAddress        String?           @map("ip_address") @db.VarChar(45)
-  metadata         Json?
-  idempotencyKey   String?           @map("idempotency_key") @db.VarChar(255)
-  expiredAt        DateTime?         @map("expired_at") @db.DateTime(0)
-  paidAt           DateTime?         @map("paid_at") @db.DateTime(0)
-  notifyWebhook    Boolean           @default(false) @map("notify_webhook") @db.TinyInt
-  webhookSentAt    DateTime?         @map("webhook_sent_at") @db.DateTime(0)
-  createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.DateTime(0)
+  id              Int               @id @default(autoincrement())
+  txnCode         String            @unique @map("txn_code") @db.VarChar(100)
+  merchantId      Int               @map("merchant_id")
+  merchantTxnId   String?           @map("merchant_txn_id") @db.VarChar(255)
+  apiKeyId        Int?              @map("api_key_id")
+  amount          Decimal           @db.Decimal(15, 0)
+  refundedAmount  Decimal           @default(0) @map("refunded_amount") @db.Decimal(15, 0)
+  currency        String            @default("VND") @db.VarChar(10)
+  description     String?           @db.Text
+  status          TransactionStatus @default(Created)
+  paymentMethod   String?           @map("payment_method") @db.VarChar(50)
+  partnerConfigId Int?              @map("partner_config_id")
+  partnerTxnId    String?           @map("partner_txn_id") @db.VarChar(255)
+  returnUrl       String?           @map("return_url") @db.VarChar(500)
+  webhookUrl      String?           @map("webhook_url") @db.VarChar(500)
+  customerName    String?           @map("customer_name") @db.VarChar(255)
+  customerEmail   String?           @map("customer_email") @db.VarChar(255)
+  customerPhone   String?           @map("customer_phone") @db.VarChar(50)
+  ipAddress       String?           @map("ip_address") @db.VarChar(45)
+  metadata        Json?
+  idempotencyKey  String?           @map("idempotency_key") @db.VarChar(255)
+  expiredAt       DateTime?         @map("expired_at") @db.DateTime(0)
+  paidAt          DateTime?         @map("paid_at") @db.DateTime(0)
+  notifyWebhook   Boolean           @default(false) @map("notify_webhook") @db.TinyInt
+  webhookSentAt   DateTime?         @map("webhook_sent_at") @db.DateTime(0)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.DateTime(0)
 
-  merchant      Merchant           @relation(fields: [merchantId], references: [id], onDelete: Restrict, map: "fk_txn_merchant")
-  apiKey        ApiKey?            @relation(fields: [apiKeyId], references: [id], onDelete: SetNull, map: "fk_txn_apikey")
-  partnerConfig PartnerConfig?     @relation(fields: [partnerConfigId], references: [id], onDelete: SetNull, map: "fk_txn_partner")
+  merchant      Merchant               @relation(fields: [merchantId], references: [id], onDelete: Restrict, map: "fk_txn_merchant")
+  apiKey        ApiKey?                @relation(fields: [apiKeyId], references: [id], onDelete: SetNull, map: "fk_txn_apikey")
+  partnerConfig PartnerConfig?         @relation(fields: [partnerConfigId], references: [id], onDelete: SetNull, map: "fk_txn_partner")
   logs          TransactionLog[]
   rawData       TransactionRawData[]
   refunds       Refund[]
@@ -320,17 +322,17 @@ model Transaction {
 }
 
 model TransactionLog {
-  id            BigInt      @id @default(autoincrement())
-  transactionId Int         @map("transaction_id")
-  event         String      @db.VarChar(50)
-  fromStatus    String?     @map("from_status") @db.VarChar(50)
-  toStatus      String?     @map("to_status") @db.VarChar(50)
-  description   String?     @db.Text
-  rawData       Json?       @map("raw_data")
-  createdBy     String?     @map("created_by") @db.VarChar(255)
-  createdAt     DateTime    @default(now()) @map("created_at") @db.DateTime(0)
+  id            BigInt   @id @default(autoincrement())
+  transactionId Int      @map("transaction_id")
+  event         String   @db.VarChar(50)
+  fromStatus    String?  @map("from_status") @db.VarChar(50)
+  toStatus      String?  @map("to_status") @db.VarChar(50)
+  description   String?  @db.Text
+  rawData       Json?    @map("raw_data")
+  createdBy     String?  @map("created_by") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(0)
 
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_txnlog_txn")
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_txnlog_txn")
 
   @@index([transactionId], map: "idx_txnlog_txn")
   @@index([event], map: "idx_txnlog_event")
@@ -349,7 +351,7 @@ model TransactionRawData {
   httpStatus    Int?             @map("http_status")
   createdAt     DateTime         @default(now()) @map("created_at") @db.DateTime(0)
 
-  transaction   Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_raw_txn")
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_raw_txn")
 
   @@index([transactionId], map: "idx_raw_txn")
   @@index([createdAt], map: "idx_raw_created")
@@ -403,28 +405,28 @@ model WebhookConfig {
 }
 
 model WebhookLog {
-  id               BigInt           @id @default(autoincrement())
-  webhookConfigId  Int?             @map("webhook_config_id")
-  transactionId    Int?             @map("transaction_id")
+  id              BigInt           @id @default(autoincrement())
+  webhookConfigId Int?             @map("webhook_config_id")
+  transactionId   Int?             @map("transaction_id")
   /// X-Webhook-Id: same for every attempt/replay of one message (merchant de-duplicates on it)
-  deliveryId       String?          @map("delivery_id") @db.VarChar(64)
-  event            String           @db.VarChar(50)
-  requestUrl       String?          @map("request_url") @db.VarChar(500)
-  requestHeaders   Json?            @map("request_headers")
-  requestBody      Json?            @map("request_body")
-  responseStatus   Int?             @map("response_status")
-  responseBody     String?          @map("response_body") @db.Text
-  responseHeaders  Json?            @map("response_headers")
-  status           WebhookLogStatus
-  attempt          Int              @default(1)
-  maxRetries       Int              @default(5) @map("max_retries")
-  nextRetryAt      DateTime?        @map("next_retry_at") @db.DateTime(0)
-  durationMs       Int?             @map("duration_ms")
-  errorMessage     String?          @map("error_message") @db.Text
-  createdAt        DateTime         @default(now()) @map("created_at") @db.DateTime(0)
+  deliveryId      String?          @map("delivery_id") @db.VarChar(64)
+  event           String           @db.VarChar(50)
+  requestUrl      String?          @map("request_url") @db.VarChar(500)
+  requestHeaders  Json?            @map("request_headers")
+  requestBody     Json?            @map("request_body")
+  responseStatus  Int?             @map("response_status")
+  responseBody    String?          @map("response_body") @db.Text
+  responseHeaders Json?            @map("response_headers")
+  status          WebhookLogStatus
+  attempt         Int              @default(1)
+  maxRetries      Int              @default(5) @map("max_retries")
+  nextRetryAt     DateTime?        @map("next_retry_at") @db.DateTime(0)
+  durationMs      Int?             @map("duration_ms")
+  errorMessage    String?          @map("error_message") @db.Text
+  createdAt       DateTime         @default(now()) @map("created_at") @db.DateTime(0)
 
-  webhookConfig    WebhookConfig? @relation(fields: [webhookConfigId], references: [id], onDelete: SetNull, map: "fk_whlog_config")
-  transaction      Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull, map: "fk_whlog_txn")
+  webhookConfig WebhookConfig? @relation(fields: [webhookConfigId], references: [id], onDelete: SetNull, map: "fk_whlog_config")
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull, map: "fk_whlog_txn")
 
   @@index([webhookConfigId], map: "idx_whlog_config")
   @@index([transactionId], map: "idx_whlog_txn")
@@ -490,25 +492,25 @@ model ReconciliationDetail {
 }
 
 model Dispute {
-  id                   Int           @id @default(autoincrement())
-  transactionId        Int           @map("transaction_id")
-  disputeCode          String        @unique @map("dispute_code") @db.VarChar(100)
-  reason               String        @db.Text
-  description          String?       @db.Text
-  status               DisputeStatus @default(Pending)
-  resolution           String?       @db.Text
-  submittedToPartner   Boolean       @default(false) @map("submitted_to_partner") @db.TinyInt
-  partnerResponse      Json?         @map("partner_response")
-  createdBy            Int?          @map("created_by")
-  resolvedBy           Int?          @map("resolved_by")
-  resolvedAt           DateTime?     @map("resolved_at") @db.DateTime(0)
-  createdAt            DateTime      @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt            DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+  id                 Int           @id @default(autoincrement())
+  transactionId      Int           @map("transaction_id")
+  disputeCode        String        @unique @map("dispute_code") @db.VarChar(100)
+  reason             String        @db.Text
+  description        String?       @db.Text
+  status             DisputeStatus @default(Pending)
+  resolution         String?       @db.Text
+  submittedToPartner Boolean       @default(false) @map("submitted_to_partner") @db.TinyInt
+  partnerResponse    Json?         @map("partner_response")
+  createdBy          Int?          @map("created_by")
+  resolvedBy         Int?          @map("resolved_by")
+  resolvedAt         DateTime?     @map("resolved_at") @db.DateTime(0)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
 
-  transaction  Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_dispute_txn")
-  creator      User?              @relation("DisputeCreator", fields: [createdBy], references: [id], onDelete: SetNull, map: "fk_dispute_creator")
-  resolver     User?              @relation("DisputeResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, map: "fk_dispute_resolver")
-  attachments  DisputeAttachment[]
+  transaction Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_dispute_txn")
+  creator     User?               @relation("DisputeCreator", fields: [createdBy], references: [id], onDelete: SetNull, map: "fk_dispute_creator")
+  resolver    User?               @relation("DisputeResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, map: "fk_dispute_resolver")
+  attachments DisputeAttachment[]
 
   @@index([transactionId], map: "idx_dispute_txn")
   @@index([status], map: "idx_dispute_status")
@@ -600,4 +602,25 @@ model IdempotencyKey {
   @@index([keyValue], map: "idx_idemp_key")
   @@index([createdAt], map: "idx_idemp_created")
   @@map("idempotency_keys")
+}
+
+/// Route Engine (P3.8): per-merchant partner priority for a payment method.
+/// Lower priority runs first; is_enabled = false removes the partner from this merchant's routes.
+/// Active partners not listed here are still used after the listed ones (fallback).
+model MerchantRoute {
+  id              Int      @id @default(autoincrement())
+  merchantId      Int      @map("merchant_id")
+  paymentMethod   String   @map("payment_method") @db.VarChar(50)
+  partnerConfigId Int      @map("partner_config_id")
+  priority        Int      @default(0)
+  isEnabled       Boolean  @default(true) @map("is_enabled") @db.TinyInt
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.DateTime(0)
+
+  merchant      Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_mroute_merchant")
+  partnerConfig PartnerConfig @relation(fields: [partnerConfigId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_mroute_partner")
+
+  @@unique([merchantId, paymentMethod, partnerConfigId], map: "uq_mroute")
+  @@index([partnerConfigId], map: "idx_mroute_partner")
+  @@map("merchant_routes")
 }

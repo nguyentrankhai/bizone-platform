@@ -118,7 +118,7 @@ async function run(
   try {
     return await produce(merchant);
   } catch (e) {
-    if (e instanceof QrError) return err(e.code, e.message, QR_ERROR_STATUS[e.code]);
+    if (e instanceof QrError) return err(e.code, e.message, QR_ERROR_STATUS[e.code], e.details);
     throw e;
   }
 }

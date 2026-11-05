@@ -12,12 +12,14 @@ import {
   listTransactions,
   type ListTransactionsInput,
 } from "@/server/services/transaction.service";
-import { PaymentError, initiatePayment } from "@/server/services/payment.service";
 import {
-  ConnectorUnavailableError,
-  resolveConnectorForMethod,
-  supportedPaymentMethods,
-} from "@/services/connectors/registry";
+  PaymentError,
+  initiatePayment,
+  type InitiatedPayment,
+} from "@/server/services/payment.service";
+import { isPaymentMethod } from "@/services/routing/routeMap";
+import { availableMethods, planRoute } from "@/services/routing/routeEngine";
+import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
@@ -33,10 +35,19 @@ const createTxnSchema = z.object({
   customer_phone: z.string().max(50).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   expiry_minutes: z.number().int().min(1).max(1440).default(15),
-  /** Optional: go straight to a PSP (payment_url = PSP URL). Omit → hosted method picker. */
+  /**
+   * Optional (services/routing/routeMap.ts). Redirect methods → payment_url = PSP URL;
+   * `vietqr` → response carries `qr_code`, payment_url = hosted QR page.
+   * Omit / null → hosted page where the customer picks among the available methods.
+   */
   payment_method: z
     .string()
-    .refine((m) => supportedPaymentMethods().includes(m), "Unsupported payment_method")
+    .refine((m) => isPaymentMethod(m), "Unsupported payment_method")
+    .nullish(),
+  qr_size: z
+    .number()
+    .int()
+    .refine((n) => (QR_SIZES as readonly number[]).includes(n), "qr_size must be 200, 300 or 500")
     .optional(),
   customer_ip: z.string().max(45).optional(),
 });
@@ -96,15 +107,19 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     if (cached) return ok(cached);
   }
 
-  // Fail fast if the requested PSP is not configured (before creating the transaction)
+  // Fail fast when the Route Engine has no partner for the requested method (before
+  // creating the transaction). Other methods keep working — tell the merchant which.
   if (input.payment_method) {
-    try {
-      await resolveConnectorForMethod(input.payment_method);
-    } catch (e) {
-      if (e instanceof ConnectorUnavailableError) {
-        return err("SERVICE_UNAVAILABLE", "Payment method is not available", 503);
-      }
-      throw e;
+    const plan = await planRoute(merchant.merchantId, input.payment_method);
+    if (plan.candidates.length === 0) {
+      return err("SERVICE_UNAVAILABLE", "Payment method is not available", 503, {
+        payment_method: input.payment_method,
+        skipped: plan.skipped.map((x) => ({
+          partner_config_id: x.partnerConfigId,
+          reason: x.reason,
+        })),
+        available_methods: await availableMethods(merchant.merchantId),
+      });
     }
   }
 
@@ -130,30 +145,53 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
 
   let paymentUrl = txn.paymentUrl;
   let status: string = txn.status;
+  let initiated: InitiatedPayment | undefined;
+  let paymentError: { code: string; message: string; details?: unknown } | undefined;
   if (input.payment_method) {
     try {
-      const initiated = await initiatePayment(
+      initiated = await initiatePayment(
         txn.txnCode,
         input.payment_method,
         input.customer_ip ?? getClientIp(req),
+        { qrSize: input.qr_size as QrSize | undefined },
       );
       paymentUrl = initiated.paymentUrl;
       status = "Pending";
     } catch (e) {
       if (!(e instanceof PaymentError)) throw e;
-      // Transaction exists; the customer can still pick a method on the hosted page.
+      // Every partner failed between the check above and now. The transaction exists and
+      // stays Created: the customer can still pick another method on the hosted page.
       console.error(`[transactions] initiatePayment failed for ${txn.txnCode}: ${e.message}`);
+      paymentError = { code: e.code, message: e.message, details: e.details };
     }
   }
 
+  const qr = initiated?.kind === "qr" ? initiated.qr : undefined;
   const response = {
     transaction_id: txn.id,
     txn_code: txn.txnCode,
+    merchant_txn_id: txn.merchantTxnId,
     status,
     amount: txn.amount.toString(),
     currency: txn.currency,
     payment_method: input.payment_method ?? null,
+    partner: initiated?.connectorType ?? null,
     payment_url: paymentUrl,
+    qr_code: qr
+      ? {
+          qr_id: qr.qr_id,
+          type: qr.type,
+          size: qr.size,
+          image_base64: qr.image_base64,
+          image_url: qr.image_url,
+          raw_data: qr.raw_data,
+          transfer_note: qr.transfer_note,
+          bank: qr.bank,
+          expires_at: qr.expires_at,
+        }
+      : null,
+    ...(initiated?.fallbackUsed ? { fallback_used: true } : {}),
+    ...(paymentError ? { payment_error: paymentError } : {}),
     expired_at: txn.expiredAt?.toISOString(),
     created_at: txn.createdAt.toISOString(),
   };

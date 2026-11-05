@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-05 (P3.7 Payment Hub Dashboard ✅; P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-06 (P3.8 Route Engine ✅ — hết task ⬜ của GĐ 3; P3.7 Payment Hub Dashboard ✅; P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 4 | 3 | 1 |
+| 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **22** | **3** | **26** |
+| **Tổng** | **51** | **23** | **3** | **25** |
 
 ---
 
@@ -53,7 +53,7 @@
 | 22 | Mapper `merchant_id` đã có trên client `payhub-admin-console`, nhưng chưa user Keycloak nào được gán thuộc tính này (token admin hiện xem mọi merchant) | QA-1 | Khi có tài khoản merchant |
 | 23 | VietQR đang dùng **tài khoản demo** (`VIETQR_*` trong `.env.development` / `.env.local`: Vietcombank `0011001234567`) → điền tài khoản nhận thật rồi `npm run db:seed` | P3.4 | Người dùng |
 | 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` | P3.4 | P5.4 Đối soát / connector ngân hàng |
-| 25 | `POST /api/v1/transactions` chưa nhận `payment_method: vietqr` (trả kèm `qr_code` như API-Design §5.1) và trang `/pay/{txn}` chưa có lựa chọn VietQR — merchant phải gọi `/api/v1/qr/generate` sau khi tạo GD | P3.4 | P3.8 Route Engine |
+| ~~25~~ | ~~`POST /api/v1/transactions` chưa nhận `payment_method: vietqr`; `/pay/{txn}` chưa có VietQR~~ | ~~P3.4~~ | ✅ P3.8 |
 | 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
 | 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
 | 28 | Log thay đổi đối tác lấy IP từ `x-forwarded-for` — tin cậy được khi chạy sau reverse proxy ghi đè header này | P3.5 | Khi triển khai (P6.5) |
@@ -63,12 +63,17 @@
 | 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | P6.5 / triển khai |
 | 33 | Cảnh báo dashboard dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`: ≥ 5 GD lỗi và ≥ 30 % trong 60 phút; ≥ 5 lần gửi webhook lỗi/giờ; outbox kẹt > 5 phút). Chưa có cảnh báo "đối tác mất kết nối", "đối soát chênh lệch", "hoàn tiền" như mockup — chưa có nguồn dữ liệu | P3.7 | P5.4 (đối soát), P5.6/P7.x (giám sát connector, cấu hình ngưỡng) |
 | 34 | Dashboard theo merchant (token có claim `merchant_id`) mới kiểm bằng code + unit, chưa kiểm end-to-end vì chưa có user Keycloak mang claim này (#22) | P3.7 | Khi có tài khoản merchant |
+| 35 | Route Engine chỉ có API admin (`/api/internal/routes/*`), chưa có màn hình cấu hình ưu tiên đối tác theo merchant / xem circuit | P3.8 | Module Merchant / P7.1 (`app/connectors`) |
+| 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB): chưa có Health Monitor định kỳ, chưa dùng bảng `connector_health_logs` / `connector_circuit_breaker_states` (migration_001), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá | P3.8 | P7.1 / P7.5 |
+| 37 | `payment_url` khi không chọn phương thức lấy từ `NEXT_PUBLIC_APP_URL` (`transaction.service`, giá trị lúc build) còn trang QR/ảnh QR/return URL dùng `APP_URL` (lúc chạy) — cần thống nhất một biến khi triển khai | P3.8 (phát hiện) | P6.5 / triển khai |
+| 38 | Đổi cấu hình định tuyến (PUT routes, reset circuit) mới ghi `console`, chưa vào audit log | P3.8 | P7.2 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-06 | Merchant không tạo được GD VietQR trong một lần gọi; `/pay/{txn}` không có VietQR (#25) | `POST /api/v1/transactions` nhận `payment_method: vietqr` → trả `qr_code` + `payment_url` trang QR; `/pay` liệt kê VietQR, hiển thị QR, tự reload theo dõi trạng thái (P3.8) |
 | 2026-11-05 | `npm run build:jobs` của Payment Hub xuất bundle CJS → `node dist/worker.js` / `dist/server.js` lỗi ngay khi khởi động (`fileURLToPath(undefined)`, Prisma 7 dùng `import.meta.url`); Docker compose chạy 2 file này | Chuyển sang bundle ESM `dist/worker.mjs`, `dist/server.mjs` (giống BizOne), sửa compose + Dockerfile (P3.7) |
 | 2026-11-04 | Job webhook trong Redis chứa `secret` dạng rõ (#3); IPN không gửi webhook cho merchant (#17) | Job chỉ mang `webhookConfigId` (secret mã hoá trong DB, đọc lúc gửi); outbox `notify_webhook` gửi `payment.success/failed/expired` (P3.6) |
 | 2026-11-04 | BizOne chưa cô lập dữ liệu tenant (SRS-NFR-14/19): mọi tenant dùng chung `bizonedb` | DB riêng mỗi tenant qua `lib/tenant.ts` (AsyncLocalStorage + `TENANT_DATABASES`), fail-closed (QA-1) |
@@ -132,7 +137,7 @@
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ✅ | `ba87a4a` | Xem [kết quả P3.6](#p36--webhook-engine) |
 | P3.7 | Payment Hub Dashboard | ✅ | `7bfeefa` | Xem [kết quả P3.7](#p37--payment-hub-dashboard) |
-| P3.8 | Route Engine — Partner Selection | ⬜ | — | |
+| P3.8 | Route Engine — Partner Selection | ✅ | `HASH_P38` | Xem [kết quả P3.8](#p38--route-engine--partner-selection) |
 
 ## Giai đoạn 4 — BizOne Mở rộng (Tuần 9–12)
 
@@ -1232,6 +1237,61 @@ Ngoài plan, theo yêu cầu người dùng.
   - Cảnh báo tính tại thời điểm đọc từ DB (không lưu bảng riêng) — đơn giản, không lệch với dữ liệu; ngưỡng tập trung ở `ALERT_RULES`.
 
 - **Vấn đề / lưu ý:** mới #33 (ngưỡng cố định, thiếu cảnh báo đối tác/đối soát), #34 (chưa kiểm e2e theo merchant). Trang `/dashboard` render sẵn dữ liệu mọi merchant khi chưa có đăng nhập (#7, như `/transactions`). Đóng lỗi bundle CJS của worker/realtime.
+
+
+### P3.8 — Route Engine — Partner Selection
+
+- **Hoàn thành:** 2026-11-06 · **Commit:** `HASH_P38` · **Vị trí:** `source/payment-hub/services/routing/` (`routeMap.ts`, `routeEngine.ts`), `server/routes/route-config.ts`, `app/api/internal/routes/`, `server/services/payment.service.ts`, `server/services/qr.service.ts`, `server/routes/transactions.ts`, `server/routes/pay-page.ts`, migration `3_merchant_routes`, `tests/routing.test.ts`
+- **Đã làm:**
+  - **`routeMap.ts`** — bảng `payment_method` → connector theo PLAN: `vnpay_qr`/`vnpay_atm`/`vnpay_card`/`vnpay` → VNPay, `vietqr` → VietQR, `momo_qr` → MoMo, `zalopay_qr` → ZaloPay; mỗi mục có `kind` (`redirect` = connector dựng URL PSP, `qr` = Hub tự sinh VietQR) và nhãn cho trang thanh toán. Thay cho danh sách `methods` cứng trong `registry.ts`
+  - **`routeEngine.ts`**:
+    - `planRoute(merchantId, method)` — ứng viên = partner config đúng loại connector, `Active`, connector bật (`connectors.is_active`) và có code trong build; thứ tự = danh sách ưu tiên của merchant (`merchant_routes`, priority nhỏ trước, dòng `is_enabled = 0` bị loại) rồi các partner Active còn lại theo id (fallback). Mỗi partner bị loại có lý do: `inactive`, `error_status`, `connector_disabled`, `connector_not_implemented`, `disabled_for_merchant`, `circuit_open`. Lõi sắp xếp `orderCandidates()` là hàm thuần (unit test)
+    - `executeRoute(plan, attempt)` — thử lần lượt, timeout theo `partner_configs.timeout`; lỗi đối tác/timeout → ghi lỗi cho circuit + thử partner kế (fallback); lỗi nghiệp vụ (GD hết hạn, sai input…) dừng ngay, không tính lỗi cho đối tác; hết partner → `NoRouteError` (`no_partner` / `all_failed`, kèm từng lần thử)
+    - **Circuit breaker** (Redis): ≥ 5 lỗi liên tiếp trong 60 s → bỏ qua partner 30 s (`ROUTE_CB_FAILURES/WINDOW_S/OPEN_S`), thành công xoá bộ đếm; Redis lỗi → không chặn routing (fail open). Mỗi partner một bộ đếm → lỗi một đối tác không ảnh hưởng đối tác khác
+    - Đọc DB mỗi request (3 truy vấn nhỏ + 1 MGET) → kích hoạt/vô hiệu đối tác, đổi ưu tiên có hiệu lực ngay request sau, không restart (hot-plug)
+  - **Bảng `merchant_routes`** (migration `3_merchant_routes`, cập nhật `database/schema_paymenthub.sql`): `merchant_id`, `payment_method`, `partner_config_id`, `priority`, `is_enabled`; unique (merchant, method, partner); FK cascade
+  - **API admin** (`server/routes/route-config.ts`, JWT qua `proxy.ts`): `GET /api/internal/routes` (mặc định + circuit từng partner), `GET/PUT /api/internal/routes/{merchantId}` (ưu tiên đã cấu hình, route hiệu lực, partner bị bỏ qua + lý do cho 7 phương thức; PUT: thứ tự mảng = ưu tiên, `partners: []` xoá cấu hình phương thức đó; kiểm partner tồn tại + đúng loại connector + không trùng), `DELETE /api/internal/routes/circuits/{partnerId}` (đóng circuit). Đọc: admin/viewer; ghi: admin; token gắn `merchant_id` chỉ xem/sửa merchant đó, không reset circuit
+  - **Tích hợp**:
+    - `initiatePayment()` (VNPay và các connector redirect sau này) chọn partner qua Route Engine thay vì "partner Active đầu tiên"; log GD ghi tên/id partner và partner đã lỗi khi fallback
+    - `qr.service.generateQr()` lấy tài khoản nhận VietQR qua Route Engine (ưu tiên theo merchant ⇒ merchant có thể có tài khoản nhận riêng; cấu hình tài khoản sai → fallback sang tài khoản kế); `/api/v1/qr/generate` trả lý do khi 503
+    - **#25** — `POST /api/v1/transactions`: `payment_method` nhận mọi phương thức trong route map (+ `null`), thêm `qr_size`; `vietqr` → GD `Pending` + `qr_code` (`type`, `image_base64`, `image_url`, `raw_data`, `transfer_note`, `bank`, `expires_at`) và `payment_url` = trang QR của Hub; thêm `partner`, `fallback_used`, `payment_error`. Phương thức không có partner khả dụng → 503 trước khi tạo GD, `details.skipped` + `available_methods`
+    - **`/pay/{txn}`**: picker chỉ liệt kê phương thức đang khả dụng cho merchant; `vietqr` → màn hình QR (ảnh, ngân hàng, số TK, chủ TK, số tiền, nội dung CK, giờ hết hạn) tự reload 15 s (thấy kết quả / QR mới khi hết hạn, không cần JS); phương thức chọn bị sập → picker 503 kèm thông báo và các phương thức còn lại; không còn phương thức nào → "Chưa thể thanh toán"; GD đã kết thúc → trang kết quả (thành công / hết hạn / thất bại / hoàn tiền)
+  - Không đổi IPN/redirect: vẫn xác thực bằng `transactions.partner_config_id` của GD (đúng secret dù GD đi qua partner dự phòng)
+  - `.env.example` thêm `ROUTE_CB_*`; API-Design §5.1 (bảng `payment_method`, `qr_size`, `partner`, `fallback_used`, `payment_error`, lỗi 503) + §6.2b (Route Engine)
+  - Test Vitest `tests/routing.test.ts` (11): route map, thứ tự mặc định + lý do loại, ưu tiên merchant + fallback + dòng tắt, circuit/connector tắt/chưa có code, VNPay sập không ảnh hưởng VietQR, fallback khi lỗi + khi timeout, lỗi nghiệp vụ không fallback, `NoRouteError`, circuit mở sau 5 lỗi liên tiếp và reset khi thành công
+
+- **Kiểm thử** (`next build` + `next start` :4010, MariaDB/Redis local, 2 merchant test `P38A`/`P38B` + API key do `apikey:create` cấp, script e2e ký HMAC độc lập với code app, token Keycloak thật (PKCE) cho `payhub.admin`/`payhub.viewer`; thêm partner dự phòng "VNPay Backup" (#8, bản sao #1) và "VietQR Backup" (#9, số TK khác); trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo GD với method='vnpay_qr' → route đến VNPay | ✅ 201 `Pending`, `partner: VNPay`, `payment_url` sandbox VNPay có `vnp_BankCode=VNPAYQR`, `partner_config_id = 1` (~45 ms); `vnpay_atm`/`vnpay_card`/`vnpay` cũng về VNPay; `/pay/{txn}?method=vnpay_qr` → 302 VNPay |
+  | Tắt VNPay → GD với method='vietqr' vẫn hoạt động | ✅ cả 2 partner VNPay `Inactive`: `vnpay_qr` → 503 (không tạo GD, `skipped` = 2× `inactive`, `available_methods: ["vietqr"]`); `vietqr` → 201 + `qr_code` (~23 ms); picker chỉ còn VietQR; `/pay?method=vnpay_qr` → 503 + thông báo + nút VietQR. Tắt connector `vnpay` (`connectors.is_active=0`) → 503 `connector_disabled`, bật lại → 201 ngay (không restart). Ngược lại tắt hết VietQR → `vietqr` 503 còn VNPay vẫn 201 |
+  | `map` 'momo_qr' → MoMo, 'zalopay_qr' → ZaloPay | ✅ có trong route map (unit test); chưa có connector (P5.1/P5.2) → 503 + `available_methods`, không tạo GD |
+  | Fallback nếu đối tác lỗi | ✅ partner ưu tiên VNPay #8 hỏng secret → GD vẫn 201 qua #1, `fallback_used: true`, log GD "… fallback after #8 failed"; VietQR #9 sai số TK → QR bằng tài khoản #2; cả 2 VNPay lỗi → GD tạo `Created` + `payment_error.reason = all_failed`, trang `/pay` mời chọn VietQR. Response cho merchant không lộ thông điệp lỗi nội bộ của partner |
+  | Cấu hình ưu tiên đối tác theo merchant | ✅ PUT merchant A: `vnpay_qr` = [#8, #1], `vietqr` = [#9] → route hiệu lực [#8, #1] và [#9, #2] (partner chưa liệt kê đứng sau); A `vnpay_qr` → #8, A `vietqr` → tài khoản #9; merchant B (không cấu hình) → #1 / tài khoản #2; `enabled: false` cho #8 → A về #1 (`disabled_for_merchant`) |
+  | Graceful degradation: một đối tác lỗi không ảnh hưởng đối tác khác | ✅ 5 lỗi liên tiếp của #8 → circuit #8 mở (`open_ms_left` ~30 s), request sau đi thẳng #1 không thử #8; bộ đếm #1 = 0; admin reset circuit → đóng (viewer → 403). VNPay sập không ảnh hưởng VietQR (trên) |
+  | #25 — `vietqr` trả `qr_code`; `/pay` có VietQR | ✅ `qr_code` đủ trường API-Design §5.1, `qr_size: 500` → ảnh 500 px; `image_url` → 200 `image/png`; `GET /api/v1/qr/{txn}` trả lại cùng `qr_id`; `payment_url` → trang QR (đã xem trên trình duyệt: ảnh QR, ngân hàng, số TK, chủ TK, nội dung `TXN…`, giờ hết hạn, nút "Chọn phương thức khác"); GD chuyển `Success` → trang "Thanh toán thành công" |
+  | IPN với GD đi qua partner dự phòng | ✅ IPN ký HMAC-SHA512 cho GD route qua #8 → `00 Confirm Success`, GD `Success`, giữ `partner_config_id = 8` |
+  | Lỗi / phân quyền API route config | ✅ không token 401; header `x-user-*` giả 401; viewer GET 200 / PUT 403; gán partner VNPay cho `vietqr` 400; partner không tồn tại 400; method lạ 400; merchant không tồn tại 404; `partners: []` xoá cấu hình; tạo GD method lạ / `qr_size: 250` → 400 |
+  | Script e2e | ✅ 55/55 (chạy lại toàn bộ từ trạng thái sạch sau lần sửa cuối) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 49/49); `dist/worker.mjs`, `dist/server.mjs` khởi động được |
+  | Dọn dẹp | ✅ dừng :4010; xoá 66 GD test (log/QR/raw cascade), merchant `P38A`/`P38B` + API key + `merchant_routes`, partner #8/#9; khôi phục `api_key`/trạng thái partner #1, #2 đúng giá trị ban đầu (đã so khớp), `connectors.vnpay` bật; xoá key Redis (`payhub:route:*`, QR, rate limit); xoá file token/API secret tạm |
+
+- **Khác biệt so với plan:**
+  - Thêm bảng `merchant_routes` (migration mới) để lưu "ưu tiên đối tác theo merchant" — schema gốc không có chỗ lưu.
+  - Fallback **trong cùng loại connector** (VNPay → VNPay dự phòng, VietQR → tài khoản dự phòng); không tự đổi sang phương thức khác (vd. `vnpay_qr` → `vietqr`) vì merchant đã chỉ định phương thức. Thay vào đó: API trả `available_methods`, trang `/pay` mời khách chọn phương thức còn hoạt động.
+  - Circuit breaker mức nhẹ trong Redis (đủ cho "graceful degradation"); circuit breaker/Health Monitor đầy đủ với bảng `connector_circuit_breaker_states` thuộc P7.1/P7.5 (#36).
+  - Chưa có UI cấu hình route (PLAN chỉ nêu file backend) — #35.
+  - `server/routes/route-config.ts` là API admin `/api/internal/routes/*` (thống nhất với các API admin khác từ QA-1).
+
+- **Quyết định thiết kế:**
+  - VietQR đi qua cùng Route Engine như PSP redirect (`kind: qr`) ⇒ một nơi quyết định partner cho mọi phương thức; merchant có thể dùng tài khoản nhận riêng.
+  - Partner chưa có trong danh sách ưu tiên của merchant vẫn được dùng sau cùng (thay vì bị cấm) — thêm partner mới không làm merchant cũ mất dự phòng; muốn loại thì đặt `enabled: false`.
+  - Phân biệt lỗi nghiệp vụ (có `code` NOT_FOUND/CONFLICT/VALIDATION_ERROR) với lỗi đối tác: chỉ lỗi đối tác mới fallback và tính vào circuit — tránh "đốt" mọi partner vì một GD hết hạn.
+  - Không cache bảng định tuyến (đọc DB mỗi request): bảng rất nhỏ, đổi cấu hình có hiệu lực tức thì, không cần cơ chế xoá cache giữa nhiều process.
+  - Kiểm tra trước khi tạo GD (503 không tạo GD) nhưng nếu partner lỗi ngay sau khi tạo thì vẫn trả 201 `Created` + `payment_error` — GD đã có, khách vẫn thanh toán được bằng phương thức khác trên `payment_url`.
+
+- **Vấn đề / lưu ý:** đóng #25. Mới #35–#38. VNPay vẫn dùng credential placeholder (#16) — routing chạy đúng, nhưng VNPay sandbox thật vẫn chờ P3.3.
 
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)
