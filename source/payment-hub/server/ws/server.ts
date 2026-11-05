@@ -5,6 +5,7 @@ import { verifyJwt } from "@/lib/auth";
 import { REALTIME_CHANNEL, canReceive, type RealtimeEvent } from "@/lib/events";
 import { createRedis } from "@/lib/redis";
 import { ADMIN_READ_ROLES } from "@/server/middleware/adminAuth";
+import { DashboardRelay } from "./dashboard";
 
 /**
  * Admin realtime relay. Clients authenticate with a Keycloak access token (realm payment-hub)
@@ -25,11 +26,17 @@ interface Client {
 
 const clients = new Map<WebSocket, Client>();
 const alive = new WeakMap<WebSocket, boolean>();
+const dashboard = new DashboardRelay();
 
 const http = createServer((req, res) => {
   if (req.url === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ success: true, data: { status: "ok", clients: clients.size } }));
+    res.end(
+      JSON.stringify({
+        success: true,
+        data: { status: "ok", clients: clients.size, dashboardSubscribers: dashboard.size },
+      }),
+    );
     return;
   }
   res.writeHead(404).end();
@@ -85,7 +92,16 @@ http.on("upgrade", (req, socket, head) => {
         clients.set(ws, result);
         alive.set(ws, true);
         ws.on("pong", () => alive.set(ws, true));
-        ws.on("close", () => clients.delete(ws));
+        ws.on("close", () => {
+          clients.delete(ws);
+          dashboard.remove(ws);
+        });
+        ws.on("message", (raw, isBinary) => {
+          if (isBinary) return;
+          const client = clients.get(ws);
+          if (!client || client.expiresAt <= Date.now()) return;
+          dashboard.handleClientMessage(ws, raw.toString(), { merchantId: client.merchantId });
+        });
         ws.send(JSON.stringify({ type: "connected", data: null, at: new Date().toISOString() }));
       });
     })
@@ -124,11 +140,13 @@ subscriber.on("message", (_channel, message) => {
     if (socket.readyState !== WebSocket.OPEN || client.expiresAt <= now) continue;
     if (canReceive(client, event)) socket.send(message);
   }
+  dashboard.onEvent(event);
 });
 
 subscriber
   .subscribe(REALTIME_CHANNEL)
   .then(() => {
+    dashboard.start();
     http.listen(port, () => {
       console.log(`[realtime] ws://0.0.0.0:${port}/ws relaying "${REALTIME_CHANNEL}"`);
     });
@@ -145,6 +163,7 @@ function shutdown(signal: string) {
   shuttingDown = true;
   console.log(`[realtime] ${signal} received, closing…`);
   clearInterval(heartbeat);
+  dashboard.stop();
   for (const socket of wss.clients) socket.close(1001, "server shutting down");
   wss.close();
   http.close();

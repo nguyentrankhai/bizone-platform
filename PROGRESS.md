@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-04 (P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-05 (P3.7 Payment Hub Dashboard ✅; P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
 
 ---
 
@@ -15,12 +15,12 @@
 |-----------|-----------|----|----|----|
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
-| 3 — Payment Hub MVP | 8 | 3 | 3 | 2 |
+| 3 — Payment Hub MVP | 8 | 4 | 3 | 1 |
 | 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **21** | **3** | **27** |
+| **Tổng** | **51** | **22** | **3** | **26** |
 
 ---
 
@@ -61,12 +61,15 @@
 | 30 | BizOne `/api/webhooks/payhub` mới xác thực + chống trùng + ghi log; chưa áp sự kiện vào hoá đơn/đơn hàng. Secret là một biến `PAYHUB_WEBHOOK_SECRET` cho cả app — chưa map merchant Payment Hub ↔ tenant BizOne | P3.6 | P4.5 (POS ↔ Payment Hub) |
 | 31 | API webhook cho merchant (`POST /api/v1/webhooks`, `POST /api/v1/webhook-test` trong OpenAPI / API-Design §5.4) chưa có — hiện chỉ admin cấu hình qua `/api/internal/webhooks` | P3.6 | Cổng merchant / P7.x |
 | 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | P6.5 / triển khai |
+| 33 | Cảnh báo dashboard dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`: ≥ 5 GD lỗi và ≥ 30 % trong 60 phút; ≥ 5 lần gửi webhook lỗi/giờ; outbox kẹt > 5 phút). Chưa có cảnh báo "đối tác mất kết nối", "đối soát chênh lệch", "hoàn tiền" như mockup — chưa có nguồn dữ liệu | P3.7 | P5.4 (đối soát), P5.6/P7.x (giám sát connector, cấu hình ngưỡng) |
+| 34 | Dashboard theo merchant (token có claim `merchant_id`) mới kiểm bằng code + unit, chưa kiểm end-to-end vì chưa có user Keycloak mang claim này (#22) | P3.7 | Khi có tài khoản merchant |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-05 | `npm run build:jobs` của Payment Hub xuất bundle CJS → `node dist/worker.js` / `dist/server.js` lỗi ngay khi khởi động (`fileURLToPath(undefined)`, Prisma 7 dùng `import.meta.url`); Docker compose chạy 2 file này | Chuyển sang bundle ESM `dist/worker.mjs`, `dist/server.mjs` (giống BizOne), sửa compose + Dockerfile (P3.7) |
 | 2026-11-04 | Job webhook trong Redis chứa `secret` dạng rõ (#3); IPN không gửi webhook cho merchant (#17) | Job chỉ mang `webhookConfigId` (secret mã hoá trong DB, đọc lúc gửi); outbox `notify_webhook` gửi `payment.success/failed/expired` (P3.6) |
 | 2026-11-04 | BizOne chưa cô lập dữ liệu tenant (SRS-NFR-14/19): mọi tenant dùng chung `bizonedb` | DB riêng mỗi tenant qua `lib/tenant.ts` (AsyncLocalStorage + `TENANT_DATABASES`), fail-closed (QA-1) |
 | 2026-11-04 | `GET /api/v1/transactions` kèm `X-Api-Key` bất kỳ bỏ qua JWT và không xác thực → lộ mọi giao dịch | Merchant: HMAC + lọc theo merchant; admin: JWT + role (QA-1) |
@@ -128,7 +131,7 @@
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ✅ | `ba87a4a` | Xem [kết quả P3.6](#p36--webhook-engine) |
-| P3.7 | Payment Hub Dashboard | ⬜ | — | |
+| P3.7 | Payment Hub Dashboard | ✅ | `PENDING` | Xem [kết quả P3.7](#p37--payment-hub-dashboard) |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
 
 ## Giai đoạn 4 — BizOne Mở rộng (Tuần 9–12)
@@ -1186,6 +1189,49 @@ Ngoài plan, theo yêu cầu người dùng.
   - Mọi phản hồi khác 2xx đều retry (kể cả 4xx) vì merchant hay trả 4xx tạm thời khi deploy; chỉ URL không hợp lệ/bị chặn mới dừng ngay.
 
 - **Vấn đề / lưu ý:** vấn đề mở #29–#32. Đóng #3, #17. BizOne cần đặt `PAYHUB_WEBHOOK_SECRET` (secret hiện một lần khi tạo endpoint trên `/webhooks`) để nhận webhook.
+
+
+### P3.7 — Payment Hub Dashboard
+
+- **Hoàn thành:** 2026-11-05 · **Commit:** `PENDING` · **Vị trí:** `source/payment-hub/app/dashboard/`, `app/api/internal/dashboard/`, `server/services/dashboard.service.ts`, `server/ws/dashboard.ts` (+ `server/ws/server.ts`), `lib/dashboard.ts`, `components/ph/{DashboardClient,DashboardStats,RevenueChart,PaymentMethodPie,RecentTransactions,DashboardAlerts,TopMerchants}.tsx`, `components/ph/dashboard-format.ts`, `tests/dashboard.test.ts`
+- **Đã làm:**
+  - **API** `GET /api/internal/dashboard?period=today|7days|30days` (API-Design §6.1; JWT qua `proxy.ts`, role `payhub-admin`/`payhub-viewer`, token có `merchant_id` chỉ thấy merchant đó; period sai → 400 `VALIDATION_ERROR`). Trả: `summary` (tổng GD, tổng tiền GD thành công, thành công, thất bại = Failed + Expired, đang chờ, hoàn tiền, tỉ lệ thành công), `previous` + `changes` (% so với kỳ trước cùng độ dài), `chart` (mỗi ngày: số GD, tiền thành công, thành công, thất bại — tối thiểu 7 ngày, 30 ngày khi chọn 30 ngày; ngày trống điền 0), `paymentMethods` (gộp theo `partner_configs.connector_type`, rồi `payment_method`: VNPay / VietQR / MoMo / ZaloPay / "Chưa chọn"), `recentTransactions` (10 GD mới nhất), `topMerchants` (top 5 theo doanh thu, SRS-PH-DASH-01-06), `alerts`, `generatedAt`
+  - **Ngày nghiệp vụ theo giờ Việt Nam** (UTC+7) trong khi DB lưu UTC: "Hôm nay" = 00:00 ICT → hiện tại, so với cùng khung giờ hôm qua; biểu đồ nhóm theo `DATE(created_at + INTERVAL 7 HOUR)`
+  - **Cache** Redis `payhub:dash:v1:{all|merchantId}:{period}` TTL 15 s (API-Design §12 "Redis aggregate cache"); Redis lỗi → đọc thẳng DB
+  - **Cảnh báo** (SRS-PH-DASH-01-07): GD lỗi bất thường (≥ 5 GD Failed/Expired và ≥ 30 % số GD kết thúc trong 60 phút), webhook thất bại hẳn (lần gửi cuối Failed, hết retry, chưa từng thành công — 24 giờ), webhook lỗi nhiều (≥ 5 lần lỗi/giờ), outbox webhook kẹt > 5 phút; mỗi cảnh báo link tới `/transactions` hoặc `/webhooks`
+  - **Realtime** `server/ws/dashboard.ts` (`DashboardRelay`, chạy trong process realtime :4001): client gửi `{"type":"subscribe","channel":"dashboard"}`; mỗi sự kiện `transaction.*` từ Redis → (gộp tối đa 1 lần/giây) xoá cache dashboard, tính `dashboard:stats` `{total_today, amount_today, success_count, failed_count, success_rate}` theo phạm vi của từng client (tất cả / merchant), gửi kèm `dashboard:refresh`; mỗi 15 s gửi `dashboard:refresh` để cảnh báo/số liệu webhook (không có sự kiện riêng) không cũ quá ~30 s. `/health` của realtime báo thêm `dashboardSubscribers`
+  - **UI `/dashboard`** (theo mockup Dashboard): server component render sẵn dữ liệu "Hôm nay" (`await connection()`), client: chọn Hôm nay / 7 ngày / 30 ngày, nút làm mới, chỉ báo "Real-time / Đang kết nối / Ngoại tuyến", giờ cập nhật; 4 thẻ top bar có % so kỳ trước (cập nhật ngay từ `dashboard:stats`); biểu đồ đường 2 trục (số GD + tiền thành công, tooltip theo ngày); donut phương thức thanh toán; donut tỉ lệ thành công/hoàn tiền/thất bại/hết hạn/đang xử lý; 10 GD gần nhất (GD mới tô sáng, link chi tiết); top merchant; khung cảnh báo. WS tự kết nối lại (backoff 1 s → 30 s), mất WS thì poll 15 s. Biểu đồ vẽ bằng SVG thuần — không thêm thư viện
+  - **Sửa `build:jobs`** sang ESM `.mjs` (bundle CJS cũ không chạy được với Prisma 7 — xem *Đã giải quyết*); `docker-compose.yml`, `Dockerfile` chạy `dist/worker.mjs`, `dist/server.mjs`
+  - Test Vitest `tests/dashboard.test.ts` (8): ranh giới ngày ICT, cửa sổ so sánh, gộp trạng thái + tỉ lệ, % thay đổi, điền ngày trống, nhãn phương thức, ngưỡng cảnh báo
+
+- **Kiểm thử** (`next start` :4010 với `DEV_AUTH_TOKEN` admin, realtime `node dist/server.mjs` :4001 + worker `dist/worker.mjs`, token Keycloak thật (PKCE) cho admin/viewer, 92 GD mẫu trải 9 ngày cho 2 merchant + GD thật tạo qua `POST /api/v1/transactions` ký HMAC bằng API key do `apikey:create` cấp, trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Dashboard load < 3 s | ✅ Trang `/dashboard` (SSR có dữ liệu): DOMContentLoaded 96 ms, load 110 ms; API không cache 7–11 ms mỗi khoảng (lần gọi đầu sau khởi động 0,23 s), có cache ~4 ms |
+  | WebSocket cập nhật real-time | ✅ 3 GD tạo qua API merchant → client WS nhận `dashboard:stats` (6→7→8→9) sau **41–85 ms**; trang đang mở tự cập nhật thẻ tổng GD và dòng GD mới đầu bảng không cần tải lại; API ngay sau đó trả tổng 9 (cache đã bị xoá). Viewer subscribe nhận stats; token rác bị từ chối |
+  | Biểu đồ render đúng | ✅ Số liệu API khớp SQL đếm trực tiếp (7 ngày: 69 GD, 42 thành công, 23 thất bại, 37,28 tr ₫; kỳ trước 21 → +228,6 %; VNPay 38 / VietQR 15 / chưa chọn 16); biểu đồ 7 và 30 điểm, nhãn trục ngày, tooltip; donut phương thức + tỉ lệ thành công khớp; top merchant 2 dòng đúng doanh thu/tỉ lệ; chọn 7 ngày / 30 ngày đổi toàn bộ số liệu. Không lỗi console |
+  | Dữ liệu cách đây < 30 s | ✅ Cảnh báo (đổi 6 GD sang Failed + thêm 1 webhook hết retry trực tiếp trong DB, không phát sự kiện) hiện trên trang sau ~11 s nhờ tick 15 s; khi tắt process realtime, trang chuyển "Ngoại tuyến — tự làm mới mỗi 15s" và GD mới hiện sau ~25 s; bật lại realtime → tự về "Real-time" |
+  | Cảnh báo GD lỗi nhiều, webhook fail | ✅ "Giao dịch lỗi bất thường 6/6 (100 %) trong 60 phút" và "Webhook payment.success (TXN-…) thất bại sau 6 lần gửi — HTTP 500"; không có sự cố → "Hệ thống ổn định" |
+  | Chọn khoảng thời gian | ✅ Hôm nay / 7 ngày / 30 ngày (so với hôm qua / 7 ngày trước / 30 ngày trước) |
+  | Bảo mật / lỗi | ✅ Không token 401; header `x-user-*` giả 401; viewer 200; `period=year` 400 |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 38/38); `node dist/server.mjs`, `node dist/worker.mjs` khởi động được |
+  | Dọn dẹp | ✅ Dừng :4010, realtime, worker; xoá 94 GD test + log, webhook log test, API key + merchant `P37TEST`; không còn key Redis test; xoá file token/secret tạm. Docker Desktop đang tắt khi bắt đầu phiên → đã mở lại (Keycloak/MariaDB/Redis/MinIO tự chạy theo restart policy) và để nguyên |
+
+- **Khác biệt so với plan:**
+  - Đường dẫn API `/api/internal/dashboard` (không phải `/api/admin/dashboard` của API-Design) — thống nhất với các API admin khác từ QA-1.
+  - WebSocket: không có namespace `/ws/admin/dashboard` riêng; dùng chung `:4001/ws` (đã xác thực JWT + role) và đăng ký kênh bằng message `subscribe` — cùng một kết nối, cùng cơ chế lọc merchant.
+  - "Tổng tiền" = tổng tiền GD **thành công** (gồm GD đã hoàn tiền); tỉ lệ thành công = thành công / (thành công + thất bại + hết hạn), không tính GD đang chờ (API-Design ví dụ chia cho tổng).
+  - Thêm top merchant (SRS-PH-DASH-01-06, có trong mockup) dù PLAN không liệt kê; thêm `DashboardAlerts.tsx`, `TopMerchants.tsx`, `DashboardClient.tsx`, `lib/dashboard.ts`.
+  - Biểu đồ dùng SVG tự vẽ thay vì thư viện chart.
+  - Sửa lỗi có sẵn của `build:jobs` (CJS → ESM) vì process realtime giờ cần Prisma.
+
+- **Quyết định thiết kế:**
+  - Realtime đẩy **số liệu top bar** (rẻ: 1 `groupBy`) + **gợi ý refresh**; phần còn lại client tự gọi API (đã có cache) — tránh tính toàn bộ dashboard cho từng client trong process WS.
+  - Xoá cache khi có sự kiện GD (không đợi hết TTL) ⇒ cache chỉ giới hạn tải DB, không làm dữ liệu cũ. Freshness đảm bảo bằng 3 lớp: sự kiện (ms), tick 15 s (cảnh báo/webhook), poll 15 s khi mất WS.
+  - Cảnh báo tính tại thời điểm đọc từ DB (không lưu bảng riêng) — đơn giản, không lệch với dữ liệu; ngưỡng tập trung ở `ALERT_RULES`.
+
+- **Vấn đề / lưu ý:** mới #33 (ngưỡng cố định, thiếu cảnh báo đối tác/đối soát), #34 (chưa kiểm e2e theo merchant). Trang `/dashboard` render sẵn dữ liệu mọi merchant khi chưa có đăng nhập (#7, như `/transactions`). Đóng lỗi bundle CJS của worker/realtime.
 
 
 ### QA-1 — Rà soát chất lượng & sửa lỗi (2026-11-04)

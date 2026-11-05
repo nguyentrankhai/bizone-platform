@@ -15,7 +15,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build && npm run build:jobs
 
 # One image, three processes: the Next app (default CMD), the BullMQ worker
-# (node dist/worker.js) and the WebSocket relay (node dist/server.js).
+# (node dist/worker.mjs) and the WebSocket relay (node dist/server.mjs).
 FROM base AS runner
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

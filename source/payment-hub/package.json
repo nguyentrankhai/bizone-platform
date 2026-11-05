@@ -12,7 +12,7 @@
     "typecheck": "prisma generate && next typegen && tsc --noEmit",
     "dev:worker": "tsx watch --env-file=.env.local services/worker.ts",
     "dev:realtime": "tsx watch --env-file=.env.local server/ws/server.ts",
-    "build:jobs": "esbuild services/worker.ts server/ws/server.ts --bundle --platform=node --target=node24 --format=cjs --outdir=dist --entry-names=[name] --external:bufferutil --external:utf-8-validate",
+    "build:jobs": "prisma generate && esbuild services/worker.ts server/ws/server.ts --bundle --platform=node --target=node24 --format=esm --outdir=dist --entry-names=[name] --out-extension:.js=.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --external:bufferutil --external:utf-8-validate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",

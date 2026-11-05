@@ -34,7 +34,7 @@ services:
     image: bizone-payhub
     pull_policy: never
     container_name: payhub-worker
-    command: ["node", "dist/worker.js"]
+    command: ["node", "dist/worker.mjs"]
     env_file:
       - path: .env.local
         required: false
@@ -49,7 +49,7 @@ services:
     image: bizone-payhub
     pull_policy: never
     container_name: payhub-realtime
-    command: ["node", "dist/server.js"]
+    command: ["node", "dist/server.mjs"]
     ports:
       - "${WS_HOST_PORT:-4001}:4001"
     env_file:

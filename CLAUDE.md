@@ -158,7 +158,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── app/api/internal/webhooks/ + webhook-logs/ # P3.6 — CRUD, ping, status, rotate-secret, stats; lịch sử, chi tiết, replay
         ├── app/webhooks/            # P3.6 — UI thống kê, endpoint, lịch sử gửi + replay
         ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
-        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5), webhook.service (P3.6: outbox, CRUD, replay, stats)
+        ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5), webhook.service (P3.6: outbox, CRUD, replay, stats), dashboard.service (P3.7: số liệu + cảnh báo, cache Redis 15 s)
         ├── services/
         │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
         │   ├── qr/vietqr.ts         # P3.4 — payload EMVCo/VietQR (NAPAS 247), CRC16, render PNG 200/300/500
@@ -166,11 +166,14 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         │   ├── webhook/             # P3.6 — sender.ts (ký HMAC, chặn SSRF), queue.ts (BullMQ, backoff), deliver.ts (processor worker)
         │   └── worker.ts            # process worker (BullMQ)
         ├── server/ws/server.ts      # process realtime: WebSocket :4001/ws (JWT + role, lọc theo merchant), relay Redis "payhub:events"
+        ├── server/ws/dashboard.ts   # P3.7 — DashboardRelay trong process realtime: `dashboard:stats` + `dashboard:refresh`
+        ├── app/dashboard/ + app/api/internal/dashboard/ # P3.7 — UI dashboard; GET ?period=today|7days|30days
+        ├── components/ph/Dashboard*.tsx, RevenueChart, PaymentMethodPie, RecentTransactions, TopMerchants # P3.7 (biểu đồ SVG thuần)
         ├── server/middleware/       # apiAuth.ts (API key + HMAC), adminAuth.ts (role admin/viewer), idempotency.ts
         ├── scripts/create-api-key.ts # `npm run apikey:create -- <MERCHANT_CODE>`
-        ├── tests/                   # Vitest (`npm test`): stateMachine, hmac, security
+        ├── tests/                   # Vitest (`npm test`): stateMachine, hmac, security, webhook, dashboard…
         ├── hooks/  types/  public/
-        ├── Dockerfile               # 1 image cho 3 process (app / dist/worker.js / dist/server.js)
+        ├── Dockerfile               # 1 image cho 3 process (app / dist/worker.mjs / dist/server.mjs)
         └── docker-compose.yml       # project "bizone-payhub": app, worker, realtime, db, cache
 ```
 
@@ -198,7 +201,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 |------|-------|
 | `npm run dev` | Next app port 4000 |
 | `npm run dev:worker` / `npm run dev:realtime` | BullMQ worker / WebSocket relay (tsx watch, đọc `.env.local`) |
-| `npm run build` + `npm run build:jobs` | Build Next + bundle worker/relay ra `dist/` |
+| `npm run build` + `npm run build:jobs` | Build Next + bundle ESM worker/relay ra `dist/worker.mjs`, `dist/server.mjs` (chạy `node --env-file=.env.local dist/server.mjs`) |
 | `npm test` / `npm run apikey:create -- <MERCHANT_CODE>` | Vitest / cấp API key merchant (in key + secret một lần, lưu secret mã hoá) |
 | `docker compose up -d --build` | app :4000, realtime :4001, worker, MariaDB 10.11 (host 3308), Redis (host 6381) |
 
@@ -210,7 +213,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý webhook (P3.6)**: đổi trạng thái cuối của GD phải đặt `OUTBOX_PENDING` (`notify_webhook=1, webhook_sent_at=NULL`) trong cùng DB transaction rồi gọi `dispatchSoon(txnId)` sau commit; worker quét outbox mỗi 30 s. Ký `X-Signature = HMAC-SHA256(secret, X-Timestamp + "." + body)`, `X-Webhook-Id` giữ nguyên qua retry/replay. Job BullMQ không mang secret. Dev cần `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` (Payment Hub) và `PAYHUB_WEBHOOK_SECRET` (BizOne).
 
-**Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub (mọi event phải có `merchantId`). WS yêu cầu token qua subprotocol `["payhub-events", token]`, role `payhub-admin`/`payhub-viewer`.
+**Lưu ý realtime**: Route Handlers của Next không giữ được WebSocket → dùng process `realtime` riêng; app gửi event bằng `publishEvent()` qua Redis pub/sub (mọi event phải có `merchantId`). WS yêu cầu token qua subprotocol `["payhub-events", token]`, role `payhub-admin`/`payhub-viewer`. Dashboard (P3.7): client gửi `{"type":"subscribe","channel":"dashboard"}` → nhận `dashboard:stats` (top bar hôm nay) và `dashboard:refresh` (sau sự kiện `transaction.*` — cache `payhub:dash:v1:*` bị xoá trước — và mỗi 15 s); mất WS thì UI tự poll 15 s. Ngày nghiệp vụ theo giờ VN (UTC+7), DB lưu UTC. Bundle `build:jobs` phải là ESM (Prisma 7 dùng `import.meta.url`).
 
 **Lưu ý bảo mật Payment Hub**: merchant API (`/api/v1/*` có `X-Api-Key`) ký `hex(HMAC-SHA256(secret, METHOD\nPATH?QUERY\nTS\nhex(SHA256(body))))` (`lib/hmac.ts`, theo OpenAPI); `api_secret` lưu `enc:v1:` (AES-256-GCM, `PARTNER_ENCRYPTION_KEY`). Admin API `/api/internal/*` dùng `requireAdmin()`; token có claim `merchant_id` chỉ thấy merchant đó. `proxy.ts` xoá header `x-user-*` do client gửi. Đổi trạng thái giao dịch luôn bằng `UPDATE … WHERE status = <đã đọc>`.
 
