@@ -131,7 +131,7 @@
 | P3.4 | VietQR Generator | 🟡 | `9d7da3b` | Code + kiểm thử xong (payload trùng khớp img.vietqr.io); chờ quét thử bằng app ngân hàng. Xem [kết quả P3.4](#p34--vietqr-generator) |
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ✅ | `ba87a4a` | Xem [kết quả P3.6](#p36--webhook-engine) |
-| P3.7 | Payment Hub Dashboard | ✅ | `PENDING` | Xem [kết quả P3.7](#p37--payment-hub-dashboard) |
+| P3.7 | Payment Hub Dashboard | ✅ | `7bfeefa` | Xem [kết quả P3.7](#p37--payment-hub-dashboard) |
 | P3.8 | Route Engine — Partner Selection | ⬜ | — | |
 
 ## Giai đoạn 4 — BizOne Mở rộng (Tuần 9–12)
@@ -1193,7 +1193,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.7 — Payment Hub Dashboard
 
-- **Hoàn thành:** 2026-11-05 · **Commit:** `PENDING` · **Vị trí:** `source/payment-hub/app/dashboard/`, `app/api/internal/dashboard/`, `server/services/dashboard.service.ts`, `server/ws/dashboard.ts` (+ `server/ws/server.ts`), `lib/dashboard.ts`, `components/ph/{DashboardClient,DashboardStats,RevenueChart,PaymentMethodPie,RecentTransactions,DashboardAlerts,TopMerchants}.tsx`, `components/ph/dashboard-format.ts`, `tests/dashboard.test.ts`
+- **Hoàn thành:** 2026-11-05 · **Commit:** `7bfeefa` · **Vị trí:** `source/payment-hub/app/dashboard/`, `app/api/internal/dashboard/`, `server/services/dashboard.service.ts`, `server/ws/dashboard.ts` (+ `server/ws/server.ts`), `lib/dashboard.ts`, `components/ph/{DashboardClient,DashboardStats,RevenueChart,PaymentMethodPie,RecentTransactions,DashboardAlerts,TopMerchants}.tsx`, `components/ph/dashboard-format.ts`, `tests/dashboard.test.ts`
 - **Đã làm:**
   - **API** `GET /api/internal/dashboard?period=today|7days|30days` (API-Design §6.1; JWT qua `proxy.ts`, role `payhub-admin`/`payhub-viewer`, token có `merchant_id` chỉ thấy merchant đó; period sai → 400 `VALIDATION_ERROR`). Trả: `summary` (tổng GD, tổng tiền GD thành công, thành công, thất bại = Failed + Expired, đang chờ, hoàn tiền, tỉ lệ thành công), `previous` + `changes` (% so với kỳ trước cùng độ dài), `chart` (mỗi ngày: số GD, tiền thành công, thành công, thất bại — tối thiểu 7 ngày, 30 ngày khi chọn 30 ngày; ngày trống điền 0), `paymentMethods` (gộp theo `partner_configs.connector_type`, rồi `payment_method`: VNPay / VietQR / MoMo / ZaloPay / "Chưa chọn"), `recentTransactions` (10 GD mới nhất), `topMerchants` (top 5 theo doanh thu, SRS-PH-DASH-01-06), `alerts`, `generatedAt`
   - **Ngày nghiệp vụ theo giờ Việt Nam** (UTC+7) trong khi DB lưu UTC: "Hôm nay" = 00:00 ICT → hiện tại, so với cùng khung giờ hôm qua; biểu đồ nhóm theo `DATE(created_at + INTERVAL 7 HOUR)`
