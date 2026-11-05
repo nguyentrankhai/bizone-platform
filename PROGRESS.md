@@ -137,7 +137,7 @@
 | P3.5 | Partner Config UI | 🟡 | `619bfd1` | Code + kiểm thử xong; VietQR: thêm → test → kích hoạt OK. VNPay: test chạy thật nhưng bị từ chối vì credential placeholder (#16) → chưa kích hoạt được. Xem [kết quả P3.5](#p35--partner-config-ui) |
 | P3.6 | Webhook Engine | ✅ | `ba87a4a` | Xem [kết quả P3.6](#p36--webhook-engine) |
 | P3.7 | Payment Hub Dashboard | ✅ | `7bfeefa` | Xem [kết quả P3.7](#p37--payment-hub-dashboard) |
-| P3.8 | Route Engine — Partner Selection | ✅ | `HASH_P38` | Xem [kết quả P3.8](#p38--route-engine--partner-selection) |
+| P3.8 | Route Engine — Partner Selection | ✅ | `6c9c435` | Xem [kết quả P3.8](#p38--route-engine--partner-selection) |
 
 ## Giai đoạn 4 — BizOne Mở rộng (Tuần 9–12)
 
@@ -1241,7 +1241,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P3.8 — Route Engine — Partner Selection
 
-- **Hoàn thành:** 2026-11-06 · **Commit:** `HASH_P38` · **Vị trí:** `source/payment-hub/services/routing/` (`routeMap.ts`, `routeEngine.ts`), `server/routes/route-config.ts`, `app/api/internal/routes/`, `server/services/payment.service.ts`, `server/services/qr.service.ts`, `server/routes/transactions.ts`, `server/routes/pay-page.ts`, migration `3_merchant_routes`, `tests/routing.test.ts`
+- **Hoàn thành:** 2026-11-06 · **Commit:** `6c9c435` · **Vị trí:** `source/payment-hub/services/routing/` (`routeMap.ts`, `routeEngine.ts`), `server/routes/route-config.ts`, `app/api/internal/routes/`, `server/services/payment.service.ts`, `server/services/qr.service.ts`, `server/routes/transactions.ts`, `server/routes/pay-page.ts`, migration `3_merchant_routes`, `tests/routing.test.ts`
 - **Đã làm:**
   - **`routeMap.ts`** — bảng `payment_method` → connector theo PLAN: `vnpay_qr`/`vnpay_atm`/`vnpay_card`/`vnpay` → VNPay, `vietqr` → VietQR, `momo_qr` → MoMo, `zalopay_qr` → ZaloPay; mỗi mục có `kind` (`redirect` = connector dựng URL PSP, `qr` = Hub tự sinh VietQR) và nhãn cho trang thanh toán. Thay cho danh sách `methods` cứng trong `registry.ts`
   - **`routeEngine.ts`**:
