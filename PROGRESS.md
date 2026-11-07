@@ -172,7 +172,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
-| P4.2 | Reports Module — API & UI | ✅ | `PENDING` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
+| P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
 | P4.5 | POS Advanced Features | ⬜ | — | |
@@ -1510,7 +1510,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.2 — Reports Module — API & UI
 
-- **Hoàn thành:** 2026-11-07 · **Commit:** `PENDING` · **Vị trí:** `source/bizone/server/routers/reports.ts`, `server/services/report.service.ts`, `server/services/reportExport.service.ts`, `server/queue/reportExport.ts` + `reportExportWorker.ts`, `lib/validators/report.ts`, `app/reports/page.tsx`, `components/reports/*`, `tests/reports.test.ts`
+- **Hoàn thành:** 2026-11-07 · **Commit:** `335d41d` · **Vị trí:** `source/bizone/server/routers/reports.ts`, `server/services/report.service.ts`, `server/services/reportExport.service.ts`, `server/queue/reportExport.ts` + `reportExportWorker.ts`, `lib/validators/report.ts`, `app/reports/page.tsx`, `components/reports/*`, `tests/reports.test.ts`
 - **Đã làm:**
   - **6 báo cáo** (`report.service.ts`, tRPC `reports.*`, quyền `report:read` — admin/manager/viewer):
     - `revenue` — Doanh thu, chiết khấu, trả hàng, **doanh thu thuần**, số HĐ, TB/HĐ; chuỗi theo ngày (≤ 62 ngày) hoặc theo tháng; so sánh **kỳ trước** (cùng độ dài, liền trước) hoặc **cùng kỳ năm trước** (29/02 → 28/02), % thay đổi từng chỉ số và từng ngày; theo phương thức thanh toán (tiền mặt trừ tiền thối, như dashboard); theo danh mục
