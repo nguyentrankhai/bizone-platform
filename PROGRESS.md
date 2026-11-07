@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 8 | 2 | 0 | 6 |
+| 4 — BizOne Mở rộng | 9 | 2 | 0 | 7 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
-| 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
+| 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **25** | **3** | **23** |
+| **Tổng** | **53** | **25** | **3** | **25** |
 
 ---
 
@@ -35,7 +35,7 @@
 | ~~3~~ | ~~Job webhook chứa `secret` trong Redis~~ | ~~P1.2~~ | ✅ P3.6 |
 | ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
 | ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
-| 7 | **[Chặn dùng app]** Dev chưa có đăng nhập OIDC trong trình duyệt (2026-11-07: trang giờ hiện banner "Chưa đăng nhập" thay vì trắng): page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
+| 7 | **[Chặn dùng app]** Dev chưa có đăng nhập OIDC trong trình duyệt → tạm: P4.0 (bypass), làm thật: P6.7 (2026-11-07: trang giờ hiện banner "Chưa đăng nhập" thay vì trắng): page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
 | ~~8~~ | ~~Router `product.ts` dùng `Number(ctx.user.id)`~~ | ~~P2.4~~ | ✅ P2.5 |
 | ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
 | ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
@@ -172,6 +172,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
+| P4.0 | Bypass xác thực Keycloak cho dev/test | ⬜ | — | Thêm 2026-11-07: bật bằng `AUTH_DEV_BYPASS=true` để test không phải đăng nhập; làm trước P4.3; gỡ ở P6.7 |
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
@@ -202,6 +203,7 @@
 | P6.4 | PWA Mobile App | ⬜ | — | |
 | P6.5 | Performance Optimization | ⬜ | — | |
 | P6.6 | Security Hardening | ⬜ | — | |
+| P6.7 | Đăng nhập Keycloak trên trình duyệt (BizOne + Payment Hub Admin) | ⬜ | — | Thêm 2026-11-07 (phần UI còn thiếu của P1.5, #7); ưu tiên thấp — trước đó dev dùng `AUTH_DEV_BYPASS` |
 
 ## Giai đoạn 7 — Payment Hub Nâng cao (Tuần 13–16)
 
