@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-06 (P3.8 Route Engine ✅ — hết task ⬜ của GĐ 3; P3.7 Payment Hub Dashboard ✅; P3.6 Webhook Engine ✅; P3.5 — 🟡 chờ credential VNPay để test + kích hoạt VNPay; P3.4 — 🟡 chờ quét thử bằng app ngân hàng; P3.3 — 🟡 chờ credential VNPay sandbox thật)
+**Cập nhật lần cuối:** 2026-11-07 (QA-2 rà soát cuối GĐ 2+3: chất lượng code xanh; phát hiện 15 vấn đề mới #39–#53, trong đó 4 mức cao — xem [QA-2](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07); P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -67,6 +67,21 @@
 | 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB): chưa có Health Monitor định kỳ, chưa dùng bảng `connector_health_logs` / `connector_circuit_breaker_states` (migration_001), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá | P3.8 | P7.1 / P7.5 |
 | 37 | `payment_url` khi không chọn phương thức lấy từ `NEXT_PUBLIC_APP_URL` (`transaction.service`, giá trị lúc build) còn trang QR/ảnh QR/return URL dùng `APP_URL` (lúc chạy) — cần thống nhất một biến khi triển khai | P3.8 (phát hiện) | P6.5 / triển khai |
 | 38 | Đổi cấu hình định tuyến (PUT routes, reset circuit) mới ghi `console`, chưa vào audit log | P3.8 | P7.2 |
+| 39 | **[Cao]** Dashboard BizOne: key cache Redis `dashboard:*` **không có tenant** → tenant này thấy số liệu tenant khác (tối đa 5 phút); TTL 5 phút và `invalidateDashboardCache()` không được gọi ở đâu → HĐ mới không lên dashboard sau 25 s (tiêu chí P2.9 "< 30 s" không đạt); "hôm nay" tính theo giờ máy chủ (`setHours`) → sai ngày nghiệp vụ khi container chạy UTC | QA-2 (P2.9) | Sửa trước P4.x |
+| 40 | **[Cao]** Audit Log BizOne: tạo hoá đơn POS **không ghi log** (tiêu chí P2.10 không đạt — `auditTrpcCall("invoice.create")` chưa từng có trong git); `user_id` luôn NULL (UUID Keycloak → `resolveNumericUserId`); chỉ product/order được ghi (kho, CRM, POS, kiểm kê, chuyển kho thì không); bảng không có ràng buộc append-only ở DB | QA-2 (P2.10) | Sửa trước P4.x |
+| 41 | **[Cao]** Idempotency Payment Hub: code đọc `X-Idempotency-Key` còn OpenAPI/API-Design quy định `Idempotency-Key` → merchant theo spec không được chống trùng; kiểm-rồi-lưu không khoá → 5 request đồng thời cùng key tạo **5 GD**; `POST /api/v1/qr/generate` chưa hỗ trợ idempotency như spec | QA-2 (P3.1) | Sửa trước P5.x |
+| 42 | **[Cao]** `merchant_txn_id` không bắt buộc và không duy nhất theo merchant (spec: bắt buộc, unique, trùng → 409) → tạo được 2 GD cùng `merchant_txn_id`, tra cứu `/transactions/merchant/{id}` mơ hồ | QA-2 (P3.1) | Sửa trước P5.x |
+| 43 | Lỗi nghiệp vụ của kho / đơn hàng / CRM vẫn trả **HTTP 500 `INTERNAL_SERVER_ERROR`** (message là chuỗi JSON, mã thật nằm ở `data.bizoneCode`) — #10 mới sửa cho POS (`bizoneError`); log server ghi như lỗi hệ thống | QA-2 | Sửa cùng #39–#40 |
+| 44 | `created_by`/`updated_by` = NULL: `product.create/update` dùng `Number(ctx.user!.id)`, `order` dùng `parseInt(ctx.user.id)` (UUID) — #8 mới sửa cho kho/kiểm kê | QA-2 | Sửa cùng #43 |
+| 45 | Đơn hàng: chấp nhận tổng tiền âm (giảm giá 50.000 > tạm tính → −49.000); đơn giá lấy từ client, không đối chiếu giá bán | QA-2 (P2.7) | Sửa cùng #43 |
+| 46 | Công nợ: `payDebt` cho trả vượt số còn nợ (nợ 50.000, đã trả 60.000, `remainingAmount` = 0) | QA-2 (P2.8) | Sửa cùng #43 |
+| 47 | Import Excel: số dòng báo lỗi sai với lỗi lúc lưu (dùng chỉ số trong danh sách hợp lệ — SKU trùng ở dòng 1004 báo dòng 1002); thông báo validate Zod bằng tiếng Anh | QA-2 (P2.1) | Sửa cùng #43 |
+| 48 | Hiệu năng kho sát ngưỡng: xác nhận phiếu nhập 999 SP 1,04 s (PLAN < 1 s); hoàn tất kiểm kê 999 SP 2,1 s (update từng dòng) | QA-2 (P2.3) | P6.x Performance |
+| 49 | Dashboard BizOne chưa có drill-down từ biểu đồ (tiêu chí P2.9) — chỉ danh sách đơn chờ / tồn thấp click được; PLAN P2.9 có `server/ws/dashboard` nhưng chưa làm | QA-2 (P2.9) | Sửa cùng #39 |
+| 50 | `npm audit --omit=dev`: BizOne 8, Payment Hub 6 lỗ hổng low/moderate — gốc là `shadcn` (CLI) nằm trong `dependencies` (kéo `ts-morph`/`minimatch`), `exceljs` → `uuid` | QA-2 | Chuyển `shadcn` sang devDependencies; theo dõi `exceljs` |
+| 51 | `.env.example` thiếu biến code đang dùng: BizOne `NEXT_PUBLIC_POS_WS_URL`, `POS_WS_PORT`; Payment Hub `KEYCLOAK_ALLOWED_CLIENTS`, `NEXT_PUBLIC_APP_URL`, `VIETQR_BANKS_URL` | QA-2 | Sửa cùng #43 |
+| 52 | API list không thống nhất: product/inventory trả `{ items, meta }` + `pageSize`; order/audit trả `{ items, total, page, limit }`; không tìm đơn theo mã vận đơn | QA-2 | P4.x (chuẩn hoá khi mở rộng) |
+| 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -195,6 +210,7 @@
 | 2026-11-02 | `.gitignore`, `.env.example`; credentials dev trong `.env.development` (gitignored) | `a7ce8cf` |
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
+| 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 (chạy lại tiêu chí nghiệm thu, chất lượng, vấn đề mở) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | — (chỉ ghi nhận) |
 
 ---
 
@@ -1345,3 +1361,48 @@ Ngoài plan, theo yêu cầu người dùng.
   - `api_secret` mã hoá (không hash) vì cần lấy lại để kiểm chữ ký.
 
 - **Vấn đề / lưu ý:** #7 (page admin chưa có đăng nhập), #20–#22. Merchant đang tích hợp (nếu có) phải đổi sang chữ ký mới; key cấp trước QA-1 (secret dạng rõ) cần cấp lại.
+
+---
+
+### QA-2 — Rà soát cuối Giai đoạn 2 + 3 (2026-11-07)
+
+- **Hoàn thành:** 2026-11-07 · **Commit:** — (chỉ rà soát + ghi nhận; chưa sửa code) · **Vị trí:** `source/bizone`, `source/payment-hub`
+- **Bối cảnh:** bước B6 mới của quy trình (`CLAUDE.md`) — GĐ 2 xong 10/10, GĐ 3 không còn task ⬜ (P3.3/P3.4/P3.5 🟡 chỉ chờ credential VNPay / quét QR). Người dùng yêu cầu rà soát trước khi sang P4.1.
+- **Cách làm:** chạy production build (`next start` BizOne :3001 + `dist/pos.mjs` + `dist/worker.mjs`; Payment Hub :4010 + `dist/worker.mjs` + `dist/server.mjs`), token Keycloak thật (PKCE, user dev trong realm JSON), gọi tRPC / REST bằng script; API key merchant tạm cho `BIZONE`. Ưu tiên chạy lại các tiêu chí trước đây chỉ kiểm bằng đọc code (P2.1, P2.3, P2.7–P2.10, P3.1). Chưa chạy lại UI trên trình duyệt: page lấy `DEV_AUTH_TOKEN` "đóng băng" lúc build (#7).
+
+- **Chất lượng (tự động):**
+
+  | Kiểm tra | BizOne | Payment Hub |
+  |----------|--------|-------------|
+  | `format:check` / `lint` / `typecheck` | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ |
+  | `npm test` | ✅ 22/22 | ✅ 49/49 |
+  | `build` / `build:jobs` | ✅ / ✅ | ✅ / ✅ |
+  | CI GitHub Actions | ✅ 4 lần chạy gần nhất xanh (`b17c9bb`, `7c9eb4d`, `df88607`, `92824b2`) | |
+  | Prisma: lịch sử migration / lệch schema DB | ✅ 1 migration, không lệch | ✅ 4 migration, không lệch |
+  | `npm audit --omit=dev` | ⚠️ 8 (2 low, 6 moderate) — #50 | ⚠️ 6 (2 low, 4 moderate) — #50 |
+  | Độ phủ test | ⚠️ 4 file (cart, rbac, tenant…) — chưa có test service kho/đơn/CRM/dashboard/audit | ✅ state machine, HMAC, security, webhook, dashboard, routing, VietQR |
+
+- **Tiêu chí nghiệm thu chạy lại:**
+
+  | Task | Tiêu chí (PLAN) | Kết quả QA-2 |
+  |------|-----------------|--------------|
+  | P2.1 | CRUD; search < 300 ms; import 1000 SP < 30 s, báo lỗi chính xác; export xlsx | ✅ CRUD; search 3–24 ms (6 truy vấn: tên, SKU, mã vạch, không có kết quả); import 1000 SP + 4 dòng lỗi **1,66 s**, export 1002 dòng 81 ms đúng cột. ⚠️ số dòng báo lỗi sai với SKU trùng (#47); `created_by` NULL (#44) |
+  | P2.2 | UI sản phẩm | ⏭ không chạy lại UI (#7); trang `/products` 200 |
+  | P2.3 | Nhập 1000 SP cập nhật tồn < 1 s; kiểm kê 1000 SP < 30 phút; chuyển kho 3 bước; cảnh báo tồn thấp < 5 s | ⚠️ tạo phiếu 999 SP 131 ms, **xác nhận 1,04 s** (sát ngưỡng, #48); ✅ kiểm kê 999 SP: tạo 75 ms, nhập SL thực tế 450 ms, hoàn tất 2,1 s, 100 dòng chênh lệch đúng; ✅ chuyển kho tạo → xác nhận đúng, chặn kho trùng / vượt tồn (nhưng trả HTTP 500 — #43); ✅ SSE cảnh báo tồn thấp **0,07 s** |
+  | P2.4 | UI kho | ⏭ không chạy lại UI (#7); API nền (kiểm kê, lịch sử phiếu) đạt ở trên |
+  | P2.5 | Tạo HĐ < 5 s, … | ✅ tạo HĐ có khách 45 ms (chỉ chạy lại phần API; WS 2 màn hình không chạy lại — code không đổi từ P2.6) |
+  | P2.6 | Full flow POS UI | ⏭ không chạy lại UI (#7) |
+  | P2.7 | Đơn online → xác nhận → giao → hoàn thành; filter; xuất Excel; tracking | ✅ pending → confirmed → preparing → shipping (GHN, mã vận đơn) → delivered → completed; chặn completed → confirmed; filter kênh + trạng thái; xuất Excel 29 ms. ❌ chấp nhận tổng tiền âm (#45); ⚠️ `created_by` NULL (#44), không tìm theo mã vận đơn (#52) |
+  | P2.8 | Thêm khách → HĐ → cộng điểm; tra SĐT; công nợ ghi → trả → giảm; merge | ✅ HĐ 27.000₫ → +27 điểm, `total_spent` cập nhật; tra SĐT 7 ms; nợ 50.000 → trả 20.000 (partial, còn 30.000); merge: KH phụ `is_active=0`, chặn merge chính nó; SĐT trùng bị chặn. ❌ trả vượt nợ được chấp nhận (#46) |
+  | P2.9 | Load < 2 s; dữ liệu < 30 s; biểu đồ đúng; drill-down | ✅ API 10–32 ms. ❌ HĐ mới sau 2 s / 10 s / 25 s vẫn chưa lên (cache 5 phút, không invalidate — #39); ❌ **cache không theo tenant** (#39); ❌ chưa có drill-down từ biểu đồ (#49) |
+  | P2.10 | Tạo HĐ → log; filter; không xoá được; export | ❌ 2 HĐ POS không sinh log nào (#40); ✅ filter module 24 ms; ✅ không có procedure xoá (`auditLog.delete` 404) — nhưng DB không chặn (#40); ✅ export xlsx; ⚠️ mọi log `user_id` NULL (#40) |
+  | P3.1 | Tạo GD → ID + URL; query theo ID + `merchant_txn_id`; idempotency; state; expire | ✅ 201 + `transaction_id`, `txn_code`, `payment_url` (145 ms); GET theo id và theo `merchant_txn_id` 200; amount âm → 400 `VALIDATION_ERROR`; ✅ GD hết hạn chuyển `Expired` 27 s sau `expired_at` (worker). ❌ header theo spec `Idempotency-Key` bị bỏ qua (2 GD); ❌ 5 request đồng thời cùng key → 5 GD (#41); ❌ `merchant_txn_id` trùng vẫn tạo (#42) |
+  | P3.2 | Danh sách < 2 s, filter | ✅ API `/api/internal/transactions` 100 dòng 28 ms, filter trạng thái 5 ms; không token 401. ⚠️ trang `/transactions`, `/dashboard` vẫn render dữ liệu GD khi chưa đăng nhập (#7) |
+  | P3.3–P3.5 | VNPay / VietQR / Partner | 🟡 không đổi — chờ credential VNPay (#16, #26) và quét QR bằng app ngân hàng (#23) |
+  | P3.6–P3.8 | Webhook / Dashboard / Route Engine | ✅ không chạy lại e2e: code không đổi từ lần nghiệm thu runtime (2026-11-04 → 06), Vitest 49/49; API admin dashboard 11 ms, routes 9 ms, viewer PUT routes 403 |
+
+- **Rà soát vấn đề còn mở (#6–#38):** không mục nào được giải quyết thêm. Chờ người dùng: #6 (xoá bản rollback MariaDB 10.3), #16 + #26 (credential VNPay sandbox), #23 (tài khoản VietQR thật). Đưa vào GĐ 4/5 như đã ghi: #11, #14, #20 (P4.6), #18, #29 (P5.3), #19, #24, #33 (P5.4), #30 (P4.5). #7 + #15 (đăng nhập OIDC trên trình duyệt) **chưa có task nào trong PLAN nhận** — cần quyết định đưa vào đâu trước khi P4.x thêm nhiều trang. #8 và #10 trước đây ghi "đã giải quyết" nhưng mới đúng một phần (xem #43, #44).
+- **Phát hiện mới:** #39–#53 (bảng *Còn mở*). Mức cao: #39 (lộ dữ liệu dashboard giữa tenant), #40 (audit log thiếu HĐ + thiếu người thực hiện), #41 (idempotency Payment Hub), #42 (`merchant_txn_id` không duy nhất).
+- **Điểm tốt:** cổng chất lượng và CI xanh; hiệu năng API tốt (đa số < 50 ms); cô lập tenant ở DB/Redis đúng ở các module khác (search, rate limit, POS, low-stock); phân quyền API admin Payment Hub đúng (401/403); job hết hạn GD và cảnh báo tồn thấp chạy đúng.
+- **Dọn dẹp:** dừng :3001/:3002/:4010/:4001 + worker; xoá toàn bộ dữ liệu tạo trong phiên (1002 SP, 2 kho, 1 chi nhánh, 1 ca, 2 HĐ, 2 đơn, 2 KH, công nợ, điểm, phiếu kho/kiểm kê, 8 audit log; 10 GD Payment Hub + log, API key #11), key Redis test (idempotency, dashboard, job BullMQ), file token/secret tạm. Docker Desktop đang tắt khi bắt đầu → đã bật lại, khởi động lại container `redis` và `minio` (đã thoát khi Docker dừng; không có restart policy).
+- **Đề xuất:** một đợt sửa **QA-2 fix** trước P4.1 cho #39–#47, #49–#51 (mức cao + lỗi nghiệp vụ, phạm vi nhỏ, có test), để #48/#52/#53 cho GĐ 4/6; quyết định task nhận #7/#15 (đăng nhập OIDC trình duyệt).
