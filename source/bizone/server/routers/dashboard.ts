@@ -1,6 +1,12 @@
+import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
-import { getDashboardSummary } from "@/server/services/dashboard.service";
+import { getDashboardSummary, getDayDetail } from "@/server/services/dashboard.service";
 
 export const dashboardRouter = router({
   summary: permissionProcedure("report:read").query(() => getDashboardSummary()),
+
+  /** Drill-down từ biểu đồ doanh thu: chi tiết một ngày (YYYY-MM-DD, giờ VN) */
+  dayDetail: permissionProcedure("report:read")
+    .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày phải dạng YYYY-MM-DD") }))
+    .query(({ input }) => getDayDetail(input.date)),
 });

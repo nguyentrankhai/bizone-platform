@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { bizoneError } from "@/lib/errors";
 import type {
   ListOrdersInput,
   CreateOrderInput,
@@ -7,16 +8,9 @@ import type {
   CreateRefundInput,
 } from "@/lib/validators/order";
 
-function conflict(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "CONFLICT", message: msg })), {
-    bizoneCode: "CONFLICT",
-  });
-}
-function notFound(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "NOT_FOUND", message: msg })), {
-    bizoneCode: "NOT_FOUND",
-  });
-}
+// Business errors → TRPCError with the right HTTP status (409 / 404), body keeps { code, message }
+const conflict = (msg: string) => bizoneError("CONFLICT", msg);
+const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
 
 function generateOrderCode(): string {
   const now = new Date();
@@ -134,14 +128,35 @@ export async function getOrder(id: number) {
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
+/**
+ * Tạm tính / tổng tiền đơn. Giảm giá không được vượt số tiền nó áp vào —
+ * tổng âm là dữ liệu sai (công nợ, báo cáo doanh thu đều cộng thẳng total_amount).
+ */
+export function computeOrderTotals(
+  input: Pick<CreateOrderInput, "items" | "shippingFee" | "discountAmount">,
+): { subtotal: number; totalAmount: number } {
+  let subtotal = 0;
+  input.items.forEach((item, idx) => {
+    const gross = item.unitPrice * item.quantity;
+    if (item.discountAmount > gross)
+      throw bizoneError(
+        "VALIDATION_ERROR",
+        `Dòng ${idx + 1}: giảm giá (${item.discountAmount}) lớn hơn thành tiền (${gross})`,
+      );
+    subtotal += gross - item.discountAmount;
+  });
+  if (input.discountAmount > subtotal + input.shippingFee)
+    throw bizoneError(
+      "VALIDATION_ERROR",
+      `Giảm giá đơn (${input.discountAmount}) lớn hơn tạm tính + phí giao hàng (${subtotal + input.shippingFee})`,
+    );
+  return { subtotal, totalAmount: subtotal + input.shippingFee - input.discountAmount };
+}
+
 export async function createOrder(input: CreateOrderInput, userId: number | null) {
   const prisma = getPrisma();
 
-  const subtotal = input.items.reduce((sum, item) => {
-    const lineTotal = item.unitPrice * item.quantity - item.discountAmount;
-    return sum + lineTotal;
-  }, 0);
-  const totalAmount = subtotal + input.shippingFee - input.discountAmount;
+  const { subtotal, totalAmount } = computeOrderTotals(input);
 
   let orderCode = generateOrderCode();
   // Retry once on collision

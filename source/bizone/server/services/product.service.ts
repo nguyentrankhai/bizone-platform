@@ -185,7 +185,7 @@ export async function getProduct(id: number) {
 
 // ─── Create product ───────────────────────────────────────────────────────────
 
-export async function createProduct(input: CreateProductInput, userId: number) {
+export async function createProduct(input: CreateProductInput, userId: number | null) {
   const prisma = getPrisma();
 
   // Validate SKU unique
@@ -251,7 +251,7 @@ export async function createProduct(input: CreateProductInput, userId: number) {
 
 // ─── Update product ───────────────────────────────────────────────────────────
 
-export async function updateProduct(id: number, input: UpdateProductInput, userId: number) {
+export async function updateProduct(id: number, input: UpdateProductInput, userId: number | null) {
   const prisma = getPrisma();
   const existing = await prisma.product.findUnique({ where: { id } });
   if (!existing) throw notFound("Product", id);

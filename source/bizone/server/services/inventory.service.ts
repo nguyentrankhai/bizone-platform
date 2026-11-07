@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { bizoneError } from "@/lib/errors";
 import type { Prisma } from "@/generated/prisma/client";
 import { getRedis } from "@/lib/redis";
 import type {
@@ -43,16 +44,9 @@ async function upsertInventory(
   }
 }
 
-function conflict(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "CONFLICT", message: msg })), {
-    bizoneCode: "CONFLICT",
-  });
-}
-function notFound(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "NOT_FOUND", message: msg })), {
-    bizoneCode: "NOT_FOUND",
-  });
-}
+// Business errors → TRPCError with the right HTTP status (409 / 404), body keeps { code, message }
+const conflict = (msg: string) => bizoneError("CONFLICT", msg);
+const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
 
 // ─── Warehouse ───────────────────────────────────────────────────────────────
 

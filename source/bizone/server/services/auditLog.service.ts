@@ -22,6 +22,15 @@ export async function createAuditLog(input: CreateAuditLogInput): Promise<void> 
   });
 }
 
+/** createAuditLog that never throws — audit must not break the business action it records */
+export async function recordAudit(input: CreateAuditLogInput): Promise<void> {
+  try {
+    await createAuditLog(input);
+  } catch (e) {
+    console.error("[audit] write failed", input.module, input.action, e);
+  }
+}
+
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 export async function listAuditLogs(input: ListAuditLogsInput) {

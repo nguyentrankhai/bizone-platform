@@ -19,7 +19,7 @@ import {
   generateProductTemplate,
 } from "@/lib/excel/product";
 import { getPrisma } from "@/lib/prisma";
-import { auditTrpcCall } from "@/server/middleware/auditLog";
+import { resolveDbUserId } from "@/server/services/user.service";
 
 export const productRouter = router({
   /** GET /trpc/product.list */
@@ -40,12 +40,8 @@ export const productRouter = router({
   create: permissionProcedure("product:write")
     .input(createProductSchema)
     .mutation(async ({ input, ctx }) => {
-      const product = await createProduct(input, Number(ctx.user!.id));
+      const product = await createProduct(input, await resolveDbUserId(ctx.user!));
       await invalidateSearchCache(ctx.tenantId!);
-      void auditTrpcCall("product.create", ctx, product.id, null, {
-        name: product.name,
-        sku: product.sku,
-      });
       return product;
     }),
 
@@ -53,11 +49,8 @@ export const productRouter = router({
   update: permissionProcedure("product:write")
     .input(z.object({ id: z.number().int().positive(), data: updateProductSchema }))
     .mutation(async ({ input, ctx }) => {
-      const product = await updateProduct(input.id, input.data, Number(ctx.user!.id));
+      const product = await updateProduct(input.id, input.data, await resolveDbUserId(ctx.user!));
       await invalidateSearchCache(ctx.tenantId!);
-      void auditTrpcCall("product.update", ctx, input.id, null, {
-        fields: Object.keys(input.data),
-      });
       return product;
     }),
 
@@ -67,7 +60,6 @@ export const productRouter = router({
     .mutation(async ({ input, ctx }) => {
       await deleteProduct(input.id);
       await invalidateSearchCache(ctx.tenantId!);
-      void auditTrpcCall("product.delete", ctx, input.id);
       return { success: true };
     }),
 
@@ -76,22 +68,25 @@ export const productRouter = router({
     .input(z.object({ fileBase64: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const buffer = Buffer.from(input.fileBase64, "base64");
-      const result = await parseProductImport(buffer.buffer as ArrayBuffer);
+      // Small base64 strings decode into Node's shared pool: copy out exactly this file's bytes
+      const bytes = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const result = await parseProductImport(bytes as ArrayBuffer);
       if (result.success.length === 0) {
         return { imported: 0, errors: result.errors };
       }
 
       const prisma = getPrisma();
+      const userId = await resolveDbUserId(ctx.user!);
       let imported = 0;
       const errors = [...result.errors];
 
       // Insert valid rows — skip duplicates
-      for (const [idx, row] of result.success.entries()) {
+      for (const row of result.success) {
         try {
           const existing = await prisma.product.findUnique({ where: { sku: row.sku } });
           if (existing) {
             errors.push({
-              row: idx + 2,
+              row: row.rowNumber,
               sku: row.sku,
               errors: [`SKU "${row.sku}" đã tồn tại, bỏ qua`],
             });
@@ -114,15 +109,18 @@ export const productRouter = router({
               unit: row.unit,
               minStock: row.minStock,
               status: row.status,
+              createdBy: userId,
+              updatedBy: userId,
             },
           });
           imported++;
         } catch {
-          errors.push({ row: idx + 2, sku: row.sku, errors: ["Lỗi khi lưu sản phẩm"] });
+          errors.push({ row: row.rowNumber, sku: row.sku, errors: ["Lỗi khi lưu sản phẩm"] });
         }
       }
 
       await invalidateSearchCache(ctx.tenantId!);
+      errors.sort((a, b) => a.row - b.row);
       return { imported, errors };
     }),
 

@@ -25,6 +25,8 @@ import type { AppRouter } from "@/server/routers";
 
 type DashboardData = inferRouterOutputs<AppRouter>["dashboard"]["summary"];
 
+const AUTO_REFRESH_MS = 20_000;
+
 interface Props {
   auth: ApiAuth;
 }
@@ -36,35 +38,138 @@ function fmtCompact(n: number): string {
   return n.toLocaleString("vi-VN");
 }
 
-function RevenueBar({ revenue7d }: { revenue7d: DashboardData["revenue7d"] }) {
+/** VN calendar date (YYYY-MM-DD) of now — matches the server's revenue7d keys */
+function vnToday(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function RevenueBar({
+  revenue7d,
+  selected,
+  onSelect,
+}: {
+  revenue7d: DashboardData["revenue7d"];
+  selected: string | null;
+  onSelect: (date: string) => void;
+}) {
   const max = Math.max(...revenue7d.map((d) => d.revenue), 1);
   const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const today = vnToday();
 
   return (
     <div className="flex h-36 items-end gap-1.5 pt-2">
-      {revenue7d.map((d, i) => {
+      {revenue7d.map((d) => {
         const pct = (d.revenue / max) * 100;
-        const dow = new Date(d.date).getDay();
-        const label = days[dow];
-        const isToday = d.date === new Date().toISOString().slice(0, 10);
+        // revenue7d keys are calendar dates: read the weekday in UTC so the browser TZ can't shift it
+        const label = days[new Date(`${d.date}T00:00:00Z`).getUTCDay()];
+        const isToday = d.date === today;
+        const isSelected = d.date === selected;
         return (
-          <div key={d.date} className="relative flex flex-1 flex-col items-center">
+          <button
+            type="button"
+            key={d.date}
+            onClick={() => onSelect(d.date)}
+            aria-pressed={isSelected}
+            aria-label={`Xem chi tiết doanh thu ngày ${d.date}`}
+            title="Bấm để xem chi tiết ngày"
+            className={`relative flex h-full flex-1 cursor-pointer flex-col items-center justify-end rounded-md px-0.5 hover:bg-slate-50 ${isSelected ? "bg-blue-50" : ""}`}
+          >
             <div className="mb-5 text-xs whitespace-nowrap text-slate-400">
               {d.revenue > 0 ? fmtCompact(d.revenue) : ""}
             </div>
             <div
-              className={`min-h-2 w-full rounded-t-sm transition-all ${isToday ? "bg-blue-600" : "bg-blue-200"}`}
+              className={`min-h-2 w-full rounded-t-sm transition-all ${isSelected || isToday ? "bg-blue-600" : "bg-blue-200"}`}
               style={{ height: `${Math.max(pct, 2)}%` }}
             />
             <div
-              className={`mt-1.5 text-xs ${isToday ? "font-semibold text-blue-600" : "text-slate-400"}`}
+              className={`mt-1.5 text-xs ${isToday || isSelected ? "font-semibold text-blue-600" : "text-slate-400"}`}
             >
               {label}
-              {i === revenue7d.length - 1 && <span className="ml-1 text-blue-500">•</span>}
+              {isToday && <span className="ml-1 text-blue-500">•</span>}
             </div>
-          </div>
+          </button>
         );
       })}
+    </div>
+  );
+}
+
+type DayDetail = inferRouterOutputs<AppRouter>["dashboard"]["dayDetail"];
+
+function DayDetailPanel({
+  detail,
+  loading,
+  onClose,
+  onOpenProduct,
+}: {
+  detail: DayDetail | null;
+  loading: boolean;
+  onClose: () => void;
+  onOpenProduct: (id: number) => void;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-semibold text-slate-800">
+          Chi tiết ngày {detail ? fmtDate(`${detail.date}T00:00:00+07:00`) : "…"}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="min-h-9 rounded-md px-2 text-xs text-slate-500 hover:bg-white"
+        >
+          Đóng
+        </button>
+      </div>
+      {loading || !detail ? (
+        <div className="h-24 animate-pulse rounded bg-slate-100" />
+      ) : detail.invoiceCount === 0 ? (
+        <div className="py-4 text-center text-sm text-slate-400">Không có hóa đơn trong ngày</div>
+      ) : (
+        <div className="grid gap-4 text-sm md:grid-cols-3">
+          <div>
+            <div className="text-xs text-slate-500">Doanh thu</div>
+            <div className="text-lg font-bold text-slate-800">{fmtMoney(detail.revenue)}</div>
+            <div className="text-xs text-slate-500">{detail.invoiceCount} hóa đơn</div>
+            <div className="mt-2 space-y-1">
+              {detail.payments.map((p) => (
+                <div key={p.method} className="flex justify-between text-xs text-slate-600">
+                  <span>{p.label}</span>
+                  <span>{fmtMoney(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-slate-500">Sản phẩm doanh thu cao</div>
+            {detail.topProducts.map((p) => (
+              <button
+                type="button"
+                key={p.productId}
+                onClick={() => onOpenProduct(p.productId)}
+                className="flex w-full justify-between gap-2 rounded px-1 py-1 text-left hover:bg-white"
+              >
+                <span className="truncate text-slate-700">{p.name}</span>
+                <span className="whitespace-nowrap text-slate-500">
+                  {p.quantity} · {fmtCompact(p.revenue)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-slate-500">Hóa đơn gần nhất</div>
+            {detail.invoices.map((inv) => (
+              <div key={inv.id} className="flex justify-between gap-2 py-1 text-xs text-slate-600">
+                <span className="truncate">
+                  {inv.invoiceCode}
+                  {inv.customerName ? ` · ${inv.customerName}` : ""}
+                </span>
+                <span className="whitespace-nowrap">{fmtMoney(inv.totalAmount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -104,6 +209,9 @@ export function DashboardClient({ auth }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dayDetail, setDayDetail] = useState<DayDetail | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
 
   const load = useCallback(
     async (quiet = false) => {
@@ -128,6 +236,31 @@ export function DashboardClient({ auth }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  // PLAN P2.9: số liệu không cũ quá 30 s — tự tải lại khi tab đang hiển thị
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load(true);
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const openDay = useCallback(
+    async (date: string) => {
+      setSelectedDate(date);
+      setDayDetail(null);
+      setDayLoading(true);
+      try {
+        setDayDetail(await trpc.dashboard.dayDetail.query({ date }, ctx));
+      } catch (e) {
+        toast.error(errorMessage(e));
+      } finally {
+        setDayLoading(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   if (loading) {
     return (
@@ -163,7 +296,7 @@ export function DashboardClient({ auth }: Props) {
                 minute: "2-digit",
                 second: "2-digit",
               })}{" "}
-              · Cache 5 phút
+              · Tự cập nhật mỗi 20 giây
             </p>
           )}
         </div>
@@ -253,7 +386,15 @@ export function DashboardClient({ auth }: Props) {
               Tổng: {fmtMoney(revenue7d.reduce((s, d) => s + d.revenue, 0))}
             </span>
           </div>
-          <RevenueBar revenue7d={revenue7d} />
+          <RevenueBar revenue7d={revenue7d} selected={selectedDate} onSelect={openDay} />
+          {selectedDate && (
+            <DayDetailPanel
+              detail={dayDetail}
+              loading={dayLoading}
+              onClose={() => setSelectedDate(null)}
+              onOpenProduct={(id) => router.push(`/products/${id}`)}
+            />
+          )}
         </div>
 
         {/* Payment breakdown */}

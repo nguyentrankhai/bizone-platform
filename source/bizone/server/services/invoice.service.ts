@@ -12,6 +12,8 @@ import type {
 import type { Prisma } from "@/generated/prisma/client";
 import { enqueueStockChanged } from "@/server/queue/inventory";
 import { refundTag, type PosActor } from "./cashSession.service";
+import { recordAudit } from "./auditLog.service";
+import { invalidateDashboardCache } from "./dashboard.service";
 import { settlePayments } from "./payment.service";
 import { clearCart } from "./posCart";
 import { publishPosEvent } from "./posEvents";
@@ -359,6 +361,22 @@ async function createInvoiceOnce(
           invoiceId: invoice.id,
         });
       }
+      await refreshDashboard();
+      await recordAudit({
+        userId: actor.userId,
+        module: "pos",
+        action: "create",
+        entityType: "invoice",
+        entityId: invoice.id,
+        newValue: {
+          invoiceCode: invoice.invoiceCode,
+          cashSessionId: session.id,
+          customerId: input.customerId ?? null,
+          amount: t.total,
+          items: input.items.length,
+          payments: input.payments.map((p) => p.method),
+        },
+      });
       await clearCart(session.id);
       await publishPosEvent(session.id, { type: "payment:completed", data: result });
       await publishPosEvent(session.id, { type: "cart:cleared", data: {} });
@@ -369,6 +387,11 @@ async function createInvoiceOnce(
       throw e;
     }
   }
+}
+
+/** Revenue changed — drop this tenant's dashboard cache (best effort; TTL covers failures) */
+async function refreshDashboard(): Promise<void> {
+  await invalidateDashboardCache().catch(() => undefined);
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -570,6 +593,16 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
       invoiceId: inv.id,
     });
   }
+  await refreshDashboard();
+  await recordAudit({
+    userId: actor.userId,
+    module: "pos",
+    action: "cancel",
+    entityType: "invoice",
+    entityId: inv.id,
+    oldValue: { status: inv.status },
+    newValue: { invoiceCode: inv.invoiceCode, status: "cancelled", reason: input.reason ?? null },
+  });
   return getInvoice(inv.id);
 }
 
@@ -706,6 +739,20 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
       invoiceId: inv.id,
     });
   }
+  await refreshDashboard();
+  await recordAudit({
+    userId: actor.userId,
+    module: "pos",
+    action: "refund",
+    entityType: "invoice",
+    entityId: inv.id,
+    newValue: {
+      invoiceCode: inv.invoiceCode,
+      refundCode: refund.refundCode,
+      amount: total,
+      items: input.items.length,
+    },
+  });
   return {
     refundId: refund.id,
     refundCode: refund.refundCode,

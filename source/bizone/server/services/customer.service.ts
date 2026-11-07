@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { bizoneError } from "@/lib/errors";
 import type {
   ListCustomersInput,
   CreateCustomerInput,
@@ -9,16 +10,9 @@ import type {
   MergeCustomersInput,
 } from "@/lib/validators/customer";
 
-function conflict(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "CONFLICT", message: msg })), {
-    bizoneCode: "CONFLICT",
-  });
-}
-function notFound(msg: string): Error {
-  return Object.assign(new Error(JSON.stringify({ code: "NOT_FOUND", message: msg })), {
-    bizoneCode: "NOT_FOUND",
-  });
-}
+// Business errors → TRPCError with the right HTTP status (409 / 404), body keeps { code, message }
+const conflict = (msg: string) => bizoneError("CONFLICT", msg);
+const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
 
 function generateCustomerCode(): string {
   const now = new Date();
@@ -259,18 +253,28 @@ export async function payDebt(customerId: number, input: PayDebtInput, _userId: 
   if (!debt || debt.customerId !== customerId)
     throw notFound(`Công nợ #${input.debtId} không tồn tại`);
   if (debt.status === "paid") throw conflict("Công nợ đã được thanh toán đủ");
+  if (input.amount > Number(debt.remainingAmount))
+    throw bizoneError(
+      "VALIDATION_ERROR",
+      `Số tiền trả (${input.amount}) vượt số còn nợ (${Number(debt.remainingAmount)})`,
+    );
 
-  const remaining = Number(debt.remainingAmount) - input.amount;
-  const newStatus = remaining <= 0 ? "paid" : input.amount > 0 ? "partial" : debt.status;
-
-  return prisma.customerDebt.update({
-    where: { id: input.debtId },
-    data: {
-      paidAmount: { increment: input.amount },
-      remainingAmount: Math.max(0, remaining),
-      status: newStatus,
-      notes: input.notes ?? debt.notes,
-    },
+  return prisma.$transaction(async (tx) => {
+    // Conditional decrement: two concurrent payments can't both pass the check above
+    const { count } = await tx.customerDebt.updateMany({
+      where: { id: input.debtId, status: { not: "paid" }, remainingAmount: { gte: input.amount } },
+      data: {
+        paidAmount: { increment: input.amount },
+        remainingAmount: { decrement: input.amount },
+        notes: input.notes ?? debt.notes,
+      },
+    });
+    if (count === 0) throw conflict("Công nợ vừa được cập nhật, vui lòng tải lại");
+    const after = await tx.customerDebt.findUniqueOrThrow({ where: { id: input.debtId } });
+    return tx.customerDebt.update({
+      where: { id: input.debtId },
+      data: { status: Number(after.remainingAmount) <= 0 ? "paid" : "partial" },
+    });
   });
 }
 

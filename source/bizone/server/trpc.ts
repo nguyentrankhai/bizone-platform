@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
+import { auditTrpcMutation, isAudited } from "@/server/middleware/auditLog";
 import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { verifyJwt, extractBearerToken } from "@/lib/auth";
@@ -118,19 +119,33 @@ const enforcePermission = (permission: Permission) =>
     return next();
   });
 
+// ─── Audit middleware ─────────────────────────────────────────────────────────
+
+/** Records successful mutations listed in server/middleware/auditLog.ts (after tenant is set) */
+const auditMutations = t.middleware(async ({ ctx, path, type, getRawInput, next }) => {
+  const result = await next();
+  if (type === "mutation" && result.ok && isAudited(path)) {
+    const input = await getRawInput().catch(() => undefined);
+    await auditTrpcMutation(path, { req: ctx.req, user: ctx.user }, input, result.data);
+  }
+  return result;
+});
+
 // ─── Procedure builders ───────────────────────────────────────────────────────
 
 /** Requires valid JWT + X-Tenant-ID + rate limit */
 export const protectedProcedure = t.procedure
   .use(enforceAuth)
   .use(enforceTenant)
-  .use(enforceRateLimit("general"));
+  .use(enforceRateLimit("general"))
+  .use(auditMutations);
 
 /** protectedProcedure + higher rate limit for POS */
 export const posProcedure = t.procedure
   .use(enforceAuth)
   .use(enforceTenant)
-  .use(enforceRateLimit("pos"));
+  .use(enforceRateLimit("pos"))
+  .use(auditMutations);
 
 /** Factory: protectedProcedure + specific RBAC permission check */
 export const permissionProcedure = (permission: Permission) =>
