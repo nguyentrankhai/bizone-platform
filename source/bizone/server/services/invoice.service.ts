@@ -11,6 +11,7 @@ import type {
 } from "@/lib/validators/pos";
 import type { Prisma } from "@/generated/prisma/client";
 import { enqueueStockChanged } from "@/server/queue/inventory";
+import { enqueueCommissionRecalc } from "@/server/queue/commission";
 import { refundTag, type PosActor } from "./cashSession.service";
 import { recordAudit } from "./auditLog.service";
 import { invalidateDashboardCache } from "./dashboard.service";
@@ -361,6 +362,7 @@ async function createInvoiceOnce(
           invoiceId: invoice.id,
         });
       }
+      await enqueueCommissionRecalc(invoice.userId, invoice.createdAt);
       await refreshDashboard();
       await recordAudit({
         userId: actor.userId,
@@ -593,6 +595,7 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
       invoiceId: inv.id,
     });
   }
+  await enqueueCommissionRecalc(inv.userId, inv.createdAt);
   await refreshDashboard();
   await recordAudit({
     userId: actor.userId,
@@ -739,6 +742,7 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
       invoiceId: inv.id,
     });
   }
+  await enqueueCommissionRecalc(inv.userId, inv.createdAt);
   await refreshDashboard();
   await recordAudit({
     userId: actor.userId,

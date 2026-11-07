@@ -58,4 +58,7 @@ export type Permission =
   | "staff:write"
   | "staff:read"
   | "staff:view_audit_log"
+  | "staff:manage_shift"
+  | "staff:manage_attendance"
+  | "staff:manage_commission"
   | "admin:*";

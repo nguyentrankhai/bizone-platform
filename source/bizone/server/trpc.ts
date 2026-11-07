@@ -6,6 +6,7 @@ import { verifyJwt, extractBearerToken } from "@/lib/auth";
 import { hasPermission, ForbiddenError } from "@/lib/rbac";
 import { rateLimitGeneral, rateLimitPos } from "@/lib/rate-limit";
 import { isKnownTenant, runWithTenant } from "@/lib/tenant";
+import { getStaffAccess } from "@/server/services/rbac.service";
 import type { AuthUser, Permission } from "@/types/auth";
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -104,10 +105,13 @@ const enforceRateLimit = (variant: "general" | "pos" = "general") =>
 // ─── RBAC middleware factory ──────────────────────────────────────────────────
 
 const enforcePermission = (permission: Permission) =>
-  t.middleware(({ ctx, next }) => {
+  t.middleware(async ({ ctx, next }) => {
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+    // Runs inside the tenant scope: staff profile (active flag + custom roles) from tenant DB
+    const access = await getStaffAccess(ctx.user);
     try {
-      if (!hasPermission(ctx.user, permission)) {
+      if (!access.active) throw new ForbiddenError("Tài khoản nhân viên đã bị vô hiệu hoá");
+      if (!hasPermission(ctx.user, permission, access.capabilities)) {
         throw new ForbiddenError(`Required permission: ${permission}`);
       }
     } catch (e) {
@@ -116,8 +120,18 @@ const enforcePermission = (permission: Permission) =>
       }
       throw e;
     }
-    return next();
+    return next({ ctx: { ...ctx, user: ctx.user } });
   });
+
+/** Signed-in staff acting on their own record (check-in/out): only the active flag matters */
+const enforceActiveStaff = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  const access = await getStaffAccess(ctx.user);
+  if (!access.active) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Tài khoản nhân viên đã bị vô hiệu hoá" });
+  }
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});
 
 // ─── Audit middleware ─────────────────────────────────────────────────────────
 
@@ -150,6 +164,9 @@ export const posProcedure = t.procedure
 /** Factory: protectedProcedure + specific RBAC permission check */
 export const permissionProcedure = (permission: Permission) =>
   protectedProcedure.use(enforcePermission(permission));
+
+/** protectedProcedure for an active staff member acting on their own data */
+export const staffSelfProcedure = protectedProcedure.use(enforceActiveStaff);
 
 /** posProcedure (300 req/min) + specific RBAC permission check */
 export const posPermissionProcedure = (permission: Permission) =>

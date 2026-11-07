@@ -189,6 +189,7 @@ model Commission {
   commissionRule   CommissionRule?  @relation(fields: [commissionRuleId], references: [id], onUpdate: Restrict, map: "fk_comm_rule")
   user             User             @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "fk_comm_user")
 
+  @@unique([userId, invoiceId, commissionRuleId], map: "uq_commission_line")
   @@index([invoiceId], map: "fk_comm_inv")
   @@index([commissionRuleId], map: "fk_comm_rule")
   @@index([status], map: "idx_comm_status")

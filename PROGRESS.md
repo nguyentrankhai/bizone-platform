@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-07 (QA-2 fix: đã sửa #39–#47, #49–#51 + lỗi thống kê tiền thối trên dashboard; còn mở #48, #52, #53 và mới #54, #55 — xem [QA-2](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07); P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-07 (P4.1 Staff Module xong — nhân viên + tài khoản Keycloak, vai trò/quyền chi tiết, ca, chấm công, hoa hồng tự động; mới #56–#60; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 8 | 0 | 0 | 8 |
+| 4 — BizOne Mở rộng | 8 | 1 | 0 | 7 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **23** | **3** | **25** |
+| **Tổng** | **51** | **24** | **3** | **24** |
 
 ---
 
@@ -84,6 +84,11 @@
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
 | 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub); sidebar còn link tới trang chưa có (`/staff`, `/reports`, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
+| 56 | `next dev`: lần tải lại thứ 2 của một số trang client (`/audit-log`, `/staff/shifts`, `/staff/commissions`) kẹt ở fallback Suspense "Đang tải..." dù API trả 200 — **chỉ ở dev** (bản `next start` bình thường); có từ trước P4.1 (đã thử `/audit-log`) | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
+| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (NCC, kế toán, marketing, omni, cài đặt) chưa có tác dụng | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
+| 58 | WebSocket POS (`server/ws/pos.ts`) chỉ xét role trong token: vai trò tuỳ chỉnh không áp dụng và nhân viên bị cho nghỉ việc vẫn giữ kết nối WS đang mở tới khi token hết hạn (≤ 15 phút). API tRPC đã chặn ngay | P4.1 | P4.5 (POS nâng cao) |
+| 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
+| 60 | Phân quyền cần chi nhánh (`user_roles.branch_id` NOT NULL) mà chưa có màn hình tạo chi nhánh (#11). Nhân viên tạo trước P4.1 (vd. `admin@bizone.vn`, tự sinh khi đăng nhập) chưa có vai trò trong DB → danh sách hiện "Chưa phân quyền trong BizOne" (quyền vẫn theo Keycloak); gán vai trò trong UI sẽ đồng bộ lại role Keycloak | P4.1 | P4.6 Multi-store |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -162,7 +167,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P4.1 | Staff Module — API & UI | ⬜ | — | |
+| P4.1 | Staff Module — API & UI | ✅ | `PENDING` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ⬜ | — | |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
@@ -1455,3 +1460,46 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Khác biệt so với đề xuất:** không đổi đơn giá đơn hàng theo giá bán (đơn từ kênh online có giá riêng của kênh) — chỉ chặn tổng âm.
 - **Vấn đề / lưu ý:** còn mở từ QA-2: #48 (hiệu năng kho), #52 (chuẩn hoá API list), #53 (hardening), mới #54 (layout BizOne chưa responsive), #55 (GET GD trả camelCase). #7/#15 (đăng nhập OIDC trình duyệt) vẫn chưa có task nhận.
 
+### P4.1 — Staff Module — API & UI
+
+- **Hoàn thành:** 2026-11-07 · **Commit:** `PENDING` · **Vị trí:** `source/bizone/server/routers/staff.ts`, `server/services/{staff,shift,attendance,commission,rbac}.service.ts`, `server/queue/commission.ts`, `lib/{permissions,keycloak-admin}.ts`, `lib/validators/staff.ts`, `app/staff/**`, `components/staff/*`, migration `1_commission_line_unique`, `tests/staff.test.ts`, `keycloak/realms/bizone-realm.json`
+- **Đã làm:**
+  - **Nhân viên = hồ sơ DB + tài khoản Keycloak** (`staff.service.ts`, `lib/keycloak-admin.ts`): `staff.create` tạo user Keycloak qua service account `bizone-api` (thuộc tính `tenant_id`, `branch_ids`, mật khẩu ban đầu, tuỳ chọn bắt đổi khi đăng nhập lần đầu) rồi tạo `users` + `user_roles` + `user_branches` trong 1 transaction; lỗi DB → xoá lại user Keycloak (bù trừ). `update` (họ tên/email/SĐT, đồng bộ Keycloak), `setRoles` (vai trò × chi nhánh), `setActive` (cho nghỉ việc ⇔ Keycloak `enabled=false`), `resetPassword`, `list` (lọc tên/SĐT/email, vai trò, trạng thái; phân trang `{ items, meta }`), `get` (kèm role Keycloak thực tế). Mọi thao tác trên tài khoản Keycloak có sẵn đều kiểm `tenant_id` trùng tenant hiện tại. Không có xoá cứng (HĐ/hoa hồng tham chiếu `users` — `ON DELETE RESTRICT`) → "nghỉ việc"
+  - **RBAC chi tiết** (`lib/permissions.ts`, `rbac.service.ts`, `server/trpc.ts`): danh mục 52 quyền `module.action` (chuyển từ seed sang `lib/permissions.ts`, dùng chung seed + app), mỗi quyền mở một capability API (`grants`). Vai trò hệ thống `admin/manager/seller/warehouse/viewer` ⇔ realm role `bizone-*` (gán vai trò hệ thống → đồng bộ role Keycloak); quyền của chúng sinh từ `ROLE_PERMISSIONS` (seed ghi lại `role_permissions`, không sửa được). Vai trò tuỳ chỉnh: CRUD + ma trận quyền, áp dụng ở mỗi lần kiểm quyền: `enforcePermission` = role token ∪ capability của vai trò tuỳ chỉnh (cache Redis hash `rbac:{tenant}` TTL 60 s, xoá khi đổi vai trò/quyền/trạng thái) và **chặn nhân viên đã nghỉ việc ngay** (token còn hạn vẫn 403). Thêm capability `staff:manage_shift`, `staff:manage_attendance`, `staff:manage_commission`; bổ sung `bizone-warehouse` (trước đây role này không có quyền nào). Chặn admin tự gỡ vai trò Quản trị viên / tự vô hiệu hoá
+  - **Ca làm việc** (`shift.service.ts`): CRUD ca (giờ VN, ca qua đêm khi giờ kết thúc ≤ giờ bắt đầu; ca đã phân không xoá được → ngừng sử dụng), phân ca hàng loạt (nhiều NV × nhiều ngày, trùng thì bỏ qua), bỏ phân ca, lịch theo tuần (`calendar`, ≤ 62 ngày, lọc chi nhánh)
+  - **Chấm công** (`attendance.service.ts`): check-in/out tự phục vụ (`staffSelfProcedure` — mọi nhân viên đang làm), trễ/về sớm so với ca được phân + `store_config.attendance_grace_minutes` (mặc định 5, đã thêm vào seed), ca qua đêm check-out sang ngày hôm sau, check-out tranh chấp dùng `updateMany … checkOut IS NULL`; bảng chấm công tuần/tháng (giờ làm, số lần + phút trễ/sớm, vắng = có ca mà không check-in sau giờ kết thúc ca); nhân viên không có `staff:manage_attendance` chỉ xem được của mình. Check-in/out ghi audit log
+  - **Hoa hồng** (`commission.service.ts`, `server/queue/commission.ts`): quy tắc `percent_revenue` / `percent_profit` / `fixed_per_product`, áp cho mọi SP / 1 danh mục (gồm danh mục con) / 1 SP, `min_revenue` = doanh số tháng tối thiểu. `recalculateMonth(nhân viên, tháng)` dựng lại các dòng `pending` từ HĐ của người bán (`invoices.user_id`): doanh thu dòng = thành tiền × (tổng HĐ / Σ thành tiền) − tiền đã trả hàng, lợi nhuận = doanh thu − giá vốn × SL giữ lại; dòng đã `paid` không đụng tới; idempotent (unique mới `(user_id, invoice_id, commission_rule_id)`). **Tự động**: `invoice.service` đẩy job `recalc` sau mỗi tạo / huỷ / đổi-trả HĐ (queue `bizone-commission`, worker concurrency 1); scheduler `30 0 1 * *` (Asia/Ho_Chi_Minh) chốt tháng trước cho mọi tenant. API: rules CRUD, list theo tháng (tổng chờ trả / đã trả theo NV), tính lại thủ công, thanh toán (theo id hoặc NV + tháng)
+  - **Doanh số nhân viên** `staff.sales` (doanh thu trừ trả hàng, số HĐ, TB/HĐ; top 10 SP khi chọn 1 NV)
+  - **Audit log**: 18 mutation mới trong `AUDIT_ROUTES` (nhân viên, vai trò, ca, quy tắc/tính lại/trả hoa hồng); check-in/out ghi trong service; mật khẩu không vào log (`OMIT_KEYS`). Bộ lọc `/audit-log` thêm module "Nhân viên" + các hành động mới
+  - **UI** (theo mockup 08 mục 18 + 20): `/staff` (danh sách, lọc, doanh số tháng, form thêm NV với ma trận vai trò × chi nhánh, sửa / phân quyền / đặt lại mật khẩu / cho nghỉ việc), `/staff/shifts` (thẻ ca + lịch tuần, ô "+" phân ca, × bỏ ca), `/staff/attendance` (thẻ chấm công hôm nay + bảng công tuần/tháng + chi tiết từng ngày), `/staff/commissions` (`CommissionRuleForm`, tổng chờ trả/đã trả, thanh toán, chi tiết theo HĐ), `/staff/roles` (danh sách vai trò, ma trận quyền theo module, sao chép quyền, vai trò tuỳ chỉnh). Tab điều hướng chung `StaffNav`, nút ≥ 40 px
+  - **Keycloak**: service account `bizone-api` được gán `realm-management` `view-users`, `query-users`, `manage-users` + protocol mapper "client roles" (realm không có client scope `roles` nên token không mang role) — đã áp lên Keycloak đang chạy (người dùng duyệt) và ghi vào `keycloak/realms/bizone-realm.json`. Gán realm role dùng `role-mappings/realm/available` để không cần `view-realm`; token service account bị từ chối (401/403) → lấy token mới và thử lại 1 lần
+  - Test Vitest `tests/staff.test.ts` (16): capability của vai trò tuỳ chỉnh, vai trò hệ thống ↔ Keycloak, role warehouse, khoảng tháng giờ VN, tháng trước, chấm công (đúng giờ trong ân hạn, trễ + về sớm, vắng / có ca / nghỉ, ca qua đêm, gộp ca), hoa hồng (% doanh số chia giảm giá HĐ, % lợi nhuận + cố định/SP + trả hàng, danh mục con + theo SP, ngưỡng doanh số tháng, SP không có giá vốn / lỗ)
+
+- **Kiểm thử** (`next build` + `next start` :3001 + `dist/worker.mjs`, DB `bizonedb`, Keycloak thật — token PKCE cho `admin@bizone.vn` và cho nhân viên vừa tạo; chi nhánh test tạo bằng SQL vì chưa có API chi nhánh; script e2e 36 bước; trình duyệt tích hợp cho UI):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Thêm nhân viên | ✅ `staff.create` 123 ms: user Keycloak (`tenant_id`, role `bizone-seller`) + hồ sơ DB; tạo qua form UI cũng OK. Lỗi: trùng tên đăng nhập 409, mật khẩu < 8 ký tự 400, chi nhánh không tồn tại 400; Keycloak không kết nối được → `SERVICE_UNAVAILABLE` sau 0,1 s, không để lại bản ghi DB |
+  | → phân quyền | ✅ NV mới đăng nhập Keycloak được, gọi POS 200; seller gọi `staff.list` / tự tạo admin → 403. Gán vai trò tuỳ chỉnh "Trưởng ca" (`staff.read`) → `staff.list` 200 **với token cũ**; bỏ quyền khỏi vai trò → 403 ngay; xoá vai trò đang gán 409; sửa vai trò hệ thống 409; admin tự gỡ Quản trị viên 409 |
+  | → check-in | ✅ ca bắt đầu trước 30 phút → check-in 16 ms, `late`, trễ 31 phút; check-in lần 2 409; check-out → về sớm 239 phút (`late_early`); check-out lần 2 409; bảng công quản lý: 1 lần trễ 31p, 1 lần về sớm 3h59; seller chỉ thấy dòng của mình. UI: bấm Check-in → "Đã check-in lúc 22:26", nút chuyển sang Check-out |
+  | → bán hàng → hoa hồng tự động tính | ✅ 3 quy tắc (2 % doanh số, 1.000₫/SP cho SP test, 10 % lợi nhuận); seller mở ca + HĐ 2 × 50.000₫ (giá vốn 30.000₫) → **sau 274 ms** có 2.000 + 2.000 + 4.000₫ `pending`; trả 1 SP → tính lại 1.000 + 1.000 + 2.000₫; thanh toán 4.000₫ (3 dòng `paid`); tính lại không đụng dòng đã trả; trả lần 2 → 409. Quy tắc % > 100 → 400. Doanh số NV 50.000₫ / 1 HĐ (đã trừ trả hàng). Job cuối tháng chạy được (tháng 10: 0 NV), lịch kế tiếp 2026-12-01 00:30 giờ VN |
+  | Audit log xem được | ✅ `auditLog.list module=staff`: create, set_roles, update, delete (vai trò), assign_shift, check_in, check_out, recalculate_commission, pay_commission — `user_id` đúng người thao tác, không chứa mật khẩu; lọc "Nhân viên" trên `/audit-log` |
+  | Nghỉ việc | ✅ `setActive false` → Keycloak `enabled=false`; token còn hạn của NV gọi POS → 403 ngay; đăng nhập lại thất bại; tự vô hiệu hoá chính mình 409 |
+  | UI | ✅ 5 trang render đúng dữ liệu trên bản production (danh sách NV, thẻ ca + lịch tuần, bảng công, quy tắc + tổng hoa hồng, ma trận quyền); 375 px: không cuộn ngang trang (bảng cuộn trong khung), nút chấm công chia 2 cột. ⚠️ sidebar chung che nội dung ở 375 px khi chưa thu gọn (#54, có từ trước); `next dev` kẹt fallback khi tải lại (#56, có từ trước, chỉ ở dev) |
+  | Script e2e | ✅ 36/36 |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 48/48) |
+  | Dọn dẹp | ✅ dừng :3000/:3001 + worker; xoá 2 NV test (DB + Keycloak), chi nhánh/SP/ca/HĐ/đổi trả/ca thu ngân/quy tắc/hoa hồng/chấm công test, 23 audit log của phiên; key Redis (idempotency, job hoa hồng đã xong); file token/mật khẩu tạm. Giữ: quyền + mapper của service account `bizone-api` (cần cho tính năng), scheduler cuối tháng trong Redis |
+
+- **Khác biệt so với plan:**
+  - Một router `staff.ts` với router con (`staff.role.*`, `staff.shift.*`, `staff.attendance.*`, `staff.commission.*`) thay vì nhiều router; thêm trang `/staff/commissions`, `/staff/roles` và `RoleMatrix`, `AttendanceClient`, `CommissionClient` ngoài 3 component PLAN nêu.
+  - "Audit log UI" đã có từ P2.10 → chỉ ghi thêm thao tác nhân viên + bộ lọc.
+  - "Tính hoa hồng tự động cuối tháng": tính ngay sau mỗi HĐ (để thấy ngay) **và** chốt lại đầu tháng sau (ngưỡng doanh số tháng).
+  - Thêm migration unique cho `commissions` (tính lại idempotent) và cấu hình Keycloak cho service account (không có trong PLAN nhưng cần để tạo tài khoản).
+
+- **Quyết định thiết kế:**
+  - Keycloak giữ danh tính/mật khẩu (theo P1.5), BizOne giữ hồ sơ + phân quyền theo chi nhánh; vai trò hệ thống phản chiếu sang realm role để token đúng ngay ở lần đăng nhập sau, vai trò tuỳ chỉnh kiểm từ DB (có cache) để không phải tạo role Keycloak theo từng tenant.
+  - Kiểm `isActive` ở mọi permission check (cache 60 s, xoá khi đổi) → nghỉ việc có hiệu lực ngay thay vì chờ token 15 phút hết hạn.
+  - Hoa hồng là dữ liệu dẫn xuất, tính lại toàn tháng của một NV (không cộng dồn) → đúng khi huỷ/đổi trả/sửa quy tắc; dòng đã trả bất biến.
+  - Hoa hồng tính theo người lập HĐ (`invoices.user_id`) — chưa có trường "nhân viên tư vấn" riêng.
+
+- **Vấn đề / lưu ý:** mới #56–#60. Service account `bizone-api` giờ có `manage-users` toàn realm `bizone` (dùng chung mọi tenant) — code luôn kiểm `tenant_id` trước khi sửa tài khoản; secret client cần bảo vệ như secret admin (đưa vào checklist P6.6). Tên hiển thị thu ngân vẫn là username (#15) vì token chưa có claim `name`.

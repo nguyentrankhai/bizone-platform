@@ -4,73 +4,16 @@
 // One database per tenant: seeds the tenant named by SEED_TENANT_ID (default DEV_TENANT_ID),
 // which must be listed in TENANT_DATABASES.
 import { getPrismaForTenant } from "@/lib/prisma";
+import { PERMISSION_CATALOG, SYSTEM_ROLES, systemRolePermissionCodes } from "@/lib/permissions";
+import { roleCapabilities } from "@/lib/rbac";
 
 const seedTenant = process.env.SEED_TENANT_ID ?? process.env.DEV_TENANT_ID;
 if (!seedTenant) throw new Error("Set SEED_TENANT_ID (or DEV_TENANT_ID) to the tenant to seed");
 const prisma = getPrismaForTenant(seedTenant);
 
-const roles = [
-  { code: "admin", name: "Admin", description: "Chủ cửa hàng - Toàn quyền" },
-  { code: "manager", name: "Manager", description: "Quản lý vận hành" },
-  { code: "seller", name: "Seller", description: "Nhân viên bán hàng" },
-  { code: "warehouse", name: "Warehouse", description: "Nhân viên kho" },
-  { code: "viewer", name: "Viewer", description: "Chế độ xem" },
-];
-
-const permissions: [module: string, action: string, name: string][] = [
-  ["pos", "create_invoice", "Tạo hóa đơn"],
-  ["pos", "read_invoice", "Xem hóa đơn"],
-  ["pos", "cancel_invoice", "Hủy hóa đơn"],
-  ["pos", "refund_invoice", "Đổi trả hóa đơn"],
-  ["pos", "manage_session", "Quản lý ca"],
-  ["product", "create", "Thêm sản phẩm"],
-  ["product", "read", "Xem sản phẩm"],
-  ["product", "update", "Sửa sản phẩm"],
-  ["product", "delete", "Xóa sản phẩm"],
-  ["product", "manage_category", "Quản lý danh mục"],
-  ["product", "import_export", "Import/Export sản phẩm"],
-  ["warehouse", "create_transaction", "Tạo phiếu nhập/xuất"],
-  ["warehouse", "read_inventory", "Xem tồn kho"],
-  ["warehouse", "stock_take", "Kiểm kê kho"],
-  ["warehouse", "transfer", "Chuyển kho"],
-  ["crm", "create", "Thêm khách hàng"],
-  ["crm", "read", "Xem khách hàng"],
-  ["crm", "update", "Sửa khách hàng"],
-  ["crm", "manage_points", "Quản lý điểm thưởng"],
-  ["crm", "manage_debt", "Quản lý công nợ"],
-  ["order", "read", "Xem đơn hàng"],
-  ["order", "update_status", "Cập nhật trạng thái"],
-  ["order", "manage_return", "Quản lý đổi trả"],
-  ["staff", "read", "Xem nhân viên"],
-  ["staff", "create", "Thêm nhân viên"],
-  ["staff", "update", "Sửa nhân viên"],
-  ["staff", "delete", "Xóa nhân viên"],
-  ["staff", "manage_shift", "Quản lý ca làm việc"],
-  ["staff", "manage_attendance", "Quản lý chấm công"],
-  ["staff", "manage_commission", "Quản lý hoa hồng"],
-  ["staff", "view_audit_log", "Xem audit log"],
-  ["report", "view_dashboard", "Xem dashboard"],
-  ["report", "view_revenue", "Xem báo cáo doanh thu"],
-  ["report", "view_profit", "Xem báo cáo lợi nhuận"],
-  ["report", "view_inventory", "Xem báo cáo tồn kho"],
-  ["report", "export", "Xuất báo cáo"],
-  ["supplier", "create", "Thêm nhà cung cấp"],
-  ["supplier", "read", "Xem nhà cung cấp"],
-  ["supplier", "update", "Sửa nhà cung cấp"],
-  ["supplier", "manage_po", "Quản lý đơn nhập"],
-  ["omni", "manage_connection", "Quản lý kết nối kênh"],
-  ["omni", "manage_product_sync", "Đồng bộ sản phẩm"],
-  ["omni", "manage_order_sync", "Đồng bộ đơn hàng"],
-  ["marketing", "manage_coupon", "Quản lý mã giảm giá"],
-  ["marketing", "manage_flash_sale", "Quản lý flash sale"],
-  ["marketing", "manage_promotion", "Quản lý khuyến mãi"],
-  ["accounting", "manage_fund", "Quản lý quỹ"],
-  ["accounting", "manage_revenue_expense", "Quản lý thu chi"],
-  ["accounting", "manage_debt", "Quản lý công nợ"],
-  ["config", "read", "Xem cấu hình"],
-  ["config", "update", "Cập nhật cấu hình"],
-  ["config", "manage_role", "Quản lý vai trò"],
-];
+// Roles and the permission catalog live in lib/permissions.ts (shared with the Staff module)
+const roles = SYSTEM_ROLES;
+const permissions = PERMISSION_CATALOG;
 
 const customerGroups = [
   {
@@ -115,6 +58,12 @@ const storeConfig: [key: string, value: string, group: string, description: stri
   ["store_email", "", "general", "Email"],
   ["tax_rate", "10", "tax", "Thuế suất VAT mặc định (%)"],
   ["currency", "VND", "general", "Đơn vị tiền tệ"],
+  [
+    "attendance_grace_minutes",
+    "5",
+    "staff",
+    "Số phút cho phép đi trễ / về sớm trước khi tính vi phạm chấm công",
+  ],
   ["loyalty_rate", "1", "loyalty", "Số điểm tích lũy trên 1.000đ"],
   ["loyalty_convert_rate", "1000", "loyalty", "Giá trị quy đổi 1 điểm (VNĐ)"],
   ["min_stock_alert", "10", "inventory", "Ngưỡng cảnh báo tồn kho tối thiểu (mặc định)"],
@@ -194,7 +143,7 @@ async function main() {
     });
   }
 
-  for (const [module, action, name] of permissions) {
+  for (const { module, action, name } of permissions) {
     const code = `${module}.${action}`;
     await prisma.permission.upsert({
       where: { code },
@@ -203,12 +152,21 @@ async function main() {
     });
   }
 
-  const admin = await prisma.role.findUniqueOrThrow({ where: { code: "admin" } });
-  const allPermissions = await prisma.permission.findMany({ select: { id: true } });
-  await prisma.rolePermission.createMany({
-    data: allPermissions.map((p) => ({ roleId: admin.id, permissionId: p.id })),
-    skipDuplicates: true,
-  });
+  // System roles mirror the Keycloak realm roles: (re)set their permissions from code
+  const allPermissions = await prisma.permission.findMany({ select: { id: true, code: true } });
+  const permissionId = new Map(allPermissions.map((p) => [p.code, p.id]));
+  for (const role of roles) {
+    const { id } = await prisma.role.findUniqueOrThrow({ where: { code: role.code } });
+    const ids = systemRolePermissionCodes(role.code, roleCapabilities)
+      .map((code) => permissionId.get(code))
+      .filter((v): v is number => v !== undefined);
+    await prisma.$transaction([
+      prisma.rolePermission.deleteMany({ where: { roleId: id } }),
+      prisma.rolePermission.createMany({
+        data: ids.map((permissionId) => ({ roleId: id, permissionId })),
+      }),
+    ]);
+  }
 
   for (const group of customerGroups) {
     await prisma.customerGroup.upsert({

@@ -21,6 +21,9 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "staff:write",
     "staff:read",
     "staff:view_audit_log",
+    "staff:manage_shift",
+    "staff:manage_attendance",
+    "staff:manage_commission",
   ],
   "bizone-manager": [
     "pos:write",
@@ -38,7 +41,10 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "report:read",
     "staff:read",
     "staff:view_audit_log",
+    "staff:manage_shift",
+    "staff:manage_attendance",
   ],
+  "bizone-warehouse": ["product:read", "inventory:write", "inventory:read", "order:read"],
   "bizone-seller": [
     "pos:write",
     "pos:read",
@@ -58,14 +64,27 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
 };
 
-export function hasPermission(user: AuthUser, permission: Permission): boolean {
+/** Capabilities a Keycloak realm role grants (empty for unknown roles) */
+export function roleCapabilities(role: string): Permission[] {
+  return ROLE_PERMISSIONS[role] ?? [];
+}
+
+/**
+ * Token roles first; `extra` adds capabilities from custom roles assigned in the Staff module
+ * (see server/services/rbac.service.ts).
+ */
+export function hasPermission(
+  user: AuthUser,
+  permission: Permission,
+  extra?: ReadonlySet<Permission>,
+): boolean {
   for (const role of user.roles) {
     const perms = ROLE_PERMISSIONS[role];
     if (!perms) continue;
     if (perms.includes("admin:*")) return true;
     if (perms.includes(permission)) return true;
   }
-  return false;
+  return extra?.has(permission) ?? false;
 }
 
 export function requirePermission(user: AuthUser, permission: Permission): void {

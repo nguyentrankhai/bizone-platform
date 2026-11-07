@@ -17,6 +17,7 @@ const MODULES = [
   { value: "inventory", label: "Kho" },
   { value: "order", label: "Đơn hàng" },
   { value: "crm", label: "CRM" },
+  { value: "staff", label: "Nhân viên" },
 ];
 
 const ACTIONS = [
@@ -31,6 +32,12 @@ const ACTIONS = [
   { value: "confirm_transfer", label: "Xác nhận chuyển kho" },
   { value: "update_status", label: "Đổi trạng thái" },
   { value: "refund", label: "Hoàn tiền" },
+  { value: "set_roles", label: "Phân quyền" },
+  { value: "set_active", label: "Kích hoạt / nghỉ việc" },
+  { value: "assign_shift", label: "Phân ca" },
+  { value: "check_in", label: "Check-in" },
+  { value: "check_out", label: "Check-out" },
+  { value: "pay_commission", label: "Trả hoa hồng" },
 ];
 
 function actionBadge(action: string) {

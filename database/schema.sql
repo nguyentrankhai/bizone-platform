@@ -875,6 +875,7 @@ CREATE TABLE IF NOT EXISTS commissions (
   CONSTRAINT fk_comm_inv    FOREIGN KEY (invoice_id)         REFERENCES invoices(id)       ON DELETE SET NULL,
   CONSTRAINT fk_comm_rule   FOREIGN KEY (commission_rule_id) REFERENCES commission_rules(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+CREATE UNIQUE INDEX uq_commission_line ON commissions(user_id, invoice_id, commission_rule_id);
 CREATE INDEX idx_comm_user   ON commissions(user_id);
 CREATE INDEX idx_comm_status ON commissions(status);
 

@@ -135,12 +135,14 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── products/            # P2.2 — UI sản phẩm
     │   │   ├── warehouse/           # P2.4 — kho: tồn, phiếu nhập/xuất (transactions/new), stock-take, transfer
     │   │   ├── pos/                 # P2.6 — /pos (bán hàng), /pos/session (mở/khóa ca), /pos/display?session= (màn hình khách)
+    │   │   ├── staff/               # P4.1 — /staff (NV), /staff/shifts, /staff/attendance, /staff/commissions, /staff/roles
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
     │   ├── components/ui/           # shadcn/ui components (style base-nova)
     │   ├── components/inventory/    # P2.4 — WarehouseTable, StockTakeForm, TransferForm, BarcodeScanInput…
     │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal, CustomerDisplay, Receipt, SessionClient
+    │   ├── components/staff/        # P4.1 — StaffTable, ShiftCalendar, AttendanceClient, CommissionClient, CommissionRuleForm, RoleMatrix
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
@@ -149,8 +151,10 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
     │   ├── server/                  # tRPC routers, services, middleware (P1.6)
     │   │   ├── routers/pos.ts       # P2.5 — ca, hóa đơn, thanh toán, đổi/trả, quote, scan
+    │   │   ├── routers/staff.ts     # P4.1 — nhân viên, role.*, shift.*, attendance.*, commission.*, sales
     │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…
     │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
+    │   │   ├── queue/commission.ts  # P4.1 — BullMQ "bizone-commission" (tính lại sau HĐ + chốt 00:30 ngày 1)
     │   │   ├── ws/pos.ts            # P2.5 — process WebSocket POS 2 màn hình :3002/ws/pos/{sessionId}
     │   │   └── worker.ts            # P2.5 — process worker BullMQ
     │   ├── types/                   # TypeScript types dùng chung
@@ -212,6 +216,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý multi-tenant (QA-1)**: mỗi tenant một database. `TENANT_DATABASES="tenant_demo=bizonedb,…"` (host/credential lấy từ `DATABASE_URL`); tenant không có trong danh sách → 403. `getPrisma()` chỉ chạy trong `runWithTenant()` (tRPC, POS WS, worker, SSE đã bọc sẵn) — code mới ở entry point khác (route handler, job, script) phải tự bọc, dùng `getPrismaForTenant()` cho script/health. Key/kênh Redis phải có tenant (`pos:cart:{tenant}:{session}`, `bizone:pos:{tenant}:{session}`, `bizone:low-stock:{tenant}`); job BullMQ mang `tenantId`. Seed: `SEED_TENANT_ID=<tenant> npm run db:seed`.
 
 **Lưu ý audit & lỗi (QA-2)**: mutation tRPC mới có nghiệp vụ → thêm 1 dòng vào `AUDIT_ROUTES` (`server/middleware/auditLog.ts`); middleware `auditMutations` tự ghi `user_id` (`resolveDbUserId`), IP, input rút gọn. Thao tác có đường vào ngoài tRPC (WebSocket, worker) tự gọi `recordAudit()` trong service (như `invoice.service`). Lỗi nghiệp vụ luôn `bizoneError(code, msg)` (`lib/errors.ts`) → 400/404/409, không `throw new Error`. Cột `created_by`/`updated_by` lấy từ `resolveDbUserId(ctx.user)`, không `Number(ctx.user.id)` (sub là UUID). Ngày nghiệp vụ theo giờ VN: `lib/vn-time.ts` (`vnDayRange`, `vnDateKey`), không `setHours`. Cache dashboard `dashboard:{tenant}:*` TTL 20 s.
+
+**Lưu ý nhân viên & phân quyền (P4.1)**: nhân viên = hồ sơ `users` (DB tenant) + tài khoản Keycloak tạo qua service account `bizone-api` (`lib/keycloak-admin.ts`; cần `realm-management` view/query/manage-users + mapper "client roles", đã có trong realm JSON). Mọi thao tác trên tài khoản Keycloak có sẵn phải `assertTenant`. Danh mục quyền `module.action` ở `lib/permissions.ts` (seed dùng chung), mỗi quyền mở 1 capability `Permission`; vai trò hệ thống ⇔ realm role `bizone-*`, vai trò tuỳ chỉnh kiểm từ DB trong `enforcePermission` (cache `rbac:{tenant}`, gọi `invalidateStaffAccess()` khi đổi vai trò/quyền/trạng thái). Procedure cho nhân viên tự thao tác dùng `staffSelfProcedure`. Hoa hồng là dữ liệu dẫn xuất: luồng nào đổi doanh thu HĐ phải gọi `enqueueCommissionRecalc(userId, invoice.createdAt)`.
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 

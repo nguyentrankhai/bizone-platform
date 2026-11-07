@@ -70,6 +70,39 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "customer.createDebt": { module: "crm", action: "create_debt", entityType: "customer_debt" },
   "customer.payDebt": { module: "crm", action: "pay_debt", entityType: "customer_debt" },
   "customer.merge": { module: "crm", action: "merge", entityType: "customer" },
+  "staff.create": { module: "staff", action: "create", entityType: "user" },
+  "staff.update": { module: "staff", action: "update", entityType: "user" },
+  "staff.setRoles": { module: "staff", action: "set_roles", entityType: "user" },
+  "staff.setActive": { module: "staff", action: "set_active", entityType: "user" },
+  "staff.resetPassword": { module: "staff", action: "reset_password", entityType: "user" },
+  "staff.role.create": { module: "staff", action: "create", entityType: "role" },
+  "staff.role.update": { module: "staff", action: "update", entityType: "role" },
+  "staff.role.delete": { module: "staff", action: "delete", entityType: "role" },
+  "staff.shift.create": { module: "staff", action: "create", entityType: "shift" },
+  "staff.shift.update": { module: "staff", action: "update", entityType: "shift" },
+  "staff.shift.delete": { module: "staff", action: "delete", entityType: "shift" },
+  "staff.shift.assign": { module: "staff", action: "assign_shift", entityType: "shift" },
+  "staff.shift.unassign": {
+    module: "staff",
+    action: "unassign_shift",
+    entityType: "shift_assignment",
+  },
+  "staff.commission.createRule": {
+    module: "staff",
+    action: "create",
+    entityType: "commission_rule",
+  },
+  "staff.commission.updateRule": {
+    module: "staff",
+    action: "update",
+    entityType: "commission_rule",
+  },
+  "staff.commission.recalculate": {
+    module: "staff",
+    action: "recalculate_commission",
+    entityType: "commission",
+  },
+  "staff.commission.pay": { module: "staff", action: "pay_commission", entityType: "commission" },
 };
 
 export function isAudited(path: string): boolean {
@@ -96,7 +129,16 @@ export function summarizeInput(value: unknown, depth = 0): unknown {
   return out;
 }
 
-const ID_KEYS = ["id", "stockTakeId", "sessionId", "customerId", "keepId", "invoiceId"] as const;
+const ID_KEYS = [
+  "id",
+  "stockTakeId",
+  "sessionId",
+  "customerId",
+  "keepId",
+  "invoiceId",
+  "shiftId",
+  "userId",
+] as const;
 
 /** Entity id: result.id when the mutation returns a row, else the id the caller targeted */
 export function entityIdOf(result: unknown, input: unknown): number | null {
