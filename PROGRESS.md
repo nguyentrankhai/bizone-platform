@@ -167,7 +167,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P4.1 | Staff Module — API & UI | ✅ | `PENDING` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
+| P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ⬜ | — | |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
@@ -1462,7 +1462,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.1 — Staff Module — API & UI
 
-- **Hoàn thành:** 2026-11-07 · **Commit:** `PENDING` · **Vị trí:** `source/bizone/server/routers/staff.ts`, `server/services/{staff,shift,attendance,commission,rbac}.service.ts`, `server/queue/commission.ts`, `lib/{permissions,keycloak-admin}.ts`, `lib/validators/staff.ts`, `app/staff/**`, `components/staff/*`, migration `1_commission_line_unique`, `tests/staff.test.ts`, `keycloak/realms/bizone-realm.json`
+- **Hoàn thành:** 2026-11-07 · **Commit:** `fdb36cd` · **Vị trí:** `source/bizone/server/routers/staff.ts`, `server/services/{staff,shift,attendance,commission,rbac}.service.ts`, `server/queue/commission.ts`, `lib/{permissions,keycloak-admin}.ts`, `lib/validators/staff.ts`, `app/staff/**`, `components/staff/*`, migration `1_commission_line_unique`, `tests/staff.test.ts`, `keycloak/realms/bizone-realm.json`
 - **Đã làm:**
   - **Nhân viên = hồ sơ DB + tài khoản Keycloak** (`staff.service.ts`, `lib/keycloak-admin.ts`): `staff.create` tạo user Keycloak qua service account `bizone-api` (thuộc tính `tenant_id`, `branch_ids`, mật khẩu ban đầu, tuỳ chọn bắt đổi khi đăng nhập lần đầu) rồi tạo `users` + `user_roles` + `user_branches` trong 1 transaction; lỗi DB → xoá lại user Keycloak (bù trừ). `update` (họ tên/email/SĐT, đồng bộ Keycloak), `setRoles` (vai trò × chi nhánh), `setActive` (cho nghỉ việc ⇔ Keycloak `enabled=false`), `resetPassword`, `list` (lọc tên/SĐT/email, vai trò, trạng thái; phân trang `{ items, meta }`), `get` (kèm role Keycloak thực tế). Mọi thao tác trên tài khoản Keycloak có sẵn đều kiểm `tenant_id` trùng tenant hiện tại. Không có xoá cứng (HĐ/hoa hồng tham chiếu `users` — `ON DELETE RESTRICT`) → "nghỉ việc"
   - **RBAC chi tiết** (`lib/permissions.ts`, `rbac.service.ts`, `server/trpc.ts`): danh mục 52 quyền `module.action` (chuyển từ seed sang `lib/permissions.ts`, dùng chung seed + app), mỗi quyền mở một capability API (`grants`). Vai trò hệ thống `admin/manager/seller/warehouse/viewer` ⇔ realm role `bizone-*` (gán vai trò hệ thống → đồng bộ role Keycloak); quyền của chúng sinh từ `ROLE_PERMISSIONS` (seed ghi lại `role_permissions`, không sửa được). Vai trò tuỳ chỉnh: CRUD + ma trận quyền, áp dụng ở mỗi lần kiểm quyền: `enforcePermission` = role token ∪ capability của vai trò tuỳ chỉnh (cache Redis hash `rbac:{tenant}` TTL 60 s, xoá khi đổi vai trò/quyền/trạng thái) và **chặn nhân viên đã nghỉ việc ngay** (token còn hạn vẫn 403). Thêm capability `staff:manage_shift`, `staff:manage_attendance`, `staff:manage_commission`; bổ sung `bizone-warehouse` (trước đây role này không có quyền nào). Chặn admin tự gỡ vai trò Quản trị viên / tự vô hiệu hoá
