@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-07 (P4.1 Staff Module xong — nhân viên + tài khoản Keycloak, vai trò/quyền chi tiết, ca, chấm công, hoa hồng tự động; mới #56–#60; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-07 (P4.2 Reports xong — 6 báo cáo, so sánh cùng kỳ, xuất PDF/Excel qua worker; mới #61–#64; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 8 | 1 | 0 | 7 |
+| 4 — BizOne Mở rộng | 8 | 2 | 0 | 6 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 6 | 0 | 0 | 6 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **51** | **24** | **3** | **24** |
+| **Tổng** | **51** | **25** | **3** | **23** |
 
 ---
 
@@ -40,7 +40,7 @@
 | ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
 | ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
 | 11 | Seed chưa có chi nhánh/kho mặc định → POS cần tạo chi nhánh + kho (gắn `branch_id`) trước khi mở ca | P2.5 | P4.6 Multi-store (hoặc seed) |
-| 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` | P2.5 | P6.5 / khi triển khai |
+| 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` (từ P4.2: thiếu worker thì yêu cầu xuất báo cáo PDF/Excel nằm chờ mãi; worker cần `node_modules/pdfmake` — để external khi bundle) | P2.5 | P6.5 / khi triển khai |
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
 | 14 | Chưa có UI cài đặt tài khoản ngân hàng cho VietQR (`store_config.bank_*`) và tên cửa hàng — đang sửa trực tiếp trong DB | P2.6 | Module Cài đặt (P4.x) |
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
@@ -82,13 +82,17 @@
 | ~~51~~ | ~~`.env.example` thiếu biến code đang dùng (cả 2 app)~~ | ~~QA-2~~ | ✅ QA-2 fix |
 | 52 | API list không thống nhất: product/inventory trả `{ items, meta }` + `pageSize`; order/audit trả `{ items, total, page, limit }`; không tìm đơn theo mã vận đơn | QA-2 | P4.x (chuẩn hoá khi mở rộng) |
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
-| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub); sidebar còn link tới trang chưa có (`/staff`, `/reports`, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
+| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
 | 56 | `next dev`: lần tải lại thứ 2 của một số trang client (`/audit-log`, `/staff/shifts`, `/staff/commissions`) kẹt ở fallback Suspense "Đang tải..." dù API trả 200 — **chỉ ở dev** (bản `next start` bình thường); có từ trước P4.1 (đã thử `/audit-log`) | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
 | 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (NCC, kế toán, marketing, omni, cài đặt) chưa có tác dụng | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | 58 | WebSocket POS (`server/ws/pos.ts`) chỉ xét role trong token: vai trò tuỳ chỉnh không áp dụng và nhân viên bị cho nghỉ việc vẫn giữ kết nối WS đang mở tới khi token hết hạn (≤ 15 phút). API tRPC đã chặn ngay | P4.1 | P4.5 (POS nâng cao) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
 | 60 | Phân quyền cần chi nhánh (`user_roles.branch_id` NOT NULL) mà chưa có màn hình tạo chi nhánh (#11). Nhân viên tạo trước P4.1 (vd. `admin@bizone.vn`, tự sinh khi đăng nhập) chưa có vai trò trong DB → danh sách hiện "Chưa phân quyền trong BizOne" (quyền vẫn theo Keycloak); gán vai trò trong UI sẽ đồng bộ lại role Keycloak | P4.1 | P4.6 Multi-store |
+| 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
+| 62 | Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động (mockup 07, SRS-RPT-08) | P4.2 | P4.7 Thông báo (email) |
+| 63 | Báo cáo khuyến mãi so sánh theo khung ngày (trước/trong/sau) + lượt dùng mã giảm giá; chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing | P4.2 | P4.4 Marketing |
+| 64 | Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod (vd. "Ngày bắt đầu phải trước ngày kết thúc" nằm trong mảng) — áp dụng mọi router; UI báo cáo đã chặn khoảng ngày sai trước khi gọi | P4.2 (kiểm lỗi) | Chuẩn hoá cùng #52 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -168,7 +172,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
-| P4.2 | Reports Module — API & UI | ⬜ | — | |
+| P4.2 | Reports Module — API & UI | ✅ | `PENDING` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
 | P4.5 | POS Advanced Features | ⬜ | — | |
@@ -1503,3 +1507,49 @@ Ngoài plan, theo yêu cầu người dùng.
   - Hoa hồng tính theo người lập HĐ (`invoices.user_id`) — chưa có trường "nhân viên tư vấn" riêng.
 
 - **Vấn đề / lưu ý:** mới #56–#60. Service account `bizone-api` giờ có `manage-users` toàn realm `bizone` (dùng chung mọi tenant) — code luôn kiểm `tenant_id` trước khi sửa tài khoản; secret client cần bảo vệ như secret admin (đưa vào checklist P6.6). Tên hiển thị thu ngân vẫn là username (#15) vì token chưa có claim `name`.
+
+### P4.2 — Reports Module — API & UI
+
+- **Hoàn thành:** 2026-11-07 · **Commit:** `PENDING` · **Vị trí:** `source/bizone/server/routers/reports.ts`, `server/services/report.service.ts`, `server/services/reportExport.service.ts`, `server/queue/reportExport.ts` + `reportExportWorker.ts`, `lib/validators/report.ts`, `app/reports/page.tsx`, `components/reports/*`, `tests/reports.test.ts`
+- **Đã làm:**
+  - **6 báo cáo** (`report.service.ts`, tRPC `reports.*`, quyền `report:read` — admin/manager/viewer):
+    - `revenue` — Doanh thu, chiết khấu, trả hàng, **doanh thu thuần**, số HĐ, TB/HĐ; chuỗi theo ngày (≤ 62 ngày) hoặc theo tháng; so sánh **kỳ trước** (cùng độ dài, liền trước) hoặc **cùng kỳ năm trước** (29/02 → 28/02), % thay đổi từng chỉ số và từng ngày; theo phương thức thanh toán (tiền mặt trừ tiền thối, như dashboard); theo danh mục
+    - `profit` — DT thuần, giá vốn (giá vốn lúc bán, thiếu thì lấy giá vốn SP), lợi nhuận gộp, biên LN (thay đổi tính bằng điểm %), chuỗi lợi nhuận + kỳ so sánh, theo danh mục, top 10 LN cao / thấp, cảnh báo số dòng thiếu giá vốn
+    - `products` — top 10 bán chạy (SL, DT, LN), top 10 bán chậm (còn tồn, bán ít nhất trong kỳ, giá trị tồn, số ngày chưa bán / "chưa từng bán")
+    - `staff` — mỗi nhân viên: DT thuần, tỷ trọng, số HĐ, TB/HĐ, SL, lợi nhuận, % so với kỳ so sánh
+    - `promotion` — khung KM so với khung trước và sau cùng độ dài (DT/ngày, HĐ/ngày, chiết khấu, uplift %), lượt dùng + tiền giảm qua mã giảm giá (lọc theo mã)
+    - `inventory` — giá trị tồn theo kho, hàng dưới mức tối thiểu (`max(min_quantity, min_stock)`), lô quá hạn và sắp hết hạn (≤ N ngày)
+  - **Bộ lọc**: khoảng ngày (giờ VN, ≤ 366 ngày), chi nhánh, nhân viên, danh mục (gồm danh mục con), kiểu so sánh. Tính ở mức **dòng hoá đơn** bằng 1 truy vấn SQL tổng hợp (MariaDB, `GROUP BY` theo ngày/tháng/danh mục/SP/NV) nên lọc danh mục vẫn đúng: chiết khấu cấp HĐ chia theo tỷ lệ dòng, trả hàng trừ theo dòng (ghi nhận theo ngày HĐ), HĐ đã huỷ bị loại
+  - **Xuất PDF/Excel bất đồng bộ** (`reports.export` → BullMQ `bizone-report-export` → worker dựng tài liệu chung (tổng quan + bảng) → Excel (exceljs, định dạng số/tiền) hoặc PDF (**pdfmake 0.3.12**, font Roboto có dấu tiếng Việt, A4 dọc/ngang tự chọn, chân trang số trang); file lưu Redis 30 phút; `reports.exportStatus` chỉ trả cho đúng người yêu cầu + tenant. Worker bundle để `pdfmake` external (font đọc từ `node_modules`). Xuất báo cáo được ghi audit log
+  - **UI `/reports`** (mockup 07): 6 tab, thanh lọc một hàng (mốc nhanh Hôm nay … Năm nay + tuỳ chọn), thẻ KPI có % thay đổi, biểu đồ cột **kỳ này vs kỳ so sánh** (SVG, 1 trục, tooltip khi rê, chú thích; màu #2563EB / #E07B39 đã chạy bộ kiểm tra bảng màu dataviz — cảnh báo tương phản của màu cam được bù bằng chú thích + bảng số liệu), thanh tỷ trọng phương thức TT, bảng chi tiết; nút Xuất PDF / Xuất Excel (thông báo thời gian, báo chờ worker)
+  - Test Vitest `tests/reports.test.ts` (10): kỳ so sánh (kỳ trước, tháng 3 → cuối tháng 2, năm nhuận), độ dài kỳ, gom ngày/tháng, % thay đổi, tổng hợp LN/biên/TB, validate khoảng ngày, định dạng ô, tên file
+
+- **Kiểm thử** (`next build` + `next start` :3001 + `dist/worker.mjs`; dữ liệu giả lập có chủ đích **20.140 HĐ / 40.036 dòng / 1.044 lần trả hàng / ~3 % HĐ huỷ** trải 400 ngày, 2 chi nhánh, 2 NV, 3 danh mục (có danh mục con), 1 đợt KM có mã giảm giá, lô quá hạn/sắp hết hạn; **kết quả kỳ vọng tính độc lập bằng JS** từ dữ liệu sinh ra rồi so với API; token Keycloak thật cho admin/manager/seller; script 34 bước):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Report load < 3 s | ✅ doanh thu 30 ngày 330 ms (lần đầu) / 40 ms; **365 ngày: doanh thu 176 ms, lợi nhuận 183 ms**; SP 61 ms, NV 23 ms, KM 14 ms, tồn kho 13 ms |
+  | Export Excel/PDF < 5 s | ✅ 12 file (6 báo cáo × 2 định dạng) **116–357 ms** từ lúc bấm tới khi có file (gồm hàng đợi + worker); file hợp lệ (`%PDF` / zip), PDF tiếng Việt đúng dấu (đã mở xem); UI: "Đã xuất … (0,4 s)" |
+  | So sánh cùng kỳ đúng | ✅ kỳ trước 30 ngày: khớp từng chỉ số với tính độc lập, Δ +8,8 % đúng; cùng kỳ năm trước (2025-10-09 → 2025-11-07) khớp; 30 điểm ngày cộng lại = tổng |
+  | Filter hoạt động | ✅ chi nhánh, nhân viên, danh mục (cha + con) đều khớp tính độc lập; lọc danh mục ẩn phương thức TT (không tách được); tổng phương thức TT = DT trước trả hàng |
+  | Lợi nhuận | ✅ LN = DT thuần − giá vốn khớp; LN theo danh mục cộng lại = tổng |
+  | Hàng chạy/chậm, NV, KM, tồn kho | ✅ top bán chạy đủ 5 SP; bán chậm nhất = SP chỉ có tồn ("chưa từng bán"); NV khớp DT/số HĐ, tỷ trọng cộng 100 %; KM: trước/trong/sau khớp, uplift +33,6 %, 470 lượt mã; tồn kho: 1 lô quá hạn, 1 lô sắp hết hạn, hàng dưới tối thiểu |
+  | Lỗi / phân quyền | ✅ ngày đảo ngược 400, > 366 ngày 400, seller 403, người khác đọc file xuất của admin → 404, jobId lạ 404; worker dừng → yêu cầu xuất ở trạng thái `waiting` (UI báo "Đang chờ worker") |
+  | UI | ✅ 6 tab render đúng trên bản production, đổi tab/lọc tải lại, biểu đồ giãn theo khung, xuất Excel từ UI; 375 px: trang không cuộn ngang nhưng sidebar chung chiếm chỗ (#54) |
+  | Script e2e | ✅ 34/34 |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 58/58); `npm audit --omit=dev`: chỉ còn `exceljs → uuid` moderate (có từ trước) |
+  | Dọn dẹp | ✅ dừng :3001 + worker; xoá toàn bộ dữ liệu `RPT*` (HĐ, dòng, thanh toán, trả hàng, coupon + lượt dùng, SP, danh mục, tồn, lô, NV, kho, chi nhánh), 14 audit log xuất báo cáo, job + file xuất trong Redis, file token tạm. Không đụng dev server :3000/:4000 đang chạy của người dùng |
+
+- **Khác biệt so với plan:**
+  - Thêm báo cáo tồn kho và khuyến mãi thành tab riêng (`PromotionInventory.tsx`), ngoài 4 component PLAN nêu.
+  - Hiệu quả khuyến mãi đo theo khung ngày + mã giảm giá (chưa có flash sale/Buy X Get Y — #63).
+  - Chưa có "Gửi email" (#62). Doanh số chỉ từ HĐ POS (#61).
+  - Thêm dependency `pdfmake` (0.3.12 — bản ≥ 2 tuần tuổi) cho PDF; worker phải chạy để xuất file.
+
+- **Quyết định thiết kế:**
+  - Một định nghĩa số liệu duy nhất ở mức dòng HĐ cho mọi báo cáo → lọc danh mục, chi nhánh, NV luôn cộng khớp với tổng; cùng tỷ lệ chia chiết khấu với hoa hồng (P4.1) và đổi/trả (P2.5).
+  - Tổng hợp trong SQL (không kéo dòng về Node) → 40 k dòng/năm vẫn < 200 ms; không cache (số liệu luôn mới, đủ nhanh).
+  - Xuất file qua worker + Redis TTL thay vì trả file trực tiếp: không chặn web process khi dựng PDF lớn, đúng yêu cầu "async (queue)"; file chỉ người yêu cầu đọc được.
+  - So sánh theo **vị trí** trong kỳ (ngày thứ i với ngày thứ i của kỳ so sánh) để biểu đồ/bảng thẳng hàng cả khi so cùng kỳ năm trước.
+
+- **Vấn đề / lưu ý:** mới #61–#64; cập nhật #12 (worker cần cho xuất báo cáo), #54 (`/staff`, `/reports` đã có trang).

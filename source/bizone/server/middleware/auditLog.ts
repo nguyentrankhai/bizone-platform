@@ -102,6 +102,7 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
     action: "recalculate_commission",
     entityType: "commission",
   },
+  "reports.export": { module: "report", action: "export", entityType: "report" },
   "staff.commission.pay": { module: "staff", action: "pay_commission", entityType: "commission" },
 };
 
