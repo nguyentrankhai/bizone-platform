@@ -311,7 +311,7 @@ model Transaction {
 
   @@index([txnCode], map: "idx_txn_code")
   @@index([merchantId], map: "idx_txn_merchant")
-  @@index([merchantId, merchantTxnId], map: "idx_txn_merchant_txn")
+  @@unique([merchantId, merchantTxnId], map: "uq_txn_merchant_txn")
   @@index([partnerConfigId], map: "idx_txn_partner")
   @@index([partnerTxnId], map: "idx_txn_partner_txn")
   @@index([status], map: "idx_txn_status")

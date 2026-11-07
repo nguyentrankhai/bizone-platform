@@ -1,7 +1,14 @@
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { verifyApiRequest, ApiAuthError } from "@/server/middleware/apiAuth";
-import { checkIdempotency, saveIdempotency } from "@/server/middleware/idempotency";
+import {
+  IDEMPOTENCY_KEY_MAX,
+  claimIdempotency,
+  completeIdempotency,
+  idempotencyKeyOf,
+  releaseIdempotency,
+  requestFingerprint,
+} from "@/server/middleware/idempotency";
 import { requireAdmin } from "@/server/middleware/adminAuth";
 import { isTxnStatus } from "@/server/services/stateMachine";
 import {
@@ -24,7 +31,8 @@ import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
 // ─── Validators ───────────────────────────────────────────────────────────────
 
 const createTxnSchema = z.object({
-  merchant_txn_id: z.string().max(255).optional(),
+  /** Required and unique per merchant (API-Design §5.1) — duplicates → 409 CONFLICT */
+  merchant_txn_id: z.string().trim().min(1, "merchant_txn_id is required").max(255),
   amount: z.number().int().positive("Amount must be positive"),
   currency: z.string().length(3).default("VND"),
   description: z.string().max(500).optional(),
@@ -100,48 +108,113 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
   }
   const input = parsed.data;
 
-  // Idempotency
-  const idempotencyKey = req.headers.get("x-idempotency-key") ?? undefined;
-  if (idempotencyKey) {
-    const cached = await checkIdempotency(merchant.merchantId, idempotencyKey);
-    if (cached) return ok(cached);
+  // Idempotency (API-Design §4): one claim per key — concurrent duplicates get 409, later
+  // duplicates replay the stored response. The claim is released when nothing was created.
+  const idempotencyKey = idempotencyKeyOf(req);
+  if (idempotencyKey && idempotencyKey.length > IDEMPOTENCY_KEY_MAX) {
+    return err(
+      "VALIDATION_ERROR",
+      `Idempotency-Key must be at most ${IDEMPOTENCY_KEY_MAX} characters`,
+      400,
+    );
   }
+  const url = new URL(req.url);
+  const fp = requestFingerprint("POST", url.pathname + url.search, rawBody);
+  if (idempotencyKey) {
+    const claim = await claimIdempotency("txn", merchant.merchantId, idempotencyKey, fp);
+    if (claim.kind === "replay") return replay(claim.response, claim.status);
+    if (claim.kind === "in_progress")
+      return err("CONFLICT", "A request with this Idempotency-Key is still being processed", 409);
+    if (claim.kind === "mismatch")
+      return err("CONFLICT", "Idempotency-Key was already used for a different request", 409);
+  }
+
+  try {
+    const result = await createAndInitiate(req, input, merchant, idempotencyKey);
+    if (idempotencyKey) {
+      if (result.ok) {
+        await completeIdempotency("txn", merchant.merchantId, idempotencyKey, fp, 201, result.data);
+      } else {
+        await releaseIdempotency("txn", merchant.merchantId, idempotencyKey);
+      }
+    }
+    return result.ok ? ok(result.data, 201) : result.response;
+  } catch (e) {
+    if (idempotencyKey) await releaseIdempotency("txn", merchant.merchantId, idempotencyKey);
+    throw e;
+  }
+}
+
+/** Replayed idempotent response — same body as the first call, flagged for the merchant */
+function replay(data: unknown, status: number): Response {
+  return Response.json(
+    { success: true, data },
+    { status: status === 201 ? 200 : status, headers: { "Idempotent-Replayed": "true" } },
+  );
+}
+
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002";
+}
+
+type CreateResult = { ok: true; data: unknown } | { ok: false; response: Response };
+
+async function createAndInitiate(
+  req: NextRequest,
+  input: z.infer<typeof createTxnSchema>,
+  merchant: { merchantId: number; apiKeyId: number },
+  idempotencyKey: string | undefined,
+): Promise<CreateResult> {
+  const duplicate = await getTransactionByMerchantTxnId(input.merchant_txn_id, merchant.merchantId);
+  if (duplicate)
+    return { ok: false, response: duplicateTxn(input.merchant_txn_id, duplicate.txnCode) };
 
   // Fail fast when the Route Engine has no partner for the requested method (before
   // creating the transaction). Other methods keep working — tell the merchant which.
   if (input.payment_method) {
     const plan = await planRoute(merchant.merchantId, input.payment_method);
     if (plan.candidates.length === 0) {
-      return err("SERVICE_UNAVAILABLE", "Payment method is not available", 503, {
-        payment_method: input.payment_method,
-        skipped: plan.skipped.map((x) => ({
-          partner_config_id: x.partnerConfigId,
-          reason: x.reason,
-        })),
-        available_methods: await availableMethods(merchant.merchantId),
-      });
+      return {
+        ok: false,
+        response: err("SERVICE_UNAVAILABLE", "Payment method is not available", 503, {
+          payment_method: input.payment_method,
+          skipped: plan.skipped.map((x) => ({
+            partner_config_id: x.partnerConfigId,
+            reason: x.reason,
+          })),
+          available_methods: await availableMethods(merchant.merchantId),
+        }),
+      };
     }
   }
 
-  const txn = await createTransaction(
-    {
-      merchantTxnId: input.merchant_txn_id,
-      amount: input.amount,
-      currency: input.currency,
-      description: input.description,
-      returnUrl: input.return_url,
-      webhookUrl: input.webhook_url,
-      customerName: input.customer_name,
-      customerEmail: input.customer_email,
-      customerPhone: input.customer_phone,
-      metadata: input.metadata,
-      idempotencyKey,
-      expiryMinutes: input.expiry_minutes,
-      ipAddress: getClientIp(req),
-    },
-    merchant.merchantId,
-    merchant.apiKeyId,
-  );
+  let txn;
+  try {
+    txn = await createTransaction(
+      {
+        merchantTxnId: input.merchant_txn_id,
+        amount: input.amount,
+        currency: input.currency,
+        description: input.description,
+        returnUrl: input.return_url,
+        webhookUrl: input.webhook_url,
+        customerName: input.customer_name,
+        customerEmail: input.customer_email,
+        customerPhone: input.customer_phone,
+        metadata: input.metadata,
+        idempotencyKey,
+        expiryMinutes: input.expiry_minutes,
+        ipAddress: getClientIp(req),
+      },
+      merchant.merchantId,
+      merchant.apiKeyId,
+    );
+  } catch (e) {
+    // Lost a race with a concurrent request carrying the same merchant_txn_id
+    if (!isUniqueViolation(e)) throw e;
+    const other = await getTransactionByMerchantTxnId(input.merchant_txn_id, merchant.merchantId);
+    return { ok: false, response: duplicateTxn(input.merchant_txn_id, other?.txnCode) };
+  }
 
   let paymentUrl = txn.paymentUrl;
   let status: string = txn.status;
@@ -196,11 +269,14 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     created_at: txn.createdAt.toISOString(),
   };
 
-  if (idempotencyKey) {
-    await saveIdempotency(merchant.merchantId, idempotencyKey, response);
-  }
+  return { ok: true, data: response };
+}
 
-  return ok(response, 201);
+function duplicateTxn(merchantTxnId: string, txnCode?: string): Response {
+  return err("CONFLICT", "merchant_txn_id already exists for this merchant", 409, {
+    merchant_txn_id: merchantTxnId,
+    txn_code: txnCode ?? null,
+  });
 }
 
 // ─── GET /api/v1/transactions/[id] ────────────────────────────────────────────

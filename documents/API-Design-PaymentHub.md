@@ -236,7 +236,9 @@ Header: Idempotency-Key: <UUID v4>
 - Key lưu trong Redis với TTL 24 giờ (hoặc trong bảng `idempotency_keys`)
 - Request trùng key trong TTL trả về response cũ
 - Đảm bảo không tạo trùng giao dịch
-- Các endpoint hỗ trợ: tạo giao dịch, refund, sinh QR
+- Request cùng key gửi đồng thời khi request đầu chưa xong → `409 CONFLICT` (retry sau); cùng key nhưng body khác → `409 CONFLICT`; response lặp lại có header `Idempotent-Replayed: true`
+- Header cũ `X-Idempotency-Key` vẫn được chấp nhận (tương thích ngược)
+- Các endpoint hỗ trợ: tạo giao dịch, refund, sinh QR (sinh QR vốn idempotent theo tài nguyên: cùng giao dịch + loại + kích thước luôn trả QR hiện hành)
 
 ---
 

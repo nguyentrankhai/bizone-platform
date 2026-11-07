@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_txn_code (txn_code),
   INDEX idx_txn_merchant (merchant_id),
-  INDEX idx_txn_merchant_txn (merchant_id, merchant_txn_id),
+  UNIQUE KEY uq_txn_merchant_txn (merchant_id, merchant_txn_id),
   INDEX idx_txn_partner (partner_config_id),
   INDEX idx_txn_partner_txn (partner_txn_id),
   INDEX idx_txn_status (status),
