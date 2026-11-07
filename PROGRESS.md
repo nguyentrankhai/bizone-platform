@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-07 (QA-2 rà soát cuối GĐ 2+3: chất lượng code xanh; phát hiện 15 vấn đề mới #39–#53, trong đó 4 mức cao — xem [QA-2](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07); P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-07 (QA-2 fix: đã sửa #39–#47, #49–#51 + lỗi thống kê tiền thối trên dashboard; còn mở #48, #52, #53 và mới #54, #55 — xem [QA-2](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07); P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -67,27 +67,31 @@
 | 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB): chưa có Health Monitor định kỳ, chưa dùng bảng `connector_health_logs` / `connector_circuit_breaker_states` (migration_001), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá | P3.8 | P7.1 / P7.5 |
 | 37 | `payment_url` khi không chọn phương thức lấy từ `NEXT_PUBLIC_APP_URL` (`transaction.service`, giá trị lúc build) còn trang QR/ảnh QR/return URL dùng `APP_URL` (lúc chạy) — cần thống nhất một biến khi triển khai | P3.8 (phát hiện) | P6.5 / triển khai |
 | 38 | Đổi cấu hình định tuyến (PUT routes, reset circuit) mới ghi `console`, chưa vào audit log | P3.8 | P7.2 |
-| 39 | **[Cao]** Dashboard BizOne: key cache Redis `dashboard:*` **không có tenant** → tenant này thấy số liệu tenant khác (tối đa 5 phút); TTL 5 phút và `invalidateDashboardCache()` không được gọi ở đâu → HĐ mới không lên dashboard sau 25 s (tiêu chí P2.9 "< 30 s" không đạt); "hôm nay" tính theo giờ máy chủ (`setHours`) → sai ngày nghiệp vụ khi container chạy UTC | QA-2 (P2.9) | Sửa trước P4.x |
-| 40 | **[Cao]** Audit Log BizOne: tạo hoá đơn POS **không ghi log** (tiêu chí P2.10 không đạt — `auditTrpcCall("invoice.create")` chưa từng có trong git); `user_id` luôn NULL (UUID Keycloak → `resolveNumericUserId`); chỉ product/order được ghi (kho, CRM, POS, kiểm kê, chuyển kho thì không); bảng không có ràng buộc append-only ở DB | QA-2 (P2.10) | Sửa trước P4.x |
-| 41 | **[Cao]** Idempotency Payment Hub: code đọc `X-Idempotency-Key` còn OpenAPI/API-Design quy định `Idempotency-Key` → merchant theo spec không được chống trùng; kiểm-rồi-lưu không khoá → 5 request đồng thời cùng key tạo **5 GD**; `POST /api/v1/qr/generate` chưa hỗ trợ idempotency như spec | QA-2 (P3.1) | Sửa trước P5.x |
-| 42 | **[Cao]** `merchant_txn_id` không bắt buộc và không duy nhất theo merchant (spec: bắt buộc, unique, trùng → 409) → tạo được 2 GD cùng `merchant_txn_id`, tra cứu `/transactions/merchant/{id}` mơ hồ | QA-2 (P3.1) | Sửa trước P5.x |
-| 43 | Lỗi nghiệp vụ của kho / đơn hàng / CRM vẫn trả **HTTP 500 `INTERNAL_SERVER_ERROR`** (message là chuỗi JSON, mã thật nằm ở `data.bizoneCode`) — #10 mới sửa cho POS (`bizoneError`); log server ghi như lỗi hệ thống | QA-2 | Sửa cùng #39–#40 |
-| 44 | `created_by`/`updated_by` = NULL: `product.create/update` dùng `Number(ctx.user!.id)`, `order` dùng `parseInt(ctx.user.id)` (UUID) — #8 mới sửa cho kho/kiểm kê | QA-2 | Sửa cùng #43 |
-| 45 | Đơn hàng: chấp nhận tổng tiền âm (giảm giá 50.000 > tạm tính → −49.000); đơn giá lấy từ client, không đối chiếu giá bán | QA-2 (P2.7) | Sửa cùng #43 |
-| 46 | Công nợ: `payDebt` cho trả vượt số còn nợ (nợ 50.000, đã trả 60.000, `remainingAmount` = 0) | QA-2 (P2.8) | Sửa cùng #43 |
-| 47 | Import Excel: số dòng báo lỗi sai với lỗi lúc lưu (dùng chỉ số trong danh sách hợp lệ — SKU trùng ở dòng 1004 báo dòng 1002); thông báo validate Zod bằng tiếng Anh | QA-2 (P2.1) | Sửa cùng #43 |
+| ~~39~~ | ~~**[Cao]** Dashboard BizOne: cache Redis không theo tenant; số liệu cũ tới 5 phút; ngày theo giờ máy chủ~~ | ~~QA-2 (P2.9)~~ | ✅ QA-2 fix |
+| ~~40~~ | ~~**[Cao]** Audit Log: HĐ POS không ghi log, `user_id` luôn NULL, nhiều module không được ghi~~ | ~~QA-2 (P2.10)~~ | ✅ QA-2 fix |
+| ~~41~~ | ~~**[Cao]** Idempotency Payment Hub: sai tên header so với spec; request đồng thời cùng key tạo nhiều GD~~ | ~~QA-2 (P3.1)~~ | ✅ QA-2 fix |
+| ~~42~~ | ~~**[Cao]** `merchant_txn_id` không bắt buộc, không duy nhất theo merchant~~ | ~~QA-2 (P3.1)~~ | ✅ QA-2 fix |
+| ~~43~~ | ~~Lỗi nghiệp vụ của kho / đơn hàng / CRM vẫn trả **HTTP 500 `INTERNAL_SERVER_ERROR`**~~ | ~~QA-2~~ | ✅ QA-2 fix |
+| ~~44~~ | ~~`created_by`/`updated_by` = NULL: `product.create/update` dùng `Number(ctx.user!.id)`, `order` dùng `parseInt(ctx.user.id)`~~ | ~~QA-2~~ | ✅ QA-2 fix |
+| ~~45~~ | ~~Đơn hàng: chấp nhận tổng tiền âm (giảm giá 50.000 > tạm tính → −49.000); đơn giá lấy từ client, không đối chiếu giá bán~~ | ~~QA-2 (P2.7)~~ | ✅ QA-2 fix |
+| ~~46~~ | ~~Công nợ: `payDebt` cho trả vượt số còn nợ (nợ 50.000, đã trả 60.000, `remainingAmount` = 0)~~ | ~~QA-2 (P2.8)~~ | ✅ QA-2 fix |
+| ~~47~~ | ~~Import Excel: số dòng báo lỗi sai, thông báo Zod tiếng Anh~~ | ~~QA-2 (P2.1)~~ | ✅ QA-2 fix |
 | 48 | Hiệu năng kho sát ngưỡng: xác nhận phiếu nhập 999 SP 1,04 s (PLAN < 1 s); hoàn tất kiểm kê 999 SP 2,1 s (update từng dòng) | QA-2 (P2.3) | P6.x Performance |
-| 49 | Dashboard BizOne chưa có drill-down từ biểu đồ (tiêu chí P2.9) — chỉ danh sách đơn chờ / tồn thấp click được; PLAN P2.9 có `server/ws/dashboard` nhưng chưa làm | QA-2 (P2.9) | Sửa cùng #39 |
-| 50 | `npm audit --omit=dev`: BizOne 8, Payment Hub 6 lỗ hổng low/moderate — gốc là `shadcn` (CLI) nằm trong `dependencies` (kéo `ts-morph`/`minimatch`), `exceljs` → `uuid` | QA-2 | Chuyển `shadcn` sang devDependencies; theo dõi `exceljs` |
-| 51 | `.env.example` thiếu biến code đang dùng: BizOne `NEXT_PUBLIC_POS_WS_URL`, `POS_WS_PORT`; Payment Hub `KEYCLOAK_ALLOWED_CLIENTS`, `NEXT_PUBLIC_APP_URL`, `VIETQR_BANKS_URL` | QA-2 | Sửa cùng #43 |
+| ~~49~~ | ~~Dashboard BizOne chưa có drill-down từ biểu đồ (tiêu chí P2.9)~~ | ~~QA-2 (P2.9)~~ | ✅ QA-2 fix |
+| ~~50~~ | ~~`npm audit --omit=dev`: `shadcn` CLI nằm trong dependencies (BizOne còn `exceljs → uuid` moderate)~~ | ~~QA-2~~ | ✅ QA-2 fix |
+| ~~51~~ | ~~`.env.example` thiếu biến code đang dùng (cả 2 app)~~ | ~~QA-2~~ | ✅ QA-2 fix |
 | 52 | API list không thống nhất: product/inventory trả `{ items, meta }` + `pageSize`; order/audit trả `{ items, total, page, limit }`; không tìm đơn theo mã vận đơn | QA-2 | P4.x (chuẩn hoá khi mở rộng) |
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
+| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub); sidebar còn link tới trang chưa có (`/staff`, `/reports`, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
+| 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-07 | QA-2 mức cao: dashboard BizOne dùng chung cache giữa tenant (#39); HĐ POS không có audit log, `user_id` luôn NULL (#40); Payment Hub đọc sai header idempotency + 5 request đồng thời tạo 5 GD (#41); `merchant_txn_id` không duy nhất (#42) | Key cache `dashboard:{tenant}:*` TTL 20 s + xoá khi có HĐ; middleware audit tRPC + `invoice.service` tự ghi (gồm thanh toán qua WS); `Idempotency-Key` + claim `SET NX`; unique `(merchant_id, merchant_txn_id)` → 409 (QA-2 fix) |
+| 2026-11-07 | QA-2 lỗi nghiệp vụ: lỗi kho/đơn/CRM trả 500 (#43); `created_by` NULL (#44); đơn tổng âm (#45); trả nợ vượt (#46); số dòng lỗi import sai (#47); không drill-down (#49); `shadcn` trong dependencies (#50); `.env.example` thiếu biến (#51); dashboard cộng cả tiền khách đưa (chưa trừ tiền thối) vào "Tiền mặt" | `bizoneError` 409/404/400; `resolveDbUserId`; kiểm giảm giá; trừ nợ có điều kiện; số dòng thật + thông báo tiếng Việt; `dashboard.dayDetail` + panel chi tiết ngày; devDependencies; bổ sung biến; trừ `change_amount` (QA-2 fix) |
 | 2026-11-06 | Merchant không tạo được GD VietQR trong một lần gọi; `/pay/{txn}` không có VietQR (#25) | `POST /api/v1/transactions` nhận `payment_method: vietqr` → trả `qr_code` + `payment_url` trang QR; `/pay` liệt kê VietQR, hiển thị QR, tự reload theo dõi trạng thái (P3.8) |
 | 2026-11-05 | `npm run build:jobs` của Payment Hub xuất bundle CJS → `node dist/worker.js` / `dist/server.js` lỗi ngay khi khởi động (`fileURLToPath(undefined)`, Prisma 7 dùng `import.meta.url`); Docker compose chạy 2 file này | Chuyển sang bundle ESM `dist/worker.mjs`, `dist/server.mjs` (giống BizOne), sửa compose + Dockerfile (P3.7) |
 | 2026-11-04 | Job webhook trong Redis chứa `secret` dạng rõ (#3); IPN không gửi webhook cho merchant (#17) | Job chỉ mang `webhookConfigId` (secret mã hoá trong DB, đọc lúc gửi); outbox `notify_webhook` gửi `payment.success/failed/expired` (P3.6) |
@@ -210,7 +214,7 @@
 | 2026-11-02 | `.gitignore`, `.env.example`; credentials dev trong `.env.development` (gitignored) | `a7ce8cf` |
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
-| 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 (chạy lại tiêu chí nghiệm thu, chất lượng, vấn đề mở) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | — (chỉ ghi nhận) |
+| 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
 
 ---
 
@@ -1366,7 +1370,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-2 — Rà soát cuối Giai đoạn 2 + 3 (2026-11-07)
 
-- **Hoàn thành:** 2026-11-07 · **Commit:** — (chỉ rà soát + ghi nhận; chưa sửa code) · **Vị trí:** `source/bizone`, `source/payment-hub`
+- **Hoàn thành:** 2026-11-07 · **Commit:** `3a1e7cd` (rà soát), `6931cb8` (sửa BizOne), `bb59ff9` (sửa Payment Hub) · **Vị trí:** `source/bizone`, `source/payment-hub`, `database/schema_paymenthub.sql`, `documents/API-Design-PaymentHub.md`
 - **Bối cảnh:** bước B6 mới của quy trình (`CLAUDE.md`) — GĐ 2 xong 10/10, GĐ 3 không còn task ⬜ (P3.3/P3.4/P3.5 🟡 chỉ chờ credential VNPay / quét QR). Người dùng yêu cầu rà soát trước khi sang P4.1.
 - **Cách làm:** chạy production build (`next start` BizOne :3001 + `dist/pos.mjs` + `dist/worker.mjs`; Payment Hub :4010 + `dist/worker.mjs` + `dist/server.mjs`), token Keycloak thật (PKCE, user dev trong realm JSON), gọi tRPC / REST bằng script; API key merchant tạm cho `BIZONE`. Ưu tiên chạy lại các tiêu chí trước đây chỉ kiểm bằng đọc code (P2.1, P2.3, P2.7–P2.10, P3.1). Chưa chạy lại UI trên trình duyệt: page lấy `DEV_AUTH_TOKEN` "đóng băng" lúc build (#7).
 
@@ -1405,4 +1409,49 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Phát hiện mới:** #39–#53 (bảng *Còn mở*). Mức cao: #39 (lộ dữ liệu dashboard giữa tenant), #40 (audit log thiếu HĐ + thiếu người thực hiện), #41 (idempotency Payment Hub), #42 (`merchant_txn_id` không duy nhất).
 - **Điểm tốt:** cổng chất lượng và CI xanh; hiệu năng API tốt (đa số < 50 ms); cô lập tenant ở DB/Redis đúng ở các module khác (search, rate limit, POS, low-stock); phân quyền API admin Payment Hub đúng (401/403); job hết hạn GD và cảnh báo tồn thấp chạy đúng.
 - **Dọn dẹp:** dừng :3001/:3002/:4010/:4001 + worker; xoá toàn bộ dữ liệu tạo trong phiên (1002 SP, 2 kho, 1 chi nhánh, 1 ca, 2 HĐ, 2 đơn, 2 KH, công nợ, điểm, phiếu kho/kiểm kê, 8 audit log; 10 GD Payment Hub + log, API key #11), key Redis test (idempotency, dashboard, job BullMQ), file token/secret tạm. Docker Desktop đang tắt khi bắt đầu → đã bật lại, khởi động lại container `redis` và `minio` (đã thoát khi Docker dừng; không có restart policy).
-- **Đề xuất:** một đợt sửa **QA-2 fix** trước P4.1 cho #39–#47, #49–#51 (mức cao + lỗi nghiệp vụ, phạm vi nhỏ, có test), để #48/#52/#53 cho GĐ 4/6; quyết định task nhận #7/#15 (đăng nhập OIDC trình duyệt).
+- **Đề xuất (người dùng đồng ý):** sửa #39–#47, #49–#51 trước P4.1; để #48/#52/#53 cho GĐ 4/6; quyết định task nhận #7/#15 (đăng nhập OIDC trình duyệt).
+
+#### QA-2 fix — sửa lỗi (2026-11-07)
+
+- **Đã làm:**
+  - **BizOne**
+    - `server/services/dashboard.service.ts` — key `dashboard:{tenant}:{phần}`, TTL 20 s, `invalidateDashboardCache()` gọi sau tạo / huỷ / đổi-trả HĐ; ngày nghiệp vụ theo giờ VN (`lib/vn-time.ts`, khoảng `[start, end)`); "Phương thức thanh toán" trừ `change_amount` vào tiền mặt (`netPaymentsByMethod`, phát hiện khi kiểm UI); `getDayDetail(date)` + `dashboard.dayDetail` (#39, #49)
+    - `components/dashboard/DashboardClient.tsx` — cột doanh thu là nút bấm (aria-label) mở panel chi tiết ngày (doanh thu, số HĐ, phương thức, SP doanh thu cao → `/products/{id}`, 10 HĐ gần nhất); tự tải lại mỗi 20 s khi tab hiển thị
+    - `server/middleware/auditLog.ts` + `server/trpc.ts` — middleware `auditMutations` trên `protectedProcedure`/`posProcedure`: mutation thành công có trong `AUDIT_ROUTES` (sản phẩm, danh mục, kho, phiếu kho, kiểm kê, chuyển kho, ca POS, đơn hàng, KH, điểm, công nợ, gộp KH) → ghi `user_id` (`resolveDbUserId`), IP, UA, input rút gọn (bỏ `fileBase64`, mảng → `count`). `invoice.service` tự ghi `pos.create/cancel/refund` (bao cả thanh toán qua WebSocket, không ghi trùng khi request idempotent được trả lại). Bỏ các lời gọi `auditTrpcCall` thủ công (#40)
+    - `inventory/order/customer.service` — `conflict`/`notFound` dùng `bizoneError` → HTTP 409/404 (trước: 500) (#43); `product`/`order` router + import dùng `resolveDbUserId` (#44)
+    - `order.service.computeOrderTotals` — chặn giảm giá dòng > thành tiền, giảm giá đơn > tạm tính + phí ship (`VALIDATION_ERROR`) (#45); `customer.service.payDebt` — chặn trả vượt số còn nợ, trừ nợ bằng `updateMany … remainingAmount >= amount` trong transaction (#46)
+    - `lib/excel/product.ts` — mỗi dòng hợp lệ mang `rowNumber`; lỗi lưu DB báo đúng dòng; SKU trùng trong file báo "trùng với dòng N"; thông báo tiếng Việt theo cột; SKU dạng số → chuỗi; router copy đúng byte của file (Buffer pool) (#47)
+    - `tests/qa2.test.ts` (10 test): giờ VN, key cache theo tenant, trừ tiền thối, tổng đơn, helper audit, import
+  - **Payment Hub**
+    - `server/middleware/idempotency.ts` — `Idempotency-Key` (spec) hoặc `X-Idempotency-Key`; claim nguyên tử `SET NX` (đang xử lý → 409, xong → trả lại response + header `Idempotent-Replayed: true`, cùng key khác body → 409); claim được nhả khi không tạo được GD (503, trùng `merchant_txn_id`, lỗi); key > 255 ký tự → 400 (#41)
+    - `server/routes/transactions.ts` — `merchant_txn_id` bắt buộc; trùng → 409 kèm `txn_code` cũ (kiểm trước + bắt `P2002` khi đua); migration `4_unique_merchant_txn_id` (unique `(merchant_id, merchant_txn_id)`), cập nhật `database/schema_paymenthub.sql`, API-Design §4 (#42)
+    - `tests/idempotency.test.ts` (5 test)
+  - **Chung** — `shadcn` → devDependencies cả 2 app (`npm audit --omit=dev`: Payment Hub 0, BizOne còn `exceljs → uuid` moderate) (#50); `.env.example` thêm `POS_WS_PORT`, `NEXT_PUBLIC_POS_WS_URL`, `NEXT_PUBLIC_APP_URL`, `KEYCLOAK_ALLOWED_CLIENTS`, `VIETQR_BANKS_URL` (#51)
+
+- **Kiểm thử** (production build: BizOne :3001 + `dist/pos.mjs` + `dist/worker.mjs`, Payment Hub :4010 + worker; token Keycloak thật; API key tạm):
+
+  | Vấn đề | Kết quả |
+  |--------|---------|
+  | #39 dashboard | HĐ 40.000₫ → `dashboard.summary` ngay sau đó 0 → 40.000 (9 ms); huỷ HĐ → về 0; key Redis `dashboard:tenant_demo:*` |
+  | #49 drill-down | `dayDetail` 7 ms (doanh thu, HĐ, SP); ngày sai định dạng → 400; trình duyệt: bấm cột T7 mở panel đúng số liệu; 375 px không cuộn ngang |
+  | Tiền thối | HĐ 45.000₫ khách đưa 100.000₫: "Tiền mặt" 100.000 → **45.000** |
+  | #40 audit | 16 thao tác (SP, import, kho, phiếu, chuyển kho, đơn, KH, công nợ, mở ca, HĐ, huỷ HĐ) đều có log với `user_id = 3`; thanh toán qua **WebSocket** (`payment:process`) → log `pos.create` HĐ2611070002 |
+  | #43 mã lỗi | mã kho trùng / chuyển cùng kho / vượt tồn / đơn sai trạng thái / SĐT trùng → **409 CONFLICT**; phiếu không tồn tại → **404**; message tiếng Việt |
+  | #44 người tạo | SP tạo tay + import, đơn hàng: `created_by = 3` |
+  | #45 đơn | giảm giá đơn 50.000 > 1.000 → 400; giảm giá dòng > thành tiền → 400; đơn hợp lệ 50.000 = 40.000 + 15.000 − 5.000 |
+  | #46 công nợ | trả 40.000 khi còn 30.000 → 400; trả đủ → `paid`, `paidAmount` 50.000; **5 lần trả 20.000 đồng thời** trên nợ 50.000 → 2 thành công + 3 × 409, còn 10.000 |
+  | #47 import | 1000 SP 1,73 s; lỗi: dòng 1002 "Tên sản phẩm: bắt buộc", 1003 "Giá bán: phải ≥ 0", **1004** "SKU trùng với dòng 2 trong file" |
+  | #41 idempotency | `Idempotency-Key` ×2 → 201 + 200 cùng GD; `X-Idempotency-Key` ×2 → cùng GD; cùng key khác body → 409; **5 request đồng thời cùng key → 1 × 201 + 4 × 409, 1 GD**; key 300 ký tự → 400; 503 (không có route) không giữ claim |
+  | #42 merchant_txn_id | thiếu → 400; trùng → 409 + `txn_code` cũ; 5 request đồng thời cùng `merchant_txn_id` khác key → 1 × 201 + 4 × 409; DB mỗi mã đúng 1 dòng |
+  | Hồi quy | `vietqr` → 201 `Pending` + `qr_code` (70 ms); tra theo `merchant_txn_id` 200; `qr/generate` → `reused` |
+  | Tự động | format / lint / typecheck / test (BizOne **32/32**, Payment Hub **54/54**) / build / build:jobs cả 2 app ✅; `npm ci` với lockfile mới ✅ |
+  | Dọn dẹp | dừng :3001/:3002/:4010 + worker; xoá dữ liệu test cả 2 DB, API key tạm, key Redis test, token/secret tạm |
+
+- **Quyết định thiết kế:**
+  - Audit bằng middleware tRPC (danh sách `AUDIT_ROUTES`) thay vì gọi tay từng router — thêm mutation mới chỉ cần thêm 1 dòng; HĐ POS ghi trong service vì có 2 đường vào (tRPC + WebSocket).
+  - Chưa chặn xoá/sửa `audit_logs` ở mức DB (trigger) — chỉ API không có thao tác xoá; sẽ làm cùng phân quyền user DB khi triển khai (P6.5) để còn dọn dữ liệu test/retention.
+  - Sinh QR không dùng idempotency theo key: vốn idempotent theo tài nguyên (cùng GD + loại + size → QR hiện hành); replay 24 h có thể trả QR đã hết hạn.
+  - Giữ `X-Idempotency-Key` (tương thích) song song `Idempotency-Key` (spec).
+- **Khác biệt so với đề xuất:** không đổi đơn giá đơn hàng theo giá bán (đơn từ kênh online có giá riêng của kênh) — chỉ chặn tổng âm.
+- **Vấn đề / lưu ý:** còn mở từ QA-2: #48 (hiệu năng kho), #52 (chuẩn hoá API list), #53 (hardening), mới #54 (layout BizOne chưa responsive), #55 (GET GD trả camelCase). #7/#15 (đăng nhập OIDC trình duyệt) vẫn chưa có task nhận.
+
