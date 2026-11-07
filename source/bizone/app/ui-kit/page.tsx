@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { AppShell } from "@/components/layout/AppShell";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card, CardBody } from "@/components/ui/Card";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -61,7 +61,7 @@ function UIKitInner() {
   const [inputValue, setInputValue] = useState("");
 
   return (
-    <AppLayout>
+    <AppShell>
       <div className="max-w-5xl space-y-10">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">UI Kit — BizOne</h1>
@@ -227,7 +227,7 @@ function UIKitInner() {
           </Modal>
         </section>
       </div>
-    </AppLayout>
+    </AppShell>
   );
 }
 
