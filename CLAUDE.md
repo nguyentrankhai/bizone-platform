@@ -11,7 +11,7 @@ Hai hệ thống độc lập, triển khai song song, giao tiếp qua REST API 
 
 ## Quy trình xây dựng & phát triển (BẮT BUỘC mỗi phiên)
 
-Mỗi phiên làm việc thực hiện **một task** trong `PLAN.md` theo đúng 6 bước sau, rồi dừng lại hỏi người dùng.
+Mỗi phiên làm việc thực hiện **một task** trong `PLAN.md` theo đúng 7 bước sau (B6 chỉ áp dụng khi vừa xong một giai đoạn), rồi dừng lại hỏi người dùng.
 
 ### B1. Đọc `PROGRESS.md` — xác định việc cần làm
 
@@ -56,7 +56,23 @@ Mỗi phiên làm việc thực hiện **một task** trong `PLAN.md` theo đún
 - Mã commit chỉ có sau khi commit → tạo thêm commit nhỏ `docs: record Px.y commit hash in PROGRESS.md` để điền mã vào `PROGRESS.md`.
 - `git push origin main` (remote: `git@github.com:nguyentrankhai/bizone-platform.git`). Nếu push bị chặn, báo người dùng chạy lệnh thủ công.
 
-### B6. Kiểm tra quota & hỏi người dùng
+### B6. Rà soát cuối giai đoạn (chỉ khi vừa hoàn thành một giai đoạn)
+
+- **Điều kiện**: task vừa xong là task cuối của giai đoạn — giai đoạn không còn task ⬜ (task 🟡 chỉ chờ đầu vào từ người dùng/bên ngoài như credential, quét thử app vẫn tính là xong phần code). Với cặp giai đoạn song song (2+3, 4+5, 6+7), hỏi cả khi xong một giai đoạn lẫn khi xong cả cặp (mốc chuyển giai đoạn).
+- **Hỏi người dùng** có cần rà soát tiến độ dự án không, kèm danh sách nội dung đề xuất bên dưới. Không tự rà soát khi chưa được đồng ý; nếu người dùng đồng ý, rà soát là một mục riêng (ID `QA-n`, như QA-1) — thực hiện trong phiên mới hoặc sau khi người dùng xác nhận, ghi kết quả vào `PROGRESS.md`.
+- **Nội dung rà soát**:
+  1. **Tiêu chí nghiệm thu của giai đoạn vừa xong**: chạy lại từng tiêu chí *Kiểm thử / Kết quả* của mọi task trong giai đoạn trên code hiện tại (task sau có thể làm hỏng task trước); liệt kê tiêu chí chưa đạt / chưa kiểm được và lý do.
+  2. **Chất lượng dự án đến thời điểm hiện tại**: `format:check`, `lint`, `typecheck`, `test`, `build`, `build:jobs` cả 2 app; CI trên GitHub xanh; độ phủ test các luồng chính; code trùng lặp / nợ kỹ thuật; tuân thủ conventions (response format, error code, phân trang, idempotency, rate limit, multi-tenant).
+  3. **Thông tin cần chốt**: rà bảng *Theo dõi vấn đề → Còn mở* và các task 🟡 — mục nào đã giải quyết, mục nào còn chờ người dùng (credential, tài khoản thật, quyết định nghiệp vụ), mục nào cần đưa vào giai đoạn kế; cập nhật cột *Xử lý ở*.
+  4. **Gợi ý thêm** (chọn theo tình hình):
+     - Bảo mật: xác thực/phân quyền mọi endpoint mới, cô lập tenant/merchant, lộ secret trong log/response/git, `npm audit` các dependency.
+     - Đồng bộ tài liệu: `CLAUDE.md`, `README.md`, `PROGRESS.md` khớp với code (cấu trúc, lệnh, port, env); `.env.example` đủ biến mới; khác biệt so với SRS/API-Design/OpenAPI.
+     - Database: migration Prisma khớp `database/schema*.sql`, index cho truy vấn chính, seed chạy được trên DB trống.
+     - Vận hành: Docker compose 2 app chạy đủ process (app, worker, realtime), health check, dọn container/dữ liệu test còn sót.
+     - Hiệu năng & UX: thời gian phản hồi API/trang chính, responsive (375 px), đối chiếu mockup.
+     - Kế hoạch giai đoạn kế: phụ thuộc đã sẵn sàng chưa, task nào trong `PLAN.md` cần điều chỉnh theo quyết định đã ghi.
+
+### B7. Kiểm tra quota & hỏi người dùng
 
 - Kiểm tra quota bằng tool `get_usage` (Claude desktop app): báo **% đã dùng** và **thời điểm reset** của giới hạn 5 giờ và giới hạn tuần, cùng % context của phiên hiện tại.
 - Tóm tắt: task vừa xong, kết quả kiểm thử, commit đã push, task tiếp theo dự kiến (theo B1).
@@ -236,7 +252,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 - Rollback (giữ tạm, xoá khi chắc chắn không cần): container `mariadbtest-10.3` (đã dừng) + volume gốc `0da92de461be…` còn nguyên dữ liệu 10.3. Khôi phục: dừng `mariadbtest`, `docker rename mariadbtest-10.3 mariadbtest`, start, và đổi Keycloak về 23.0.7.
 - Cột `updated_at`: dùng `@updatedAt` của Prisma (không có `ON UPDATE CURRENT_TIMESTAMP` ở DB) — SQL thuần phải tự set `updated_at`.
 
-**Quy trình**: xem mục *Quy trình xây dựng & phát triển* ở đầu file (B1–B6).
+**Quy trình**: xem mục *Quy trình xây dựng & phát triển* ở đầu file (B1–B7).
 
 ---
 
