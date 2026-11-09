@@ -16,7 +16,7 @@ import { currentTenantId } from "@/lib/tenant";
 import { lowStockChannel } from "@/lib/inventory/channels";
 
 // Prisma 7: nullable field in compound unique cannot be null in where clause — use findFirst + update/create
-async function upsertInventory(
+export async function upsertInventory(
   trx: Prisma.TransactionClient,
   productId: number,
   warehouseId: number,

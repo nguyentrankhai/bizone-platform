@@ -137,6 +137,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── pos/                 # P2.6 — /pos (bán hàng), /pos/session (mở/khóa ca), /pos/display?session= (màn hình khách)
     │   │   ├── staff/               # P4.1 — /staff (NV), /staff/shifts, /staff/attendance, /staff/commissions, /staff/roles
     │   │   ├── reports/             # P4.2 — /reports (6 tab: doanh thu, lợi nhuận, SP, NV, KM, tồn kho)
+    │   │   ├── suppliers/           # P4.3 — /suppliers (DS), /suppliers/[id] (chi tiết: đơn, công nợ, lịch sử, giá), /suppliers/prices
+    │   │   ├── purchase-orders/     # P4.3 — /purchase-orders, /new?supplier=, /[id] (nhận hàng, huỷ, thanh toán), /[id]/edit
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
@@ -145,6 +147,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal, CustomerDisplay, Receipt, SessionClient
     │   ├── components/staff/        # P4.1 — StaffTable, ShiftCalendar, AttendanceClient, CommissionClient, CommissionRuleForm, RoleMatrix
     │   ├── components/reports/      # P4.2 — ReportsClient, RevenueReport, ProfitReport, ProductPerformance, StaffPerformance, PromotionInventory
+    │   ├── components/suppliers/    # P4.3 — SupplierTable, SupplierForm, SupplierDetail, PurchaseOrderList, POForm, PurchaseOrderDetail, PaymentModal, PriceComparison
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
@@ -155,6 +158,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── routers/pos.ts       # P2.5 — ca, hóa đơn, thanh toán, đổi/trả, quote, scan
     │   │   ├── routers/staff.ts     # P4.1 — nhân viên, role.*, shift.*, attendance.*, commission.*, sales
     │   │   ├── routers/reports.ts   # P4.2 — revenue/profit/products/staff/promotion/inventory, export + exportStatus
+    │   │   ├── routers/supplier.ts + purchaseOrder.ts # P4.3 — NCC, công nợ, thanh toán, lịch sử, so sánh giá; đơn nhập (create/update/receive/cancel)
     │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…
     │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
     │   │   ├── queue/commission.ts  # P4.1 — BullMQ "bizone-commission" (tính lại sau HĐ + chốt 00:30 ngày 1)
@@ -224,6 +228,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý nhân viên & phân quyền (P4.1)**: nhân viên = hồ sơ `users` (DB tenant) + tài khoản Keycloak tạo qua service account `bizone-api` (`lib/keycloak-admin.ts`; cần `realm-management` view/query/manage-users + mapper "client roles", đã có trong realm JSON). Mọi thao tác trên tài khoản Keycloak có sẵn phải `assertTenant`. Danh mục quyền `module.action` ở `lib/permissions.ts` (seed dùng chung), mỗi quyền mở 1 capability `Permission`; vai trò hệ thống ⇔ realm role `bizone-*`, vai trò tuỳ chỉnh kiểm từ DB trong `enforcePermission` (cache `rbac:{tenant}`, gọi `invalidateStaffAccess()` khi đổi vai trò/quyền/trạng thái). Procedure cho nhân viên tự thao tác dùng `staffSelfProcedure`. Hoa hồng là dữ liệu dẫn xuất: luồng nào đổi doanh thu HĐ phải gọi `enqueueCommissionRecalc(userId, invoice.createdAt)`.
 
 **Lưu ý báo cáo (P4.2)**: mọi số liệu bán hàng tính ở mức dòng HĐ trong `report.service.ts` (`linesSql`): HĐ `active`/`refunded`, chiết khấu HĐ chia theo dòng, trả hàng trừ theo ngày HĐ — báo cáo mới nên dùng lại `linesSql`/`grouped` thay vì tự cộng. Xuất PDF/Excel chạy trong worker (`npm run dev:worker` khi dev); `pdfmake` để `--external` trong `build:jobs` (font Roboto đọc từ `node_modules`), code Next không được import `reportExportWorker.ts`/`reportExport.service.ts`.
+
+**Lưu ý nhà cung cấp (P4.3)**: nhận hàng (`purchaseOrder.receive`) trong 1 DB transaction tạo phiếu kho `purchase_receipt` đã `confirmed` (`reference_type='purchase_order'`), cộng tồn/lô, tăng `received_quantity` và công nợ `supplier_debts` của đơn (1 dòng/đơn, = giá trị đã nhận, CK đơn + thuế chia theo tỷ lệ) — không đi qua `createTransaction`/`confirmTransaction`. Thao tác trên đơn khoá `SELECT … FOR UPDATE` dòng đơn, thanh toán khoá dòng NCC. Tính tiền dùng chung `lib/supplier/calc.ts` (server + form). Quyền: `supplier:read` / `supplier:write` / `supplier:manage_po` (gồm nhận hàng, thanh toán). Lỗi Zod của mọi router giờ trả câu đọc được (`errorFormatter`, #64).
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 

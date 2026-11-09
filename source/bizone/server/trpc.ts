@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { auditTrpcMutation, isAudited } from "@/server/middleware/auditLog";
 import type { NextRequest } from "next/server";
 import superjson from "superjson";
+import { ZodError } from "zod";
 import { authenticateToken, extractBearerToken } from "@/lib/auth";
 import { hasPermission, ForbiddenError } from "@/lib/rbac";
 import { rateLimitGeneral, rateLimitPos } from "@/lib/rate-limit";
@@ -28,9 +29,34 @@ export async function createTRPCContext(req: NextRequest): Promise<TRPCContext> 
 
 // ─── tRPC init ───────────────────────────────────────────────────────────────
 
+/** "Message (field)" for each issue — messages are Vietnamese where the schema sets them */
+export function zodMessage(issues: readonly { path: PropertyKey[]; message: string }[]): string {
+  return issues
+    .slice(0, 3)
+    .map((i) => {
+      const path = i.path.map(String).join(".");
+      return path ? `${i.message} (${path})` : i.message;
+    })
+    .join("; ");
+}
+
 const t = initTRPC.context<TRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    // Input validation (Zod): readable message instead of the raw issue JSON (#64)
+    if (error.cause instanceof ZodError) {
+      const issues = error.cause.issues;
+      return {
+        ...shape,
+        message: zodMessage(issues),
+        data: {
+          ...shape.data,
+          bizoneCode: "VALIDATION_ERROR",
+          bizoneMessage: zodMessage(issues),
+          bizoneDetails: issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+        },
+      };
+    }
     // Unwrap BizOne error JSON from message if present
     try {
       const parsed = JSON.parse(error.message) as {

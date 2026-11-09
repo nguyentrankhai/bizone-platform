@@ -24,6 +24,9 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "staff:manage_shift",
     "staff:manage_attendance",
     "staff:manage_commission",
+    "supplier:read",
+    "supplier:write",
+    "supplier:manage_po",
   ],
   "bizone-manager": [
     "pos:write",
@@ -43,8 +46,17 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "staff:view_audit_log",
     "staff:manage_shift",
     "staff:manage_attendance",
+    "supplier:read",
+    "supplier:write",
+    "supplier:manage_po",
   ],
-  "bizone-warehouse": ["product:read", "inventory:write", "inventory:read", "order:read"],
+  "bizone-warehouse": [
+    "product:read",
+    "inventory:write",
+    "inventory:read",
+    "order:read",
+    "supplier:read",
+  ],
   "bizone-seller": [
     "pos:write",
     "pos:read",

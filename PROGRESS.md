@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-09 (P4.0 xong — `AUTH_DEV_BYPASS=true` bỏ qua đăng nhập Keycloak khi dev/test cho cả 2 app; #7 có cách dùng tạm, #56 cập nhật; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (P4.3 xong — NCC, đơn nhập hàng → phiếu nhập kho tự động, công nợ phải trả, so sánh giá nhập; #64 đã sửa; mới #65–#69; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 3 | 0 | 6 |
+| 4 — BizOne Mở rộng | 9 | 4 | 0 | 5 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **26** | **3** | **24** |
+| **Tổng** | **53** | **27** | **3** | **23** |
 
 ---
 
@@ -82,17 +82,22 @@
 | ~~51~~ | ~~`.env.example` thiếu biến code đang dùng (cả 2 app)~~ | ~~QA-2~~ | ✅ QA-2 fix |
 | 52 | API list không thống nhất: product/inventory trả `{ items, meta }` + `pageSize`; order/audit trả `{ items, total, page, limit }`; không tìm đơn theo mã vận đơn | QA-2 | P4.x (chuẩn hoá khi mở rộng) |
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
-| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
+| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers` ✅ P4.3, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
 | 56 | Lần tải lại thứ 2 **cùng URL trong cùng tab** của một số trang client (`/audit-log`, `/staff`, `/staff/shifts`, `/staff/commissions`, `/warehouse`) kẹt ở fallback Suspense "Đang tải..." (component bên trong không render, không gọi API) — P4.0 (2026-11-09) xác nhận xảy ra **cả với `next start`** và cả bản HEAD trước P4.0 (tab mới / điều hướng từ sidebar thì bình thường); có từ trước P4.1 | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
-| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (NCC, kế toán, marketing, omni, cài đặt) chưa có tác dụng | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
+| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (kế toán, marketing, omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | 58 | WebSocket POS (`server/ws/pos.ts`) chỉ xét role trong token: vai trò tuỳ chỉnh không áp dụng và nhân viên bị cho nghỉ việc vẫn giữ kết nối WS đang mở tới khi token hết hạn (≤ 15 phút). API tRPC đã chặn ngay | P4.1 | P4.5 (POS nâng cao) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
 | 60 | Phân quyền cần chi nhánh (`user_roles.branch_id` NOT NULL) mà chưa có màn hình tạo chi nhánh (#11). Nhân viên tạo trước P4.1 (vd. `admin@bizone.vn`, tự sinh khi đăng nhập) chưa có vai trò trong DB → danh sách hiện "Chưa phân quyền trong BizOne" (quyền vẫn theo Keycloak); gán vai trò trong UI sẽ đồng bộ lại role Keycloak | P4.1 | P4.6 Multi-store |
 | 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
 | 62 | Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động (mockup 07, SRS-RPT-08) | P4.2 | P4.7 Thông báo (email) |
 | 63 | Báo cáo khuyến mãi so sánh theo khung ngày (trước/trong/sau) + lượt dùng mã giảm giá; chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing | P4.2 | P4.4 Marketing |
-| 64 | Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod (vd. "Ngày bắt đầu phải trước ngày kết thúc" nằm trong mảng) — áp dụng mọi router; UI báo cáo đã chặn khoảng ngày sai trước khi gọi | P4.2 (kiểm lỗi) | Chuẩn hoá cùng #52 |
+| ~~64~~ | ~~Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod~~ | ~~P4.2 (kiểm lỗi)~~ | ✅ P4.3 (`errorFormatter`: câu tiếng Việt + `bizoneCode: VALIDATION_ERROR`, chi tiết theo trường) |
+| 65 | Nhận hàng theo đơn nhập không cập nhật `products.cost_price` (giá vốn): báo cáo lợi nhuận / hoa hồng vẫn dùng giá vốn nhập tay. Cần quy tắc giá vốn (bình quân gia quyền theo lần nhập hoặc giá nhập gần nhất) | P4.3 | P4.8 Kế toán (hoặc task giá vốn riêng) |
+| 66 | Công nợ NCC "quá hạn" tính lúc đọc (hạn < hôm nay giờ VN), cột `supplier_debts.status` không ghi `overdue`; chưa có thông báo chủ động khi sắp/đã quá hạn | P4.3 | P4.7 Thông báo |
+| 67 | Thanh toán NCC chưa sinh phiếu chi trong sổ quỹ (danh mục `expense_purchase` đã có trong seed) | P4.3 | P4.8 Kế toán |
+| 68 | Chưa có trả hàng cho NCC (`return_out`) / giảm công nợ khi trả; đơn đã nhận đủ không sửa được. Đơn nhận một phần rồi "huỷ phần còn lại" mang trạng thái `cancelled` (hàng + công nợ đã nhận được giữ) | P4.3 | Khi có yêu cầu nghiệp vụ (P4.x) |
+| 69 | "Nhóm hàng cung cấp" (SRS-SUP-01) chưa có cột riêng — ghi trong Ghi chú; chưa gắn NCC mặc định cho sản phẩm (SRS sản phẩm) | P4.3 | Khi có yêu cầu nghiệp vụ |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -175,7 +180,7 @@
 | P4.0 | Bypass xác thực Keycloak cho dev/test | ✅ | `97aae2f` | Xem [kết quả P4.0](#p40--bypass-xác-thực-keycloak-cho-devtest) — gỡ ở P6.7 |
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
-| P4.3 | Supplier Module — API & UI | ⬜ | — | |
+| P4.3 | Supplier Module — API & UI | ✅ | _(xem kết quả)_ | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
 | P4.5 | POS Advanced Features | ⬜ | — | |
 | P4.6 | Multi-Store Support | ⬜ | — | |
@@ -1599,3 +1604,48 @@ Ngoài plan, theo yêu cầu người dùng.
   - So sánh theo **vị trí** trong kỳ (ngày thứ i với ngày thứ i của kỳ so sánh) để biểu đồ/bảng thẳng hàng cả khi so cùng kỳ năm trước.
 
 - **Vấn đề / lưu ý:** mới #61–#64; cập nhật #12 (worker cần cho xuất báo cáo), #54 (`/staff`, `/reports` đã có trang).
+
+### P4.3 — Supplier Module — API & UI
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/server/routers/supplier.ts` + `purchaseOrder.ts`, `server/services/supplier.service.ts` + `purchaseOrder.service.ts`, `lib/supplier/calc.ts`, `lib/validators/supplier.ts`, `app/suppliers/**`, `app/purchase-orders/**`, `components/suppliers/*`, `tests/supplier.test.ts`
+- **Đã làm:**
+  - **Nhà cung cấp** (SRS-SUP-01): tRPC `supplier.list` (tìm tên/mã/SĐT/MST/người liên hệ, lọc đang/ngừng hợp tác, lọc còn nợ / có nợ quá hạn; kèm số đơn, còn nợ, quá hạn), `options`, `get` (thống kê: đơn theo trạng thái, giá trị đã nhập, đã trả, còn nợ, quá hạn, lần nhập gần nhất), `create` (mã tự sinh `NCC0001…` nếu bỏ trống; MST 10 số hoặc 10-3), `update` (gồm ngừng hợp tác), `delete` (chỉ khi chưa có đơn/thanh toán, ngược lại 409 gợi ý "Ngừng hợp tác")
+  - **Đơn nhập hàng** (SRS-SUP-02, `purchaseOrder.*`): `create` / `update` (chỉ khi Chờ nhập; thay toàn bộ dòng) với CK % theo dòng, CK đơn, thuế/phí — tổng tính ở `lib/supplier/calc.ts` (dùng chung với form); `receive` nhận đủ hoặc một phần, có số lô + NSX/HSD; `cancel` (Chờ nhập → huỷ; Đã nhập 1 phần → huỷ phần còn lại, giữ hàng + nợ đã nhận); `list` (lọc NCC, kho, trạng thái, ngày giờ VN, tìm mã/tên NCC/ghi chú; kèm tiến độ nhận, còn nợ), `get` (dòng, phiếu nhập kho, công nợ, thanh toán), `productLookup` (giá vốn SP/biến thể + giá NCC này báo lần trước), `warehouseOptions`
+  - **Nhận hàng → phiếu nhập kho tự động** trong **một DB transaction** (khoá `SELECT … FOR UPDATE` theo đơn): phiếu `PN-…` loại `purchase_receipt` trạng thái `confirmed`, `reference_type = purchase_order`; cộng tồn + lô ở kho của đơn; cập nhật `received_quantity` có điều kiện; trạng thái `partial` / `received`; sau commit phát cảnh báo tồn như phiếu nhập tay
+  - **Công nợ phải trả** (SRS-SUP-03): mỗi đơn 1 dòng `supplier_debts`, tăng theo giá trị đã nhận (CK đơn + thuế chia theo tỷ lệ giá trị dòng đã nhận; nhận đủ = đúng tổng đơn). Hạn trả = ngày nhận + số ngày trong điều khoản thanh toán của NCC ("30 ngày", "Net 45 days") hoặc chọn khi nhận. `supplier.debts` (đánh dấu quá hạn theo ngày VN), `supplier.recordPayment` theo 1 đơn hoặc tự phân bổ vào khoản nợ cũ nhất trước (hạn sớm nhất), mỗi khoản 1 dòng `supplier_payments`; không cho trả vượt nợ (khoá NCC `FOR UPDATE` + trừ có điều kiện)
+  - **Lịch sử giao dịch** (SRS-SUP-04, `supplier.history`): tạo đơn, nhập kho (giá trị phiếu), thanh toán, huỷ đơn — gộp bằng 1 truy vấn `UNION ALL`, phân trang
+  - **So sánh giá nhập** (SRS-SUP-05, `supplier.priceComparison`): giá nhập thực (sau CK dòng) theo sản phẩm/biến thể × NCC: giá gần nhất (`ROW_NUMBER()`), thấp/TB gia quyền/cao, SL, số đơn; xếp theo giá gần nhất, đánh dấu rẻ nhất, % đắt hơn, chênh lệch/đv. Đơn huỷ bị loại trừ các dòng đã nhận hàng
+  - **Phân quyền**: capability mới `supplier:read` / `supplier:write` / `supplier:manage_po` (catalog `supplier.read` → read, `supplier.create`/`update` → write, `supplier.manage_po` → đơn nhập + nhận hàng + thanh toán). admin, manager: đủ; warehouse: chỉ xem; seller/viewer: không. Seed chạy lại để bảng phân quyền hiện đúng. 8 mutation vào `AUDIT_ROUTES`
+  - **UI** (theo style các module P4.1/P4.2, chưa có mockup riêng): `/suppliers` (bảng + lọc + form thêm/sửa), `/suppliers/[id]` (thẻ thống kê, thông tin, tab Đơn nhập / Công nợ & thanh toán / Lịch sử / Giá nhập, modal thanh toán), `/purchase-orders` (bảng + thanh tiến độ nhận), `/purchase-orders/new` (`?supplier=`), `/purchase-orders/[id]` (modal Nhận hàng, Huỷ, Thanh toán), `/purchase-orders/[id]/edit`, `/suppliers/prices`. Sidebar mở mục "Nhà cung cấp" (sáng cả ở `/purchase-orders`)
+  - **#64**: `errorFormatter` của tRPC đổi lỗi Zod thành câu dễ đọc (`"Mã số thuế gồm 10 chữ số … (taxCode)"`, `bizoneCode: VALIDATION_ERROR`, `bizoneDetails` theo trường) — áp dụng mọi router
+  - Test Vitest `tests/supplier.test.ts` (17): tổng đơn, làm tròn, công nợ theo hàng đã nhận, điều khoản → số ngày, cộng ngày qua tháng/năm nhuận, trạng thái/quá hạn, phân bổ thanh toán, validator (MST, trùng SP, nhận 0), quyền theo vai trò + catalog
+
+- **Kiểm thử** (`next dev` + `AUTH_DEV_BYPASS=true`; dữ liệu tạm: chi nhánh/kho `P43*`, 3 sản phẩm (1 có biến thể), 3 NCC; script API 49 bước + script phân quyền/đồng thời 10 bước với token Keycloak thật của `demo.seller` / `demo.manager`; UI qua trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo PO → nhập kho → tự động tạo phiếu nhập | ✅ PO 3 dòng (CK dòng 5 %, CK đơn 10.000, thuế 8.000): tổng 1.538.000 đúng. Nhận 6/10 + lô `P43-LOT1` (HSD) → phiếu `PN-…` `confirmed`, "Nhập kho từ đơn nhập hàng", tham chiếu đơn, hiện trong `inventory.transactions` của module Kho; tồn +6; trạng thái "Đã nhập 1 phần"; nhận nốt → "Đã nhập", 2 phiếu. UI: tạo đơn từ trang NCC (tìm SP, biến thể, CK %, xem trước 2.160.000 + 510.000), nhận 20/24 + lô/HSD → phiếu + công nợ 2.310.000, hạn 17/11 (điều khoản 7 ngày); nhận 42 ms |
+  | Công nợ supplier | ✅ nợ theo hàng đã nhận 908.818,18 (chia CK/thuế) → nhận đủ 1.538.000; trả 500.000 theo đơn rồi trả hết tự phân bổ → "Đã trả"; đơn nhận 2/12 rồi huỷ phần còn lại giữ nợ 184.000; lọc "Còn nợ" chỉ ra NCC đó. UI modal: chặn trả vượt ("Không được vượt số còn nợ 2.310.000₫"), trả 1.000.000 kèm chứng từ → còn 1.310.000 "Trả 1 phần" |
+  | So sánh giá nhập | ✅ P1: B 92.000 (rẻ nhất) vs A 95.000 (+3,26 %) — gồm dòng đã nhận của đơn bị huỷ một phần; dòng chưa nhận của đơn huỷ bị loại; lọc 1 sản phẩm; trang `/suppliers/prices` + tab Giá nhập |
+  | Lịch sử giao dịch | ✅ A: 1 đơn + 2 lần nhập + 2 thanh toán (5 mục); B có sự kiện huỷ; tab Lịch sử có link tới đơn |
+  | CRUD + lỗi | ✅ mã tự sinh `NCC0001`; trùng mã 409; MST sai / tên trống 400 (thông báo tiếng Việt); CK đơn > tiền hàng 400; trùng SP trong đơn 400; SP không tồn tại 404; biến thể sai SP 400; nhận vượt / nhận 0 → 400; sửa đơn đã nhận 409; nhận/huỷ đơn đã đủ hoặc đã huỷ 409; trả vượt 400; NCC hết nợ 409; xoá NCC có giao dịch 409, chưa có thì xoá được; NCC ngừng hợp tác không tạo được đơn (409) |
+  | Phân quyền | ✅ token seller: `supplier.list` / `purchaseOrder.create` 403; token manager 200; audit log ghi `create_po`, `receive_po`, `record_payment` |
+  | Đồng thời | ✅ 2 lần nhận cùng 10/10 cùng lúc → 1 thành công, 1 bị 400 "chỉ còn 0 chưa nhận" (không nhận trùng, 1 phiếu); 2 lần trả 600.000 cùng lúc (nợ 990.000) → 1 thành công, còn 390.000 |
+  | UI | ✅ 7 trang + sửa đơn (Chờ nhập sửa được, đơn đã nhận báo không sửa được); 375 px: 6 trang không cuộn ngang (bảng cuộn trong khung) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 80/80) |
+  | Dọn dẹp | ✅ dừng dev server; xoá NCC, đơn, công nợ, thanh toán, phiếu kho, tồn, lô, sản phẩm, kho, chi nhánh `P43*`, audit log của các lần test, cache tìm kiếm Redis, file token tạm |
+
+- **Khác biệt so với plan:**
+  - Thêm trang `/purchase-orders/new`, `/purchase-orders/[id]`, `/purchase-orders/[id]/edit`, `/suppliers/prices` và các component `SupplierForm`, `SupplierDetail`, `PurchaseOrderList`, `PurchaseOrderDetail`, `PaymentModal`, `PriceComparison` ngoài 2 component PLAN nêu.
+  - API theo tRPC (`supplier.*`, `purchaseOrder.*`) thay vì REST `/api/suppliers/*` của API-Design (như các module BizOne khác).
+  - Thanh toán NCC dùng quyền `supplier.manage_po` (catalog không có mã riêng cho công nợ NCC).
+  - Sửa #64 (định dạng lỗi Zod) vì form mới cần thông báo đọc được.
+
+- **Quyết định thiết kế:**
+  - Công nợ phát sinh khi **nhận hàng** (không phải khi đặt), theo giá trị đã nhận → huỷ phần còn lại không cần bút toán bù; không cho trả trước / số dư có (trả ≤ nợ).
+  - Phiếu nhập kho tạo thẳng trạng thái `confirmed` trong cùng transaction với đơn + công nợ (không qua `createTransaction` + `confirmTransaction` vốn là 2 transaction) → không thể có đơn "đã nhận" mà kho chưa cộng.
+  - Mọi thao tác trên 1 đơn khoá dòng đơn (`FOR UPDATE`); thanh toán khoá dòng NCC; cộng `received_quantity` / trừ nợ đều có điều kiện → an toàn khi bấm 2 lần / 2 người cùng thao tác.
+  - Giá so sánh là giá thực (sau CK dòng), chưa trừ CK đơn (CK đơn không gắn được cho từng SP một cách khách quan).
+  - Trạng thái quá hạn tính khi đọc theo ngày VN thay vì job ghi `overdue`.
+
+- **Vấn đề / lưu ý:** mới #65–#69; #64 đã sửa; cập nhật #54, #57. `created_by` của đơn/thanh toán là NULL khi người dùng Keycloak chưa có hồ sơ `users` trong tenant (như các module khác). Seed (`npm run db:seed`) cần chạy lại trên DB tenant đã có để bảng phân quyền hiện quyền NCC của vai trò hệ thống (việc kiểm quyền theo role token không phụ thuộc seed).

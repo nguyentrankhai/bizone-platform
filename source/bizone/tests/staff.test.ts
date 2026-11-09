@@ -24,7 +24,12 @@ const user = (roles: string[]): AuthUser => ({
 
 describe("permissions", () => {
   it("custom-role capabilities extend token roles", () => {
-    const caps = capabilitiesOf(["staff.manage_shift", "product.update", "supplier.read", "nope"]);
+    const caps = capabilitiesOf([
+      "staff.manage_shift",
+      "product.update",
+      "omni.manage_connection",
+      "nope",
+    ]);
     expect([...caps].sort()).toEqual(["product:write", "staff:manage_shift"]);
     const seller = user(["bizone-seller"]);
     expect(hasPermission(seller, "staff:manage_shift")).toBe(false);

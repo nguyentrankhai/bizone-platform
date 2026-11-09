@@ -104,6 +104,22 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   },
   "reports.export": { module: "report", action: "export", entityType: "report" },
   "staff.commission.pay": { module: "staff", action: "pay_commission", entityType: "commission" },
+  "supplier.create": { module: "supplier", action: "create", entityType: "supplier" },
+  "supplier.update": { module: "supplier", action: "update", entityType: "supplier" },
+  "supplier.delete": { module: "supplier", action: "delete", entityType: "supplier" },
+  "supplier.recordPayment": {
+    module: "supplier",
+    action: "record_payment",
+    entityType: "supplier_payment",
+  },
+  "purchaseOrder.create": { module: "supplier", action: "create_po", entityType: "purchase_order" },
+  "purchaseOrder.update": { module: "supplier", action: "update_po", entityType: "purchase_order" },
+  "purchaseOrder.receive": {
+    module: "supplier",
+    action: "receive_po",
+    entityType: "purchase_order",
+  },
+  "purchaseOrder.cancel": { module: "supplier", action: "cancel_po", entityType: "purchase_order" },
 };
 
 export function isAudited(path: string): boolean {
@@ -139,6 +155,7 @@ const ID_KEYS = [
   "invoiceId",
   "shiftId",
   "userId",
+  "supplierId",
 ] as const;
 
 /** Entity id: result.id when the mutation returns a row, else the id the caller targeted */

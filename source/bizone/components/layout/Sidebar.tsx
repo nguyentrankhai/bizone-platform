@@ -31,6 +31,8 @@ interface NavItem {
   section?: string;
   /** Module not built yet — shown greyed out instead of linking to a 404 */
   soon?: string;
+  /** Other path prefixes that belong to this module (highlight the item there too) */
+  also?: string[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -43,7 +45,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Nhân viên", href: "/staff", icon: UserCog },
   { label: "Báo cáo", href: "/reports", icon: BarChart3 },
   // section: Tiện ích
-  { label: "Nhà cung cấp", href: "/suppliers", icon: Truck, section: "TIỆN ÍCH", soon: "P4.3" },
+  {
+    label: "Nhà cung cấp",
+    href: "/suppliers",
+    icon: Truck,
+    section: "TIỆN ÍCH",
+    also: ["/purchase-orders"],
+  },
   { label: "Omni Channel", href: "/omni", icon: Globe, soon: "P6.1" },
   { label: "Marketing", href: "/marketing", icon: Megaphone, soon: "P4.4" },
   { label: "Kế toán", href: "/accounting", icon: Calculator, soon: "P4.8" },
@@ -96,7 +104,7 @@ export function Sidebar({ className }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto py-3">
         {NAV_ITEMS.map((item, i) => {
           const Icon = item.icon;
-          const active = pathname?.startsWith(item.href);
+          const active = [item.href, ...(item.also ?? [])].some((p) => pathname?.startsWith(p));
           return (
             <div key={item.href}>
               {item.section && !collapsed && (
