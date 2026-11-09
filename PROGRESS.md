@@ -185,7 +185,7 @@
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ✅ | `b784329` | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
-| P4.4 | Marketing Module — API & UI | ✅ | _(xem kết quả)_ | Xem [kết quả P4.4](#p44--marketing-module--api--ui) |
+| P4.4 | Marketing Module — API & UI | ✅ | `524fb15` | Xem [kết quả P4.4](#p44--marketing-module--api--ui) |
 | P4.5 | POS Advanced Features | ⬜ | — | |
 | P4.6 | Multi-Store Support | ⬜ | — | |
 | P4.7 | Thông báo — Hệ thống + Email + SMS | ⬜ | — | |
@@ -1656,7 +1656,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.4 — Marketing Module — API & UI
 
-- **Hoàn thành:** 2026-11-10 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/lib/pos/promotions.ts` (mới) + `lib/pos/cart.ts`, `server/services/pricing.service.ts` + `invoice.service.ts`, `server/services/coupon.service.ts` + `promotion.service.ts`, `server/routers/coupon.ts` + `flashSale.ts` + `promotion.ts`, `lib/validators/marketing.ts`, `prisma/migrations/2_promotion_usage`, `app/marketing/**`, `components/marketing/*`, `components/pos/CartPanel.tsx` + `CustomerDisplay.tsx`, `tests/promotions.test.ts`; `database/schema.sql`
+- **Hoàn thành:** 2026-11-10 · **Commit:** `524fb15` · **Vị trí:** `source/bizone/lib/pos/promotions.ts` (mới) + `lib/pos/cart.ts`, `server/services/pricing.service.ts` + `invoice.service.ts`, `server/services/coupon.service.ts` + `promotion.service.ts`, `server/routers/coupon.ts` + `flashSale.ts` + `promotion.ts`, `lib/validators/marketing.ts`, `prisma/migrations/2_promotion_usage`, `app/marketing/**`, `components/marketing/*`, `components/pos/CartPanel.tsx` + `CustomerDisplay.tsx`, `tests/promotions.test.ts`; `database/schema.sql`
 - **Đã làm:**
   - **Engine khuyến mãi tự động tại POS** (`lib/pos/promotions.ts`, thuần, test được): mỗi lần báo giá `quoteCart` nạp khuyến mãi đang chạy (`loadPromoContext`) rồi áp theo thứ tự **flash sale → combo → mua X tặng Y**, mỗi đơn vị hàng chỉ nhận 1 khuyến mãi; kết quả nằm trên dòng giỏ (`promoDiscount`, `promotions[]` nhãn, `isGift`) nên giỏ POS (WebSocket), màn hình khách, hoá đơn và báo cáo dùng chung một con số. Chiết khấu tay của thu ngân áp **sau** khuyến mãi; hạng thành viên + mã giảm giá áp sau cùng như cũ
     - Flash sale: giá flash cho tối đa số suất còn lại / suất mỗi khách (khách lẻ: giới hạn trên 1 HĐ), phần vượt tính giá thường; nhiều đợt cùng SP → lấy giá thấp nhất
