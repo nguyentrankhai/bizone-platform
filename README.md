@@ -135,6 +135,7 @@ npm run dev
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
+- Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
 
 ### Build Plan
 
@@ -261,6 +262,7 @@ npm run dev
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
+- Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).
 
 ### Kế hoạch xây dựng
 

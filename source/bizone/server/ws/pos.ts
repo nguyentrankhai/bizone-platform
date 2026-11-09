@@ -12,7 +12,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { verifyJwt } from "@/lib/auth";
+import { authenticateToken } from "@/lib/auth";
 import { hasPermission } from "@/lib/rbac";
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
@@ -103,7 +103,7 @@ async function authorize(
   if (!protocols.includes(POS_WS_PROTOCOL) || !token)
     return { status: 401, message: "Missing token" };
 
-  const verified = await verifyJwt(token);
+  const verified = await authenticateToken(token); // DEV_BYPASS_TOKEN → dev user (P4.0)
   if (!verified.ok) return { status: 401, message: "Invalid token" };
   const tenantId = url.searchParams.get("tenant");
   if (!tenantId || tenantId !== verified.user.tenantId)

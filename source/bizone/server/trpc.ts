@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { auditTrpcMutation, isAudited } from "@/server/middleware/auditLog";
 import type { NextRequest } from "next/server";
 import superjson from "superjson";
-import { verifyJwt, extractBearerToken } from "@/lib/auth";
+import { authenticateToken, extractBearerToken } from "@/lib/auth";
 import { hasPermission, ForbiddenError } from "@/lib/rbac";
 import { rateLimitGeneral, rateLimitPos } from "@/lib/rate-limit";
 import { isKnownTenant, runWithTenant } from "@/lib/tenant";
@@ -19,9 +19,7 @@ export interface TRPCContext {
 
 export async function createTRPCContext(req: NextRequest): Promise<TRPCContext> {
   const token = extractBearerToken(req.headers.get("authorization"));
-  if (!token) return { req, user: null, tenantId: null };
-
-  const result = await verifyJwt(token);
+  const result = await authenticateToken(token); // dev bypass (P4.0) handled inside
   if (!result.ok) return { req, user: null, tenantId: null };
 
   const tenantId = req.headers.get("x-tenant-id");

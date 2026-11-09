@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { verifyJwt } from "@/lib/auth";
+import { authenticateToken } from "@/lib/auth";
 import { REALTIME_CHANNEL, canReceive, type RealtimeEvent } from "@/lib/events";
 import { createRedis } from "@/lib/redis";
 import { ADMIN_READ_ROLES } from "@/server/middleware/adminAuth";
@@ -66,7 +66,7 @@ async function authorize(
     return { status: 401, message: "Missing token" };
   }
 
-  const verified = await verifyJwt(token);
+  const verified = await authenticateToken(token); // DEV_BYPASS_TOKEN → dev user (P4.0)
   if (!verified.ok) return { status: 401, message: "Invalid token" };
   const { user } = verified;
   if (!user.roles.some((r) => (ADMIN_READ_ROLES as readonly string[]).includes(r))) {

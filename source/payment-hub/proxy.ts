@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { extractBearerToken, verifyJwt } from "@/lib/auth";
+import { authenticateToken, extractBearerToken } from "@/lib/auth";
 import { IDENTITY_HEADERS } from "@/server/middleware/adminAuth";
 
 const PUBLIC_PATHS = [
@@ -42,14 +42,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   const token = extractBearerToken(authHeader);
 
-  if (!token) {
-    return jsonError(401, "UNAUTHORIZED", "Missing Bearer token");
-  }
-
-  const result = await verifyJwt(token);
+  // Dev bypass (P4.0): no token → dev user when AUTH_DEV_BYPASS=true
+  const result = await authenticateToken(token);
 
   if (!result.ok) {
-    return jsonError(401, "UNAUTHORIZED", result.reason);
+    return jsonError(
+      401,
+      "UNAUTHORIZED",
+      result.reason === "missing_token" ? "Missing Bearer token" : result.reason,
+    );
   }
 
   const { user } = result;

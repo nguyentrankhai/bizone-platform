@@ -253,7 +253,9 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý bảo mật Payment Hub**: merchant API (`/api/v1/*` có `X-Api-Key`) ký `hex(HMAC-SHA256(secret, METHOD\nPATH?QUERY\nTS\nhex(SHA256(body))))` (`lib/hmac.ts`, theo OpenAPI); `api_secret` lưu `enc:v1:` (AES-256-GCM, `PARTNER_ENCRYPTION_KEY`). Admin API `/api/internal/*` dùng `requireAdmin()`; token có claim `merchant_id` chỉ thấy merchant đó. `proxy.ts` xoá header `x-user-*` do client gửi. Đổi trạng thái giao dịch luôn bằng `UPDATE … WHERE status = <đã đọc>`.
 
-**Gọi tRPC từ client**: truyền header mỗi call `trpc.x.y.query(input, { context: { headers } })` (helper `apiContext(auth)` trong `components/inventory/shared.ts`). Chưa có đăng nhập OIDC trên trình duyệt — page lấy `DEV_TENANT_ID` / `DEV_AUTH_TOKEN` từ env qua `getDevAuth()`. Next 16 không cho 2 `next dev` cùng thư mục: nếu :3000 đang chạy, test bằng `npm run build && npx next start -p 3001`.
+**Gọi tRPC từ client**: truyền header mỗi call `trpc.x.y.query(input, { context: { headers } })` (helper `apiContext(auth)` trong `components/inventory/shared.ts`). Chưa có đăng nhập OIDC trên trình duyệt (P6.7) — page lấy `DEV_TENANT_ID` / `DEV_AUTH_TOKEN` từ env qua `getDevAuth()` (Payment Hub: `getDevAuthToken()`). Next 16 không cho 2 `next dev` cùng thư mục: nếu :3000 đang chạy, test bằng `npm run build && npx next start -p 3001`.
+
+**Dev bypass đăng nhập (P4.0, gỡ ở P6.7)**: `AUTH_DEV_BYPASS=true` trong `.env.local` (hoặc biến shell) của từng app → request không token / token giả `dev-bypass` chạy với user dev (`AUTH_DEV_USER`, `AUTH_DEV_ROLES`; BizOne tenant `DEV_TENANT_ID`; Payment Hub `AUTH_DEV_MERCHANT_ID`), token thật vẫn verify đầy đủ. Mọi điểm vào xác thực phải gọi `authenticateToken()` (`lib/auth.ts`), không gọi `verifyJwt` trực tiếp. Page tĩnh "đóng băng" token lúc build → build lại khi đổi biến. Không bật trên production/Docker compose.
 
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 

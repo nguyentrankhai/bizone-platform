@@ -1,13 +1,11 @@
 import { AppLayout } from "@/components/layout/AppLayout";
+import { getDevAuth } from "@/lib/dev-auth";
 import { ProductsClient } from "@/components/products/ProductsClient";
 
 export const metadata = { title: "Quản lý Sản phẩm | BizOne" };
 
 export default function ProductsPage() {
-  // In production, tenantId and authToken come from session/cookies.
-  // For dev, use placeholder values that the middleware/tRPC layer validates.
-  const tenantId = process.env.DEV_TENANT_ID ?? "tenant_demo";
-  const authToken = process.env.DEV_AUTH_TOKEN ?? "";
+  const { tenantId, authToken } = getDevAuth();
 
   return (
     <AppLayout>

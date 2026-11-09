@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-07 (P4.2 Reports xong — 6 báo cáo, so sánh cùng kỳ, xuất PDF/Excel qua worker; mới #61–#64; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-09 (P4.0 xong — `AUTH_DEV_BYPASS=true` bỏ qua đăng nhập Keycloak khi dev/test cho cả 2 app; #7 có cách dùng tạm, #56 cập nhật; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 2 | 0 | 7 |
+| 4 — BizOne Mở rộng | 9 | 3 | 0 | 6 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **25** | **3** | **25** |
+| **Tổng** | **53** | **26** | **3** | **24** |
 
 ---
 
@@ -35,7 +35,7 @@
 | ~~3~~ | ~~Job webhook chứa `secret` trong Redis~~ | ~~P1.2~~ | ✅ P3.6 |
 | ~~4~~ | ~~Payment Hub health check dùng driver `mariadb` trực tiếp → chuyển sang Prisma~~ | ~~P1.2~~ | ✅ P1.4 |
 | ~~5~~ | ~~`paymentdb` còn charset mặc định `utf8` / `utf8_general_ci` (utf8mb3) → đổi sang `utf8mb4_unicode_ci`~~ | ~~Kiểm tra 2026-11-03~~ | ✅ P1.4 |
-| 7 | **[Chặn dùng app]** Dev chưa có đăng nhập OIDC trong trình duyệt → tạm: P4.0 (bypass), làm thật: P6.7 (2026-11-07: trang giờ hiện banner "Chưa đăng nhập" thay vì trắng): page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
+| 7 | **[Chặn dùng app → đã có cách tạm]** Dev chưa có đăng nhập OIDC trong trình duyệt → tạm: ✅ P4.0 (2026-11-09: đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của app, không cần `DEV_AUTH_TOKEN`), làm thật: P6.7 (2026-11-07: trang giờ hiện banner "Chưa đăng nhập" thay vì trắng): page lấy token từ env `DEV_AUTH_TOKEN` (hết hạn 15 phút, bị "đóng băng" vào trang static khi build). Áp dụng cho cả Payment Hub Admin (QA-1): API `/api/internal/*` đã yêu cầu JWT + role, nhưng **page server component** (`/transactions`…) vẫn render dữ liệu không cần đăng nhập | P2.2/P2.4, QA-1 | Task auth UI |
 | ~~8~~ | ~~Router `product.ts` dùng `Number(ctx.user.id)`~~ | ~~P2.4~~ | ✅ P2.5 |
 | ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
 | ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
@@ -84,7 +84,7 @@
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
 | 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
-| 56 | `next dev`: lần tải lại thứ 2 của một số trang client (`/audit-log`, `/staff/shifts`, `/staff/commissions`) kẹt ở fallback Suspense "Đang tải..." dù API trả 200 — **chỉ ở dev** (bản `next start` bình thường); có từ trước P4.1 (đã thử `/audit-log`) | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
+| 56 | Lần tải lại thứ 2 **cùng URL trong cùng tab** của một số trang client (`/audit-log`, `/staff`, `/staff/shifts`, `/staff/commissions`, `/warehouse`) kẹt ở fallback Suspense "Đang tải..." (component bên trong không render, không gọi API) — P4.0 (2026-11-09) xác nhận xảy ra **cả với `next start`** và cả bản HEAD trước P4.0 (tab mới / điều hướng từ sidebar thì bình thường); có từ trước P4.1 | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
 | 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (NCC, kế toán, marketing, omni, cài đặt) chưa có tác dụng | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | 58 | WebSocket POS (`server/ws/pos.ts`) chỉ xét role trong token: vai trò tuỳ chỉnh không áp dụng và nhân viên bị cho nghỉ việc vẫn giữ kết nối WS đang mở tới khi token hết hạn (≤ 15 phút). API tRPC đã chặn ngay | P4.1 | P4.5 (POS nâng cao) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
@@ -172,7 +172,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P4.0 | Bypass xác thực Keycloak cho dev/test | ⬜ | — | Thêm 2026-11-07: bật bằng `AUTH_DEV_BYPASS=true` để test không phải đăng nhập; làm trước P4.3; gỡ ở P6.7 |
+| P4.0 | Bypass xác thực Keycloak cho dev/test | ✅ | _(xem kết quả)_ | Xem [kết quả P4.0](#p40--bypass-xác-thực-keycloak-cho-devtest) — gỡ ở P6.7 |
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
@@ -1466,6 +1466,49 @@ Ngoài plan, theo yêu cầu người dùng.
   - Giữ `X-Idempotency-Key` (tương thích) song song `Idempotency-Key` (spec).
 - **Khác biệt so với đề xuất:** không đổi đơn giá đơn hàng theo giá bán (đơn từ kênh online có giá riêng của kênh) — chỉ chặn tổng âm.
 - **Vấn đề / lưu ý:** còn mở từ QA-2: #48 (hiệu năng kho), #52 (chuẩn hoá API list), #53 (hardening), mới #54 (layout BizOne chưa responsive), #55 (GET GD trả camelCase). #7/#15 (đăng nhập OIDC trình duyệt) vẫn chưa có task nhận.
+
+### P4.0 — Bypass xác thực Keycloak cho dev/test
+
+- **Hoàn thành:** 2026-11-09 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/trpc.ts`, `server/ws/pos.ts`, `components/layout/AppLayout.tsx`, `app/products/**/page.tsx`, `tests/dev-auth.test.ts`; `source/payment-hub/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/ws/server.ts`, `components/ph/PHLayout.tsx`, `tests/dev-auth.test.ts`; `.env.example` 2 app
+- **Đã làm:**
+  - `authenticateToken(token)` trong `lib/auth.ts` của mỗi app là **điểm xác thực duy nhất**: token thật → `verifyJwt` như cũ; không có token hoặc token giả `dev-bypass` → user dev khi `AUTH_DEV_BYPASS=true`, ngược lại 401 (`missing_token` / `invalid_token`). Log cảnh báo 1 lần/process khi bypass được dùng
+  - Dùng ở mọi điểm vào: BizOne `proxy.ts` (route handler + SSE `/api/inventory/alerts`), `server/trpc.ts` (context tRPC), `server/ws/pos.ts` (WebSocket POS); Payment Hub `proxy.ts` (`/api/internal/*`, `/api/v1/*` không có `X-Api-Key`) và `server/ws/server.ts` (realtime :4001). API merchant có `X-Api-Key` (HMAC) và `/api/ipn/*`, `/api/webhooks/*` không đi qua đây → không đổi
+  - User dev cấu hình qua env: `AUTH_DEV_USER` (mặc định `admin@bizone.vn` / `payhub.admin@bizone.vn` — trùng user Keycloak dev nên `resolveDbUserId`, phân quyền tuỳ chỉnh, nghỉ việc vẫn áp dụng), `AUTH_DEV_ROLES` (mặc định `bizone-admin` / `payhub-admin`), tenant = `DEV_TENANT_ID` (BizOne), `AUTH_DEV_MERCHANT_ID` (Payment Hub, giới hạn theo merchant). Hạn "token" dev 12 giờ (WS realtime đóng khi hết hạn như token thật)
+  - `lib/dev-auth.ts`: thiếu `DEV_AUTH_TOKEN` mà bật bypass → page trả token giả `dev-bypass` cho client (WebSocket subprotocol không được rỗng). Có `DEV_AUTH_TOKEN` thì vẫn dùng token đó (test phân quyền bằng user thật). Payment Hub `devTokenCanWrite` hiểu token giả (ẩn nút ghi khi user dev là viewer hoặc gắn merchant). 3 trang sản phẩm chuyển sang `getDevAuth()` thay vì đọc env trực tiếp
+  - Dải **"Chế độ dev"** (tím) dưới TopBar/PHHeader: user + role đang thao tác, nhắc không bật trên production; tính mỗi request (`connection()` trong Suspense). BizOne: bypass bật mà `DEV_AUTH_TOKEN` đã hết hạn → thêm cảnh báo vàng "xoá biến để dùng user dev"; bypass tắt → banner "Chưa đăng nhập" như trước (thêm gợi ý `AUTH_DEV_BYPASS`)
+  - `.env.example` 2 app: `AUTH_DEV_BYPASS=false` + các biến tuỳ chọn (comment). Docker compose không đặt biến này (mặc định tắt)
+  - Test Vitest `tests/dev-auth.test.ts`: BizOne 5 (tắt → 401 cả không token lẫn `dev-bypass`; bật → admin dev đủ quyền; token thật vẫn verify; user dev theo env, seller không có `staff:write`; token page/banners theo env), Payment Hub 4 (tương tự + `AUTH_DEV_MERCHANT_ID`, viewer không được ghi)
+
+- **Kiểm thử** (dev server :3000/:3002/:4000/:4001 với `AUTH_DEV_BYPASS=true` truyền qua shell; bản production BizOne `next start -p 3001`; token Keycloak thật của `demo.seller@bizone.vn` và `payhub.viewer@bizone.vn` lấy qua Authorization Code + PKCE; ca POS tạm trên chi nhánh tạm `P40TEST`):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Bật bypass: mở mọi trang BizOne/Payment Hub Admin có dữ liệu mà không cần token | ✅ BizOne (bản production): 14 trang `/dashboard`, `/products`, `/orders`, `/crm`, `/warehouse`, `/warehouse/stock-take`, `/reports`, `/audit-log`, `/staff` (+ shifts, attendance, commissions, roles), `/pos/session` tải dữ liệu, không lỗi, có dải "Chế độ dev" (trang POS toàn màn hình không dùng `AppLayout` nên không có dải). Payment Hub: `/dashboard`, `/transactions`, `/partners` (có nút ghi), `/webhooks` có dữ liệu + dải "Chế độ dev". API: tRPC không token 200, `/api/internal/*` không token 200 |
+  | POS 2 màn hình (WebSocket) chạy | ✅ `/pos` hiện "Ca #9 · Trực tuyến", `/pos/display?session=9` kết nối; WS `dev-bypass` nhận `session:status`. Realtime Payment Hub: dashboard "Real-time", WS `dev-bypass` nhận `connected` |
+  | Cảnh báo tồn (SSE) chạy | ✅ `/api/inventory/alerts` không token → 200 `: connected`; trang `/warehouse` mở stream 200 |
+  | Token thật của seller vẫn bị 403 ở trang quản trị | ✅ (bypass bật) seller: `staff.role.list` 403 "Required permission: staff:read", `dashboard.summary` 403, `product.list` 200. Viewer Payment Hub: `GET partners` 200, `POST webhooks` 403, `PUT routes/1` 403. Token rác → 401 ("JWS Protected Header is invalid"); WS token rác 401, sai tenant 403 |
+  | Tắt bypass: không token → 401 như trước | ✅ BizOne tRPC + SSE không token 401 "Missing Bearer token", `dev-bypass` 401 `invalid_token`; Payment Hub `/api/internal/*` 401; WS `dev-bypass` bị từ chối cả 2 app; token thật seller/viewer 200; trang hiện lại banner "Chưa đăng nhập"; không có log cảnh báo bypass |
+  | API merchant/IPN không bị ảnh hưởng | ✅ (bypass bật) `/api/v1/transactions` với `X-Api-Key` giả → 401 HMAC như cũ; `/api/ipn/vnpay` chữ ký sai → `RspCode 97`; `/api/webhooks/payhub` (BizOne) vẫn đi đường public (503 vì dev chưa đặt `PAYHUB_WEBHOOK_SECRET` — như trước) |
+  | Log cảnh báo khi bật | ✅ `[auth] AUTH_DEV_BYPASS=true — …` 1 lần ở mỗi process (next dev, realtime) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ cả 2 app (Vitest BizOne 63/63, Payment Hub 58/58) |
+  | Dọn dẹp | ✅ dừng mọi dev server/`next start`/realtime đã khởi động; xoá chi nhánh + ca POS tạm (không phát sinh HĐ, audit log, key Redis); xoá file token/credential tạm; build lại BizOne không bypass |
+
+- **Khác biệt so với plan:**
+  - BizOne `/pos/*` (màn hình POS) không có dải "Chế độ dev" vì không dùng `AppLayout`; trạng thái bypass xem ở các trang quản trị.
+  - Không bật bypass mặc định trong `.env.local` (người dùng tự đặt `AUTH_DEV_BYPASS=true`); kiểm thử truyền biến qua shell.
+  - Thêm cảnh báo khi bypass bật mà `DEV_AUTH_TOKEN` đã hết hạn (token cũ được ưu tiên nên trang sẽ 401).
+
+- **Quyết định thiết kế:**
+  - Bypass chỉ thay thế **danh tính**, không bỏ qua kiểm tra: tenant (`X-Tenant-ID` khớp, tenant đã cấp), RBAC theo role + vai trò tuỳ chỉnh + trạng thái nghỉ việc, rate limit, giới hạn merchant đều chạy như với token thật.
+  - Token thật luôn được verify kể cả khi bypass bật → test phân quyền với user thật không đổi; token giả `dev-bypass` bị từ chối khi bypass tắt → bản build "đóng băng" token giả cũng không dùng được trên server không bật bypass.
+  - Không chặn theo `NODE_ENV` vì `next start` (production mode) là cách test chuẩn khi :3000 bận; thay vào đó: mặc định tắt, compose không đặt, log cảnh báo + dải tím trên UI. P6.6/P6.7 gỡ hẳn.
+  - `getDevAuth()` chỉ đọc env (không đồng hồ) vì page gọi nó lúc prerender — dùng `Date.now()` ở đây làm Next báo lỗi "unstable value" (đã gặp khi kiểm thử, đã sửa).
+
+- **Vấn đề / lưu ý:**
+  - Trang tĩnh (prerender) "đóng băng" token lúc build: build khi bypass bật → client gửi `dev-bypass`; muốn đổi thì build lại (như #7 trước đây). `next dev` không bị.
+  - Sửa file khi `next dev` đang chạy đôi khi làm trang mở trong trình duyệt full-reload liên tục (HMR) — restart dev server là hết.
+  - #56 cập nhật: kẹt Suspense ở lần tải lại thứ 2 cùng URL xảy ra cả với `next start` và bản trước P4.0 — không do P4.0, cần xử lý riêng.
+  - Gỡ toàn bộ (`authenticateToken` → `verifyJwt`, `DEV_BYPASS_TOKEN`, dải dev, biến env) ở P6.7.
 
 ### P4.1 — Staff Module — API & UI
 
