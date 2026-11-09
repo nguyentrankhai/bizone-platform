@@ -180,7 +180,7 @@
 | P4.0 | Bypass xác thực Keycloak cho dev/test | ✅ | `97aae2f` | Xem [kết quả P4.0](#p40--bypass-xác-thực-keycloak-cho-devtest) — gỡ ở P6.7 |
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
-| P4.3 | Supplier Module — API & UI | ✅ | _(xem kết quả)_ | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
+| P4.3 | Supplier Module — API & UI | ✅ | `b784329` | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
 | P4.4 | Marketing Module — API & UI | ⬜ | — | |
 | P4.5 | POS Advanced Features | ⬜ | — | |
 | P4.6 | Multi-Store Support | ⬜ | — | |
@@ -1607,7 +1607,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.3 — Supplier Module — API & UI
 
-- **Hoàn thành:** 2026-11-10 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/server/routers/supplier.ts` + `purchaseOrder.ts`, `server/services/supplier.service.ts` + `purchaseOrder.service.ts`, `lib/supplier/calc.ts`, `lib/validators/supplier.ts`, `app/suppliers/**`, `app/purchase-orders/**`, `components/suppliers/*`, `tests/supplier.test.ts`
+- **Hoàn thành:** 2026-11-10 · **Commit:** `b784329` · **Vị trí:** `source/bizone/server/routers/supplier.ts` + `purchaseOrder.ts`, `server/services/supplier.service.ts` + `purchaseOrder.service.ts`, `lib/supplier/calc.ts`, `lib/validators/supplier.ts`, `app/suppliers/**`, `app/purchase-orders/**`, `components/suppliers/*`, `tests/supplier.test.ts`
 - **Đã làm:**
   - **Nhà cung cấp** (SRS-SUP-01): tRPC `supplier.list` (tìm tên/mã/SĐT/MST/người liên hệ, lọc đang/ngừng hợp tác, lọc còn nợ / có nợ quá hạn; kèm số đơn, còn nợ, quá hạn), `options`, `get` (thống kê: đơn theo trạng thái, giá trị đã nhập, đã trả, còn nợ, quá hạn, lần nhập gần nhất), `create` (mã tự sinh `NCC0001…` nếu bỏ trống; MST 10 số hoặc 10-3), `update` (gồm ngừng hợp tác), `delete` (chỉ khi chưa có đơn/thanh toán, ngược lại 409 gợi ý "Ngừng hợp tác")
   - **Đơn nhập hàng** (SRS-SUP-02, `purchaseOrder.*`): `create` / `update` (chỉ khi Chờ nhập; thay toàn bộ dòng) với CK % theo dòng, CK đơn, thuế/phí — tổng tính ở `lib/supplier/calc.ts` (dùng chung với form); `receive` nhận đủ hoặc một phần, có số lô + NSX/HSD; `cancel` (Chờ nhập → huỷ; Đã nhập 1 phần → huỷ phần còn lại, giữ hàng + nợ đã nhận); `list` (lọc NCC, kho, trạng thái, ngày giờ VN, tìm mã/tên NCC/ghi chú; kèm tiến độ nhận, còn nợ), `get` (dòng, phiếu nhập kho, công nợ, thanh toán), `productLookup` (giá vốn SP/biến thể + giá NCC này báo lần trước), `warehouseOptions`
