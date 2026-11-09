@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P4.3 xong — NCC, đơn nhập hàng → phiếu nhập kho tự động, công nợ phải trả, so sánh giá nhập; #64 đã sửa; mới #65–#69; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (P4.4 xong — mã giảm giá, voucher, flash sale, mua X tặng Y, combo áp dụng tự động tại POS + báo cáo hiệu quả; #63 đã xử lý; mới #70–#73; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 4 | 0 | 5 |
+| 4 — BizOne Mở rộng | 9 | 5 | 0 | 4 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **27** | **3** | **23** |
+| **Tổng** | **53** | **28** | **3** | **22** |
 
 ---
 
@@ -82,22 +82,26 @@
 | ~~51~~ | ~~`.env.example` thiếu biến code đang dùng (cả 2 app)~~ | ~~QA-2~~ | ✅ QA-2 fix |
 | 52 | API list không thống nhất: product/inventory trả `{ items, meta }` + `pageSize`; order/audit trả `{ items, total, page, limit }`; không tìm đơn theo mã vận đơn | QA-2 | P4.x (chuẩn hoá khi mở rộng) |
 | 53 | Hardening trước production: compose dùng mật khẩu mặc định (`mypass`, `123456`), `docker-compose.keycloak.yml` ghi cứng `KC_DB_PASSWORD`, realm JSON chứa mật khẩu user dev | QA-2 | P6.5 Security Hardening |
-| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers` ✅ P4.3, `/omni`, `/marketing`, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
+| 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers` ✅ P4.3, `/omni`, `/marketing` ✅ P4.4, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
 | 56 | Lần tải lại thứ 2 **cùng URL trong cùng tab** của một số trang client (`/audit-log`, `/staff`, `/staff/shifts`, `/staff/commissions`, `/warehouse`) kẹt ở fallback Suspense "Đang tải..." (component bên trong không render, không gọi API) — P4.0 (2026-11-09) xác nhận xảy ra **cả với `next start`** và cả bản HEAD trước P4.0 (tab mới / điều hướng từ sidebar thì bình thường); có từ trước P4.1 | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
-| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (kế toán, marketing, omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
+| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (kế toán, omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`), marketing từ P4.4 (`marketing:coupon` / `marketing:flash_sale` / `marketing:promotion`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | 58 | WebSocket POS (`server/ws/pos.ts`) chỉ xét role trong token: vai trò tuỳ chỉnh không áp dụng và nhân viên bị cho nghỉ việc vẫn giữ kết nối WS đang mở tới khi token hết hạn (≤ 15 phút). API tRPC đã chặn ngay | P4.1 | P4.5 (POS nâng cao) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
 | 60 | Phân quyền cần chi nhánh (`user_roles.branch_id` NOT NULL) mà chưa có màn hình tạo chi nhánh (#11). Nhân viên tạo trước P4.1 (vd. `admin@bizone.vn`, tự sinh khi đăng nhập) chưa có vai trò trong DB → danh sách hiện "Chưa phân quyền trong BizOne" (quyền vẫn theo Keycloak); gán vai trò trong UI sẽ đồng bộ lại role Keycloak | P4.1 | P4.6 Multi-store |
 | 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
 | 62 | Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động (mockup 07, SRS-RPT-08) | P4.2 | P4.7 Thông báo (email) |
-| 63 | Báo cáo khuyến mãi so sánh theo khung ngày (trước/trong/sau) + lượt dùng mã giảm giá; chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing | P4.2 | P4.4 Marketing |
+| ~~63~~ | ~~Báo cáo khuyến mãi chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing~~ | ~~P4.2~~ | ✅ P4.4 (`promotion_usage` + báo cáo `/marketing/report` theo từng chương trình) |
 | ~~64~~ | ~~Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod~~ | ~~P4.2 (kiểm lỗi)~~ | ✅ P4.3 (`errorFormatter`: câu tiếng Việt + `bizoneCode: VALIDATION_ERROR`, chi tiết theo trường) |
 | 65 | Nhận hàng theo đơn nhập không cập nhật `products.cost_price` (giá vốn): báo cáo lợi nhuận / hoa hồng vẫn dùng giá vốn nhập tay. Cần quy tắc giá vốn (bình quân gia quyền theo lần nhập hoặc giá nhập gần nhất) | P4.3 | P4.8 Kế toán (hoặc task giá vốn riêng) |
 | 66 | Công nợ NCC "quá hạn" tính lúc đọc (hạn < hôm nay giờ VN), cột `supplier_debts.status` không ghi `overdue`; chưa có thông báo chủ động khi sắp/đã quá hạn | P4.3 | P4.7 Thông báo |
 | 67 | Thanh toán NCC chưa sinh phiếu chi trong sổ quỹ (danh mục `expense_purchase` đã có trong seed) | P4.3 | P4.8 Kế toán |
 | 68 | Chưa có trả hàng cho NCC (`return_out`) / giảm công nợ khi trả; đơn đã nhận đủ không sửa được. Đơn nhận một phần rồi "huỷ phần còn lại" mang trạng thái `cancelled` (hàng + công nợ đã nhận được giữ) | P4.3 | Khi có yêu cầu nghiệp vụ (P4.x) |
 | 69 | "Nhóm hàng cung cấp" (SRS-SUP-01) chưa có cột riêng — ghi trong Ghi chú; chưa gắn NCC mặc định cho sản phẩm (SRS sản phẩm) | P4.3 | Khi có yêu cầu nghiệp vụ |
+| 70 | Chiến dịch marketing SMS / Email / Zalo hàng loạt (SRS-MKT-06) chưa làm: chưa có kênh gửi (nhà cung cấp SMS, SMTP, Zalo OA) và bảng chiến dịch trong schema | P4.4 | P4.7 Thông báo — Hệ thống + Email + SMS |
+| 71 | Đổi/trả hoá đơn (refund) không hoàn suất flash sale / combo đã dùng (chỉ **huỷ** hoá đơn mới hoàn); trả hàng có dòng quà tặng / combo tính theo giá trị dòng đã chia (quà = 0₫) | P4.4 | Khi có yêu cầu nghiệp vụ |
+| 72 | Mã giảm giá / voucher / khuyến mãi mới áp dụng tại POS; đơn hàng online (module Đơn hàng P2.7) và mã `free_shipping` chưa dùng được (kênh `online`/`website`… lưu sẵn) | P4.4 | P6.1 Omni Channel (Website) |
+| 73 | Giới hạn flash sale "mỗi khách" được kiểm khi báo giá + lúc tạo HĐ (tổng suất kiểm có điều kiện), nhưng 2 HĐ đồng thời của **cùng một khách** có thể cùng lọt giới hạn mỗi khách (không khoá theo khách) | P4.4 | P6.5 (nếu cần) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -181,7 +185,7 @@
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ✅ | `b784329` | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
-| P4.4 | Marketing Module — API & UI | ⬜ | — | |
+| P4.4 | Marketing Module — API & UI | ✅ | _(xem kết quả)_ | Xem [kết quả P4.4](#p44--marketing-module--api--ui) |
 | P4.5 | POS Advanced Features | ⬜ | — | |
 | P4.6 | Multi-Store Support | ⬜ | — | |
 | P4.7 | Thông báo — Hệ thống + Email + SMS | ⬜ | — | |
@@ -1649,3 +1653,49 @@ Ngoài plan, theo yêu cầu người dùng.
   - Trạng thái quá hạn tính khi đọc theo ngày VN thay vì job ghi `overdue`.
 
 - **Vấn đề / lưu ý:** mới #65–#69; #64 đã sửa; cập nhật #54, #57. `created_by` của đơn/thanh toán là NULL khi người dùng Keycloak chưa có hồ sơ `users` trong tenant (như các module khác). Seed (`npm run db:seed`) cần chạy lại trên DB tenant đã có để bảng phân quyền hiện quyền NCC của vai trò hệ thống (việc kiểm quyền theo role token không phụ thuộc seed).
+
+### P4.4 — Marketing Module — API & UI
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/lib/pos/promotions.ts` (mới) + `lib/pos/cart.ts`, `server/services/pricing.service.ts` + `invoice.service.ts`, `server/services/coupon.service.ts` + `promotion.service.ts`, `server/routers/coupon.ts` + `flashSale.ts` + `promotion.ts`, `lib/validators/marketing.ts`, `prisma/migrations/2_promotion_usage`, `app/marketing/**`, `components/marketing/*`, `components/pos/CartPanel.tsx` + `CustomerDisplay.tsx`, `tests/promotions.test.ts`; `database/schema.sql`
+- **Đã làm:**
+  - **Engine khuyến mãi tự động tại POS** (`lib/pos/promotions.ts`, thuần, test được): mỗi lần báo giá `quoteCart` nạp khuyến mãi đang chạy (`loadPromoContext`) rồi áp theo thứ tự **flash sale → combo → mua X tặng Y**, mỗi đơn vị hàng chỉ nhận 1 khuyến mãi; kết quả nằm trên dòng giỏ (`promoDiscount`, `promotions[]` nhãn, `isGift`) nên giỏ POS (WebSocket), màn hình khách, hoá đơn và báo cáo dùng chung một con số. Chiết khấu tay của thu ngân áp **sau** khuyến mãi; hạng thành viên + mã giảm giá áp sau cùng như cũ
+    - Flash sale: giá flash cho tối đa số suất còn lại / suất mỗi khách (khách lẻ: giới hạn trên 1 HĐ), phần vượt tính giá thường; nhiều đợt cùng SP → lấy giá thấp nhất
+    - Combo: mỗi bộ đủ SP tính giá combo, phần tiết kiệm chia theo giá trị dòng; giới hạn số bộ
+    - Mua X tặng Y: tặng 1 SP → **tự thêm dòng quà** (`gift-{id}`, không sửa/xoá được trên POS, trừ tồn khi bán); tặng theo danh mục → giảm cho SP rẻ nhất của danh mục đã có trong giỏ (cùng danh mục thì cần đủ mua + tặng). Mua/tặng theo danh mục gồm danh mục con
+  - **Ghi nhận lúc tạo hoá đơn** (cùng transaction): bảng mới `promotion_usage` (migration `2_promotion_usage`, đã cập nhật `schema.sql`); suất flash sale / số bộ combo tăng **có điều kiện** (hết suất giữa chừng → 409 "cập nhật lại giỏ"). **Huỷ hoá đơn** trả lại suất flash/combo, xoá lượt dùng, mở lại voucher
+  - **Mã giảm giá** (SRS-MKT-01, `coupon.*`): CRUD (mã viết hoa, không trùng với voucher; đổi mã bị khoá khi đã dùng; xoá chỉ khi chưa dùng), loại % / số tiền / miễn phí vận chuyển, đơn tối thiểu, giảm tối đa, tổng lượt + lượt/khách, thời gian, kênh, **điều kiện**: tự áp dụng (đã có từ P2.5), **hạng khách** (`rankings`), **danh mục áp dụng** (`category_ids` — chỉ tính giảm trên dòng thuộc danh mục, gồm danh mục con); trạng thái Đang áp dụng / Sắp diễn ra / Hết hạn / Hết lượt / Tạm ngừng; **lịch sử sử dụng** (HĐ, khách, voucher, số tiền)
+  - **Voucher** (SRS-MKT-02): phát hành từ mã gốc cho khách theo hạng (khách thân thiết), danh sách khách, hoặc N voucher tự do; mã ngẫu nhiên 8 ký tự (bỏ 0/O/1/I), duy nhất với cả mã giảm giá; dùng 1 lần, hạn riêng; voucher gắn khách chỉ khách đó dùng được; POS nhập mã voucher như mã giảm giá (`coupon_usage.voucher_id`); huỷ voucher
+  - **Flash sale** (SRS-MKT-03, `flashSale.*`): khung giờ, SP/biến thể + giá flash (< giá bán), tổng suất, suất/khách; chặn trùng SP với đợt khác cùng thời gian; **tự bắt đầu / tự kết thúc** theo giờ (POS tính theo thời gian, cột `status` đồng bộ khi đọc); sửa khi chưa bắt đầu, kết thúc sớm, huỷ
+  - **Mua X tặng Y** (SRS-MKT-05) và **Combo** (SRS-MKT-04) (`promotion.buyXGetY.*`, `promotion.combo.*`): CRUD, bật/tắt, thống kê lượt áp dụng; combo kiểm giá combo < tổng giá lẻ
+  - **Báo cáo hiệu quả** (`promotion.report`, quyền `report:read`): theo khoảng ngày VN, mỗi chương trình (mã, flash sale, mua X tặng Y, combo): số HĐ, số lượng, tiền giảm, doanh thu đi kèm, TB/HĐ, tỷ lệ giảm; HĐ huỷ không tính
+  - **Phân quyền**: capability `marketing:coupon` / `marketing:flash_sale` / `marketing:promotion` ⇐ catalog `marketing.manage_*`; admin + manager. Thu ngân không cần quyền marketing để được hưởng khuyến mãi. 18 mutation vào `AUDIT_ROUTES`
+  - **UI** `/marketing` (Mã giảm giá + `CouponForm`, lịch sử dùng, phát voucher), `/marketing/vouchers`, `/marketing/flash-sales` (+ `FlashSaleForm`, chi tiết đã bán/suất), `/marketing/promotions` (`PromotionList`: mua X tặng Y + combo), `/marketing/report`. **POS**: dòng quà có nhãn "Quà tặng", nhãn từng khuyến mãi dưới dòng, dòng "Khuyến mãi" trong tổng; màn hình khách hiện quà + nhãn. Sidebar mở mục Marketing
+  - Test Vitest `tests/promotions.test.ts` (13): flash (suất, suất/khách chia nhiều dòng, biến thể, CK tay sau flash), combo (chia tiết kiệm, giới hạn bộ, không chồng flash), mua X tặng Y (dòng quà, ngưỡng, bỏ dòng quà cũ từ client, cùng danh mục 2+1), mã theo danh mục sau hạng thành viên, validator (giờ VN, mã, điều kiện)
+
+- **Kiểm thử** (`next dev` + POS WebSocket với `AUTH_DEV_BYPASS=true`; dữ liệu tạm `P44*`: chi nhánh, kho (tồn 100), 3 danh mục (có con), 5 SP, 2 khách, ca POS; script 41 bước qua `pos.quote` + `pos.createInvoice` / `pos.cancelInvoice` thật; token Keycloak thật seller/manager; UI qua trình duyệt):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo coupon → áp dụng POS → giảm giá đúng | ✅ 10 % đơn 40.000 → 4.000, HĐ tổng 36.000, lịch sử dùng có mã HĐ; giảm tối đa 15.000; dưới đơn tối thiểu báo "áp dụng cho đơn từ 30.000₫"; hết 2/2 lượt → "đã hết lượt"; mã hạng Vàng: khách Bạc bị từ chối, khách Vàng −5.000; mã danh mục Bánh kẹo −20 % chỉ tính dòng bánh quy (danh mục con) = 2.400; mã tự áp dụng chọn khi không nhập mã. Voucher: phát cho khách hạng Vàng + 2 tự do; không chọn khách / khách khác → từ chối; dùng → −15.000; dùng lại → "đã được sử dụng"; huỷ HĐ → dùng lại được |
+  | Flash sale: đúng giờ tự động giảm giá | ✅ đợt bắt đầu sau 8 s, kết thúc sau 20 s: trước giờ 15.000 ("Sắp diễn ra") → đến giờ tự còn 9.000 ("Đang diễn ra") → hết giờ tự về 15.000 ("Đã kết thúc", đã bán 2). Suất/khách 2: khách lẻ mua 4 → 2 giá flash + 2 giá thường; khách đã mua 2 → giá thường; còn 1 suất tổng cho khách khác. Giá flash ≥ giá bán 400; trùng SP + giờ 409; sửa đợt đã kết thúc 409. UI: tạo đợt bắt đầu ngay → POS hiện "Flash sale …: 1 × 11.000₫ (−4.000₫)" |
+  | Buy X Get Y: thêm SP tặng tự động | ✅ mua 1 trà sữa: chưa có quà; mua 5 → tự thêm 2 kẹo, thành tiền 0, tổng không đổi; HĐ lưu dòng quà (đơn giá 10.000, giảm 10.000) và trừ tồn kẹo 1. Theo danh mục cùng nhóm (mua 2 tặng 1 giảm 50 %): 2 bánh → 0, 3 bánh → −6.000. UI POS: dòng "🎁 Quà tặng" không có nút sửa/xoá; màn hình khách hiện quà + nhãn |
+  | Combo | ✅ nước cam + bánh ngọt 65.000 → 60.000 (giảm 5.000); giới hạn 1 bộ → bán xong không giảm nữa; huỷ HĐ → trả suất; giá combo ≥ giá lẻ → 400 |
+  | Báo cáo hiệu quả | ✅ hôm nay: mã giảm giá (2 HĐ, −8.000), flash sale, mua X tặng Y; combo của HĐ đã huỷ không còn; UI `/marketing/report` (mặc định 30 ngày) |
+  | Phân quyền | ✅ seller: `coupon.list` / `flashSale.create` / `promotion.report` 403; manager 200; seller vẫn được hưởng khuyến mãi khi báo giá POS (51.000, quà + flash) |
+  | UI | ✅ 5 trang marketing có dữ liệu; tạo flash sale qua form; 375 px không cuộn ngang |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 93/93); migration `2_promotion_usage` áp lên DB dev, `prisma migrate diff` với schema: rỗng |
+  | Dọn dẹp | ✅ dừng dev + WS; xoá HĐ, thanh toán, lượt dùng, phiếu kho, tồn, khuyến mãi, mã, voucher, SP, danh mục, khách, ca, kho, chi nhánh `P44*`, audit log test, giỏ + cache Redis, file token tạm. Seed chạy lại (quyền marketing của vai trò hệ thống) |
+
+- **Khác biệt so với plan:**
+  - **Chiến dịch SMS/Email/Zalo chưa làm** (#70) — cần kênh gửi của P4.7 và bảng chiến dịch.
+  - Router đặt tên `coupon` (gồm voucher), `flashSale`, `promotion` (mua X tặng Y, combo, báo cáo) đúng file PLAN; service tách `coupon.service.ts` + `promotion.service.ts`; thêm `VoucherList`, `FlashSaleList`, `MarketingReport`, `CouponList`.
+  - Thêm bảng `promotion_usage` + cột `coupon_usage.voucher_id` (migration 2) — cần để huỷ HĐ hoàn suất và để báo cáo.
+  - "Auto start/end" flash sale theo thời gian ở mỗi lần báo giá thay vì job worker.
+
+- **Quyết định thiết kế:**
+  - Khuyến mãi tính trên server ở `quoteCart` (nguồn sự thật cho giỏ WS, màn hình khách và HĐ); dòng quà sinh lại mỗi lần, không lưu trong giỏ → không thể bị sửa từ client.
+  - Một đơn vị hàng chỉ nhận một khuyến mãi tự động (flash > combo > mua X tặng Y) để tránh chồng giảm; mã giảm giá và ưu đãi hạng vẫn áp thêm trên phần còn lại.
+  - Giới hạn suất kiểm 2 lần: khi báo giá (hiển thị) và trong transaction tạo HĐ bằng cập nhật có điều kiện (không bán vượt suất kể cả khi 2 quầy bấm cùng lúc).
+  - Voucher là mã riêng dẫn tới mã gốc (mức giảm); không áp giới hạn lượt/thời gian của mã gốc mà dùng hạn riêng + dùng 1 lần.
+
+- **Vấn đề / lưu ý:** mới #70–#73; #63 đã xử lý; cập nhật #54, #57. Trang `/marketing/report` render theo request (`instant = false`) vì mặc định khoảng ngày theo hôm nay. Tab trình duyệt cũ có thể kẹt trạng thái màn hình khách (cùng nhóm #56), mở tab mới thì đúng.

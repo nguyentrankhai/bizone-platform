@@ -215,14 +215,18 @@ model CouponUsage {
   invoiceId      Int?      @map("invoice_id")
   customerId     Int?      @map("customer_id")
   discountAmount Decimal   @map("discount_amount") @db.Decimal(15, 2)
+  /// P4.4: personal voucher code used (coupon = its template); null for a plain coupon code
+  voucherId      Int?      @map("voucher_id")
   usedAt         DateTime  @default(now()) @map("used_at") @db.DateTime(0)
   coupon         Coupon    @relation(fields: [couponId], references: [id], onUpdate: Restrict, map: "fk_cu_coupon")
+  voucher        Voucher?  @relation(fields: [voucherId], references: [id], onUpdate: Restrict, map: "fk_cu_voucher")
   customer       Customer? @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_cu_customer")
   invoice        Invoice?  @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "fk_cu_invoice")
 
   @@index([customerId], map: "fk_cu_customer")
   @@index([invoiceId], map: "fk_cu_invoice")
   @@index([couponId], map: "idx_cu_coupon")
+  @@index([voucherId], map: "fk_cu_voucher")
   @@map("coupon_usage")
 }
 
@@ -339,6 +343,7 @@ model Customer {
   createdAt             DateTime               @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt             DateTime               @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
   couponUsage           CouponUsage[]
+  promotionUsage        PromotionUsage[]
   customerAddresses     CustomerAddress[]
   customerDebts         CustomerDebt[]
   customerLoyaltyPoints CustomerLoyaltyPoint[]
@@ -614,6 +619,7 @@ model Invoice {
   updatedAt       DateTime           @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
   commissions     Commission[]
   couponUsage     CouponUsage[]
+  promotionUsage  PromotionUsage[]
   invoiceItems    InvoiceItem[]
   invoicePayments InvoicePayment[]
   invoiceRefunds  InvoiceRefund[]
@@ -1390,16 +1396,17 @@ model User {
 }
 
 model Voucher {
-  id         Int           @id @default(autoincrement())
-  couponId   Int?          @map("coupon_id")
-  customerId Int?          @map("customer_id")
-  code       String        @unique(map: "code") @db.VarChar(100)
-  status     VoucherStatus @default(active)
-  issuedAt   DateTime      @default(now()) @map("issued_at") @db.DateTime(0)
-  usedAt     DateTime?     @map("used_at") @db.DateTime(0)
-  expiredAt  DateTime?     @map("expired_at") @db.DateTime(0)
-  coupon     Coupon?       @relation(fields: [couponId], references: [id], onUpdate: Restrict, map: "fk_v_coupon")
-  customer   Customer?     @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_v_customer")
+  id          Int           @id @default(autoincrement())
+  couponId    Int?          @map("coupon_id")
+  customerId  Int?          @map("customer_id")
+  code        String        @unique(map: "code") @db.VarChar(100)
+  status      VoucherStatus @default(active)
+  issuedAt    DateTime      @default(now()) @map("issued_at") @db.DateTime(0)
+  usedAt      DateTime?     @map("used_at") @db.DateTime(0)
+  expiredAt   DateTime?     @map("expired_at") @db.DateTime(0)
+  coupon      Coupon?       @relation(fields: [couponId], references: [id], onUpdate: Restrict, map: "fk_v_coupon")
+  customer    Customer?     @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_v_customer")
+  couponUsage CouponUsage[]
 
   @@index([couponId], map: "fk_v_coupon")
   @@index([code], map: "idx_v_code")
@@ -1609,4 +1616,36 @@ enum InvoiceInvoiceType {
   pos
   online
   preorder
+}
+
+/// P4.4: one row per automatic promotion applied on an invoice (flash sale units, buy-X-get-Y
+/// gifts, combo sets) — undone when the invoice is cancelled, read by the marketing report.
+model PromotionUsage {
+  id             Int                @id @default(autoincrement())
+  promotionType  PromotionUsageType @map("promotion_type")
+  /// flash_sales.id / promotion_buy_x_get_y.id / promotion_combos.id
+  promotionId    Int                @map("promotion_id")
+  /// flash_sale_products.id for a flash sale line
+  itemRefId      Int?               @map("item_ref_id")
+  invoiceId      Int                @map("invoice_id")
+  customerId     Int?               @map("customer_id")
+  productId      Int?               @map("product_id")
+  /// units at flash price / gift units / combo sets
+  quantity       Int
+  discountAmount Decimal            @map("discount_amount") @db.Decimal(15, 2)
+  usedAt         DateTime           @default(now()) @map("used_at") @db.DateTime(0)
+  invoice        Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pu_invoice")
+  customer       Customer?          @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_pu_customer")
+
+  @@index([promotionType, promotionId], map: "idx_pu_promotion")
+  @@index([invoiceId], map: "idx_pu_invoice")
+  @@index([customerId], map: "fk_pu_customer")
+  @@index([usedAt], map: "idx_pu_used")
+  @@map("promotion_usage")
+}
+
+enum PromotionUsageType {
+  flash_sale
+  buy_x_get_y
+  combo
 }

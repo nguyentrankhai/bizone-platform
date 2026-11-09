@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Minus, Plus, ShoppingCart, Tag, User, X } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Tag, User, X, Gift, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { CartSnapshot } from "@/lib/pos/protocol";
@@ -118,33 +118,54 @@ export const CartPanel = forwardRef<CartPanelHandle, CartPanelProps>(function Ca
           lines.map((l) => (
             <div key={l.id} className="border-b border-gray-50 px-2 py-2.5" data-testid="cart-line">
               <div className="flex items-start justify-between gap-2">
-                <p className="line-clamp-2 text-[15px] font-medium text-gray-900">{l.name}</p>
-                <button
-                  aria-label={`Xóa ${l.name}`}
-                  onClick={() => onRemove(l.id)}
-                  className="-mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <p className="line-clamp-2 text-[15px] font-medium text-gray-900">
+                  {l.isGift && (
+                    <span className="mr-1.5 inline-flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 align-middle text-xs font-semibold text-rose-700">
+                      <Gift className="h-3 w-3" /> Quà tặng
+                    </span>
+                  )}
+                  {l.name}
+                </p>
+                {!l.isGift && (
+                  <button
+                    aria-label={`Xóa ${l.name}`}
+                    onClick={() => onRemove(l.id)}
+                    className="-mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
+              {l.promotions?.map((p) => (
+                <p
+                  key={`${p.type}-${p.id}`}
+                  className="mb-1 flex items-center gap-1 text-xs text-rose-700"
+                >
+                  <Sparkles className="h-3 w-3 shrink-0" /> {p.label} (−{fmtMoney(p.discount)})
+                </p>
+              ))}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    aria-label={`Giảm ${l.name}`}
-                    onClick={() => onQuantity(l.id, l.quantity - 1)}
-                    className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="w-8 text-center text-base font-semibold">{l.quantity}</span>
-                  <button
-                    aria-label={`Tăng ${l.name}`}
-                    onClick={() => onQuantity(l.id, l.quantity + 1)}
-                    className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
+                {l.isGift ? (
+                  <span className="w-[136px] text-sm text-gray-500">SL {l.quantity} (tự động)</span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <button
+                      aria-label={`Giảm ${l.name}`}
+                      onClick={() => onQuantity(l.id, l.quantity - 1)}
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span className="w-8 text-center text-base font-semibold">{l.quantity}</span>
+                    <button
+                      aria-label={`Tăng ${l.name}`}
+                      onClick={() => onQuantity(l.id, l.quantity + 1)}
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
                 <span className="text-xs text-gray-500">
                   × {fmtMoney(l.unitPrice)}
                   {l.discountPercent ? ` −${l.discountPercent}%` : ""}
@@ -250,8 +271,14 @@ export const CartPanel = forwardRef<CartPanelHandle, CartPanelProps>(function Ca
       {/* Totals */}
       <div className="space-y-1 border-t border-gray-100 px-4 py-3 text-[15px]">
         <Row label="Tạm tính" value={fmtMoney(cart?.subtotal)} />
-        {!!cart?.lineDiscount && (
-          <Row label="Giảm giá sản phẩm" value={`−${fmtMoney(cart.lineDiscount)}`} />
+        {!!cart?.promotionDiscount && (
+          <Row label="Khuyến mãi" value={`−${fmtMoney(cart.promotionDiscount)}`} />
+        )}
+        {!!cart && cart.lineDiscount - (cart.promotionDiscount ?? 0) > 0 && (
+          <Row
+            label="Giảm giá sản phẩm"
+            value={`−${fmtMoney(cart.lineDiscount - (cart.promotionDiscount ?? 0))}`}
+          />
         )}
         {!!cart?.memberDiscount && (
           <Row

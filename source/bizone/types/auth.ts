@@ -64,4 +64,7 @@ export type Permission =
   | "supplier:read"
   | "supplier:write"
   | "supplier:manage_po"
+  | "marketing:coupon"
+  | "marketing:flash_sale"
+  | "marketing:promotion"
   | "admin:*";

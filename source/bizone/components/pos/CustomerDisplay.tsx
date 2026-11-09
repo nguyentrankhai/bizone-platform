@@ -100,8 +100,16 @@ export function CustomerDisplay({ auth, sessionId }: { auth: ApiAuth; sessionId:
                     className="flex items-center gap-4 border-b border-slate-700 py-4 text-2xl"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{l.name}</p>
+                      <p className="truncate font-semibold">
+                        {l.isGift && <span className="mr-2 text-rose-300">🎁 Quà tặng</span>}
+                        {l.name}
+                      </p>
                       <p className="text-base text-slate-400">SKU: {l.sku}</p>
+                      {l.promotions?.map((p) => (
+                        <p key={`${p.type}-${p.id}`} className="text-base text-emerald-300">
+                          {p.label}
+                        </p>
+                      ))}
                     </div>
                     <span className="text-slate-300">x{l.quantity}</span>
                     <span className="w-48 text-right font-bold">{fmtMoney(l.totalAmount)}</span>

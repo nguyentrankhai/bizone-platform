@@ -120,6 +120,52 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
     entityType: "purchase_order",
   },
   "purchaseOrder.cancel": { module: "supplier", action: "cancel_po", entityType: "purchase_order" },
+  "coupon.create": { module: "marketing", action: "create_coupon", entityType: "coupon" },
+  "coupon.update": { module: "marketing", action: "update_coupon", entityType: "coupon" },
+  "coupon.setActive": { module: "marketing", action: "toggle_coupon", entityType: "coupon" },
+  "coupon.delete": { module: "marketing", action: "delete_coupon", entityType: "coupon" },
+  "coupon.issueVouchers": { module: "marketing", action: "issue_vouchers", entityType: "voucher" },
+  "coupon.cancelVoucher": { module: "marketing", action: "cancel_voucher", entityType: "voucher" },
+  "flashSale.create": {
+    module: "marketing",
+    action: "create_flash_sale",
+    entityType: "flash_sale",
+  },
+  "flashSale.update": {
+    module: "marketing",
+    action: "update_flash_sale",
+    entityType: "flash_sale",
+  },
+  "flashSale.end": { module: "marketing", action: "end_flash_sale", entityType: "flash_sale" },
+  "flashSale.cancel": {
+    module: "marketing",
+    action: "cancel_flash_sale",
+    entityType: "flash_sale",
+  },
+  "promotion.buyXGetY.create": {
+    module: "marketing",
+    action: "create_bxgy",
+    entityType: "buy_x_get_y",
+  },
+  "promotion.buyXGetY.update": {
+    module: "marketing",
+    action: "update_bxgy",
+    entityType: "buy_x_get_y",
+  },
+  "promotion.buyXGetY.setActive": {
+    module: "marketing",
+    action: "toggle_bxgy",
+    entityType: "buy_x_get_y",
+  },
+  "promotion.buyXGetY.delete": {
+    module: "marketing",
+    action: "delete_bxgy",
+    entityType: "buy_x_get_y",
+  },
+  "promotion.combo.create": { module: "marketing", action: "create_combo", entityType: "combo" },
+  "promotion.combo.update": { module: "marketing", action: "update_combo", entityType: "combo" },
+  "promotion.combo.setActive": { module: "marketing", action: "toggle_combo", entityType: "combo" },
+  "promotion.combo.delete": { module: "marketing", action: "delete_combo", entityType: "combo" },
 };
 
 export function isAudited(path: string): boolean {
@@ -156,6 +202,7 @@ const ID_KEYS = [
   "shiftId",
   "userId",
   "supplierId",
+  "couponId",
 ] as const;
 
 /** Entity id: result.id when the mutation returns a row, else the id the caller targeted */

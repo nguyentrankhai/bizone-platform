@@ -19,6 +19,7 @@ import { settlePayments } from "./payment.service";
 import { clearCart } from "./posCart";
 import { publishPosEvent } from "./posEvents";
 import { quoteCart } from "./pricing.service";
+import type { PromotionUse } from "@/lib/pos/promotions";
 
 type Tx = Prisma.TransactionClient;
 
@@ -286,29 +287,51 @@ async function createInvoiceOnce(
           }
 
           if (quote.couponId && t.coupon) {
-            // Prisma can't compare two columns, so guard on the limit read in this transaction
-            const { usageLimit } = await tx.coupon.findUniqueOrThrow({
-              where: { id: quote.couponId },
-              select: { usageLimit: true },
-            });
-            const used = await tx.coupon.updateMany({
-              where: {
-                id: quote.couponId,
-                ...(usageLimit !== null ? { usedCount: { lt: usageLimit } } : {}),
-              },
-              data: { usedCount: { increment: 1 } },
-            });
-            if (used.count === 0)
-              throw bizoneError("CONFLICT", `Mã ${t.coupon.code} vừa hết lượt sử dụng`);
+            if (quote.voucherId) {
+              // Personal voucher: single use — the template's usage limit doesn't apply
+              const v = await tx.voucher.updateMany({
+                where: { id: quote.voucherId, status: "active" },
+                data: { status: "used", usedAt: new Date() },
+              });
+              if (v.count === 0)
+                throw bizoneError("CONFLICT", `Voucher ${t.coupon.code} vừa được sử dụng`);
+              await tx.coupon.update({
+                where: { id: quote.couponId },
+                data: { usedCount: { increment: 1 } },
+              });
+            } else {
+              // Prisma can't compare two columns, so guard on the limit read in this transaction
+              const { usageLimit } = await tx.coupon.findUniqueOrThrow({
+                where: { id: quote.couponId },
+                select: { usageLimit: true },
+              });
+              const used = await tx.coupon.updateMany({
+                where: {
+                  id: quote.couponId,
+                  ...(usageLimit !== null ? { usedCount: { lt: usageLimit } } : {}),
+                },
+                data: { usedCount: { increment: 1 } },
+              });
+              if (used.count === 0)
+                throw bizoneError("CONFLICT", `Mã ${t.coupon.code} vừa hết lượt sử dụng`);
+            }
             await tx.couponUsage.create({
               data: {
                 couponId: quote.couponId,
+                voucherId: quote.voucherId,
                 invoiceId: invoice.id,
                 customerId: quote.customer?.id ?? null,
                 discountAmount: t.coupon.discount,
               },
             });
           }
+
+          await recordPromotionUses(
+            tx,
+            quote.promotionUses,
+            invoice.id,
+            quote.customer?.id ?? null,
+          );
 
           let movedProducts: number[] = [];
           if (warehouseId) {
@@ -497,6 +520,86 @@ export async function printData(id: number) {
   };
 }
 
+// ─── Promotion usage (P4.4) ───────────────────────────────────────────────────
+
+/**
+ * Count flash-sale units / combo sets against their limits and log every automatic promotion
+ * on the invoice. Limits are re-checked here (conditional update) — the quote may be stale.
+ */
+async function recordPromotionUses(
+  tx: Prisma.TransactionClient,
+  uses: PromotionUse[],
+  invoiceId: number,
+  customerId: number | null,
+) {
+  for (const u of uses) {
+    if (u.type === "flash_sale" && u.itemRefId) {
+      const item = await tx.flashSaleProduct.findUniqueOrThrow({
+        where: { id: u.itemRefId },
+        select: { quantityLimit: true },
+      });
+      const ok = await tx.flashSaleProduct.updateMany({
+        where: {
+          id: u.itemRefId,
+          ...(item.quantityLimit > 0
+            ? { soldQuantity: { lte: item.quantityLimit - u.quantity } }
+            : {}),
+        },
+        data: { soldQuantity: { increment: u.quantity } },
+      });
+      if (ok.count === 0)
+        throw bizoneError("CONFLICT", "Flash sale vừa hết suất — cập nhật lại giỏ hàng");
+    } else if (u.type === "combo") {
+      const combo = await tx.promotionCombo.findUniqueOrThrow({
+        where: { id: u.promotionId },
+        select: { quantityLimit: true },
+      });
+      const ok = await tx.promotionCombo.updateMany({
+        where: {
+          id: u.promotionId,
+          ...(combo.quantityLimit > 0
+            ? { soldCount: { lte: combo.quantityLimit - u.quantity } }
+            : {}),
+        },
+        data: { soldCount: { increment: u.quantity } },
+      });
+      if (ok.count === 0)
+        throw bizoneError("CONFLICT", "Combo vừa hết suất — cập nhật lại giỏ hàng");
+    }
+    await tx.promotionUsage.create({
+      data: {
+        promotionType: u.type,
+        promotionId: u.promotionId,
+        itemRefId: u.itemRefId,
+        invoiceId,
+        customerId,
+        productId: u.productId,
+        quantity: u.quantity,
+        discountAmount: u.discount,
+      },
+    });
+  }
+}
+
+/** Cancelled invoice: give flash-sale units / combo sets back and drop the usage rows */
+async function releasePromotionUses(tx: Prisma.TransactionClient, invoiceId: number) {
+  const rows = await tx.promotionUsage.findMany({ where: { invoiceId } });
+  for (const r of rows) {
+    if (r.promotionType === "flash_sale" && r.itemRefId) {
+      await tx.flashSaleProduct.updateMany({
+        where: { id: r.itemRefId, soldQuantity: { gte: r.quantity } },
+        data: { soldQuantity: { decrement: r.quantity } },
+      });
+    } else if (r.promotionType === "combo") {
+      await tx.promotionCombo.updateMany({
+        where: { id: r.promotionId, soldCount: { gte: r.quantity } },
+        data: { soldCount: { decrement: r.quantity } },
+      });
+    }
+  }
+  await tx.promotionUsage.deleteMany({ where: { invoiceId } });
+}
+
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 
 /**
@@ -550,7 +653,14 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
     for (const u of inv.couponUsage) {
       await tx.couponUsage.delete({ where: { id: u.id } });
       await tx.coupon.update({ where: { id: u.couponId }, data: { usedCount: { decrement: 1 } } });
+      if (u.voucherId) {
+        await tx.voucher.update({
+          where: { id: u.voucherId },
+          data: { status: "active", usedAt: null },
+        });
+      }
     }
+    await releasePromotionUses(tx, inv.id);
     let moved: number[] = [];
     if (warehouseId) {
       moved = await moveStock(tx, {

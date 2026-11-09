@@ -139,6 +139,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── reports/             # P4.2 — /reports (6 tab: doanh thu, lợi nhuận, SP, NV, KM, tồn kho)
     │   │   ├── suppliers/           # P4.3 — /suppliers (DS), /suppliers/[id] (chi tiết: đơn, công nợ, lịch sử, giá), /suppliers/prices
     │   │   ├── purchase-orders/     # P4.3 — /purchase-orders, /new?supplier=, /[id] (nhận hàng, huỷ, thanh toán), /[id]/edit
+    │   │   ├── marketing/           # P4.4 — /marketing (mã giảm giá), /vouchers, /flash-sales, /promotions (mua X tặng Y, combo), /report
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
@@ -147,10 +148,11 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal, CustomerDisplay, Receipt, SessionClient
     │   ├── components/staff/        # P4.1 — StaffTable, ShiftCalendar, AttendanceClient, CommissionClient, CommissionRuleForm, RoleMatrix
     │   ├── components/reports/      # P4.2 — ReportsClient, RevenueReport, ProfitReport, ProductPerformance, StaffPerformance, PromotionInventory
+    │   ├── components/marketing/    # P4.4 — CouponList, CouponForm, VoucherList, FlashSaleList, FlashSaleForm, PromotionList, MarketingReport
     │   ├── components/suppliers/    # P4.3 — SupplierTable, SupplierForm, SupplierDetail, PurchaseOrderList, POForm, PurchaseOrderDetail, PaymentModal, PriceComparison
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
-    │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
+    │   │   └── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), promotions.ts (P4.4 — flash sale / combo / mua X tặng Y), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6)
     │   ├── prisma/                  # P1.3 — schema.prisma (70 models), migrations/0_init, seed.ts
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
@@ -158,6 +160,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── routers/pos.ts       # P2.5 — ca, hóa đơn, thanh toán, đổi/trả, quote, scan
     │   │   ├── routers/staff.ts     # P4.1 — nhân viên, role.*, shift.*, attendance.*, commission.*, sales
     │   │   ├── routers/reports.ts   # P4.2 — revenue/profit/products/staff/promotion/inventory, export + exportStatus
+    │   │   ├── routers/coupon.ts + flashSale.ts + promotion.ts # P4.4 — mã giảm giá + voucher; flash sale; mua X tặng Y, combo, báo cáo hiệu quả
     │   │   ├── routers/supplier.ts + purchaseOrder.ts # P4.3 — NCC, công nợ, thanh toán, lịch sử, so sánh giá; đơn nhập (create/update/receive/cancel)
     │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…
     │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
@@ -230,6 +233,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý báo cáo (P4.2)**: mọi số liệu bán hàng tính ở mức dòng HĐ trong `report.service.ts` (`linesSql`): HĐ `active`/`refunded`, chiết khấu HĐ chia theo dòng, trả hàng trừ theo ngày HĐ — báo cáo mới nên dùng lại `linesSql`/`grouped` thay vì tự cộng. Xuất PDF/Excel chạy trong worker (`npm run dev:worker` khi dev); `pdfmake` để `--external` trong `build:jobs` (font Roboto đọc từ `node_modules`), code Next không được import `reportExportWorker.ts`/`reportExport.service.ts`.
 
 **Lưu ý nhà cung cấp (P4.3)**: nhận hàng (`purchaseOrder.receive`) trong 1 DB transaction tạo phiếu kho `purchase_receipt` đã `confirmed` (`reference_type='purchase_order'`), cộng tồn/lô, tăng `received_quantity` và công nợ `supplier_debts` của đơn (1 dòng/đơn, = giá trị đã nhận, CK đơn + thuế chia theo tỷ lệ) — không đi qua `createTransaction`/`confirmTransaction`. Thao tác trên đơn khoá `SELECT … FOR UPDATE` dòng đơn, thanh toán khoá dòng NCC. Tính tiền dùng chung `lib/supplier/calc.ts` (server + form). Quyền: `supplier:read` / `supplier:write` / `supplier:manage_po` (gồm nhận hàng, thanh toán). Lỗi Zod của mọi router giờ trả câu đọc được (`errorFormatter`, #64).
+
+**Lưu ý khuyến mãi (P4.4)**: mọi giá POS đi qua `quoteCart` (`pricing.service.ts`): `loadCartLines` → `loadPromoContext` + `applyPromotions` (`lib/pos/promotions.ts`: flash sale → combo → mua X tặng Y, mỗi đơn vị 1 khuyến mãi, dòng quà `gift-{id}` sinh lại mỗi lần) → `computeCart` (CK tay sau khuyến mãi → hạng → mã/voucher). Tạo HĐ ghi `promotion_usage` + tăng suất flash/combo có điều kiện; **huỷ HĐ** gọi `releasePromotionUses` + mở lại voucher — luồng mới đổi/huỷ HĐ phải làm tương tự. Điều kiện mã trong `coupon_conditions`: `auto_apply`, `rankings`, `category_ids`. Voucher = mã riêng dẫn tới mã gốc (`coupon_usage.voucher_id`). Giờ nhập từ `datetime-local` là giờ VN (validator thêm `+07:00`). Flash sale bật/tắt theo `start_time`/`end_time`, cột `status` chỉ đồng bộ khi đọc.
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 

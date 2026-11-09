@@ -53,7 +53,7 @@ const NAV_ITEMS: NavItem[] = [
     also: ["/purchase-orders"],
   },
   { label: "Omni Channel", href: "/omni", icon: Globe, soon: "P6.1" },
-  { label: "Marketing", href: "/marketing", icon: Megaphone, soon: "P4.4" },
+  { label: "Marketing", href: "/marketing", icon: Megaphone },
   { label: "Kế toán", href: "/accounting", icon: Calculator, soon: "P4.8" },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },
   { label: "Cài đặt", href: "/settings", icon: Settings, soon: "P4.x" },

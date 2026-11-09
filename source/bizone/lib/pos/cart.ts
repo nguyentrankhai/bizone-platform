@@ -2,7 +2,8 @@
  * POS cart arithmetic shared by the server (authoritative invoice totals) and the
  * browser (offline/BroadcastChannel mode). Pure functions, no I/O.
  *
- * Order: line discount → member (ranking) discount → coupon. Prices include VAT;
+ * Order: automatic promotions (flash sale / combo / buy X get Y, see promotions.ts) → line
+ * discount → member (ranking) discount → coupon. Prices include VAT;
  * tax is reported as the VAT share of each line, it is never added on top.
  * All money is rounded to whole VND.
  */
@@ -19,6 +20,20 @@ export interface CartLine {
   quantity: number;
   discountPercent: number;
   taxRate: number;
+  /** Product category (category-based promotions / coupons) */
+  categoryId?: number | null;
+  /** Amount (VND) taken off this line by automatic promotions — set by applyPromotions */
+  promoDiscount?: number;
+  promotions?: LinePromotion[];
+  /** Added automatically by a buy-X-get-Y promotion — not editable at the POS */
+  isGift?: boolean;
+}
+
+export interface LinePromotion {
+  type: "flash_sale" | "combo" | "buy_x_get_y";
+  id: number;
+  label: string;
+  discount: number;
 }
 
 export interface CouponRule {
@@ -41,6 +56,10 @@ export interface CartTotals {
   itemCount: number;
   subtotal: number;
   lineDiscount: number;
+  /** Part of lineDiscount that comes from automatic promotions */
+  promotionDiscount: number;
+  /** Promotions applied, one entry per promotion (sum of its line discounts) */
+  promotions: { type: LinePromotion["type"]; id: number; label: string; discount: number }[];
   memberDiscountPercent: number;
   memberDiscount: number;
   coupon: { code: string; name: string; discount: number } | null;
@@ -53,9 +72,14 @@ export interface CartTotals {
 
 const round = (n: number) => Math.round(n);
 
+/**
+ * `amount` = order amount after member discount (minimum order is checked on it);
+ * `base` = the part of it the coupon applies to (eligible categories), default the whole order.
+ */
 export function couponDiscount(
   rule: CouponRule,
   amount: number,
+  base: number = amount,
 ): { discount: number; error: string | null } {
   if (rule.minOrderAmount !== null && amount < rule.minOrderAmount) {
     return {
@@ -65,19 +89,29 @@ export function couponDiscount(
   }
   if (rule.type === "free_shipping")
     return { discount: 0, error: `Mã ${rule.code} chỉ áp dụng cho đơn giao hàng` };
-  let discount = rule.type === "percent" ? (amount * rule.value) / 100 : rule.value;
+  if (base <= 0)
+    return { discount: 0, error: `Mã ${rule.code} không áp dụng cho sản phẩm trong giỏ` };
+  let discount = rule.type === "percent" ? (base * rule.value) / 100 : rule.value;
   if (rule.maxDiscount !== null) discount = Math.min(discount, rule.maxDiscount);
-  return { discount: round(Math.min(discount, amount)), error: null };
+  return { discount: round(Math.min(discount, base)), error: null };
 }
 
 export function computeCart(
   lines: CartLine[],
-  opts: { memberDiscountPercent?: number; coupon?: CouponRule | null } = {},
+  opts: {
+    memberDiscountPercent?: number;
+    coupon?: CouponRule | null;
+    /** Lines the coupon applies to (default: all) */
+    couponEligible?: (line: CartLine) => boolean;
+  } = {},
 ): CartTotals {
   const priced: PricedLine[] = lines.map((l) => {
-    const gross = l.unitPrice * l.quantity;
-    const discountAmount = round((gross * l.discountPercent) / 100);
-    const totalAmount = round(gross - discountAmount);
+    const gross = round(l.unitPrice * l.quantity);
+    const promo = Math.min(round(l.promoDiscount ?? 0), gross);
+    // Cashier's line discount applies to what is left after promotions
+    const manual = round(((gross - promo) * l.discountPercent) / 100);
+    const discountAmount = promo + manual;
+    const totalAmount = gross - discountAmount;
     return { ...l, discountAmount, totalAmount, taxAmount: 0 };
   });
 
@@ -92,7 +126,14 @@ export function computeCart(
   let coupon: CartTotals["coupon"] = null;
   let couponError: string | null = null;
   if (opts.coupon) {
-    const r = couponDiscount(opts.coupon, afterMember);
+    const eligible = opts.couponEligible;
+    const base = eligible
+      ? round(
+          priced.filter(eligible).reduce((s, l) => s + l.totalAmount, 0) *
+            (afterLines > 0 ? afterMember / afterLines : 0),
+        )
+      : afterMember;
+    const r = couponDiscount(opts.coupon, afterMember, base);
     couponError = r.error;
     if (!r.error) coupon = { code: opts.coupon.code, name: opts.coupon.name, discount: r.discount };
   }
@@ -111,6 +152,11 @@ export function computeCart(
     itemCount: priced.reduce((s, l) => s + l.quantity, 0),
     subtotal,
     lineDiscount,
+    promotionDiscount: priced.reduce(
+      (s, l) => s + Math.min(round(l.promoDiscount ?? 0), round(l.unitPrice * l.quantity)),
+      0,
+    ),
+    promotions: summarizePromotions(priced),
     memberDiscountPercent,
     memberDiscount,
     coupon,
@@ -119,6 +165,19 @@ export function computeCart(
     taxAmount: priced.reduce((s, l) => s + l.taxAmount, 0),
     total,
   };
+}
+
+function summarizePromotions(lines: CartLine[]): CartTotals["promotions"] {
+  const out = new Map<string, CartTotals["promotions"][number]>();
+  for (const l of lines) {
+    for (const p of l.promotions ?? []) {
+      const key = `${p.type}:${p.id}`;
+      const cur = out.get(key);
+      if (cur) cur.discount += p.discount;
+      else out.set(key, { type: p.type, id: p.id, label: p.label, discount: p.discount });
+    }
+  }
+  return [...out.values()];
 }
 
 // ─── Membership ranking (SRS-CRM, "Xếp hạng thành viên mặc định") ─────────────

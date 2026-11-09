@@ -1069,6 +1069,7 @@ CREATE TABLE IF NOT EXISTS coupon_usage (
   invoice_id      INT,
   customer_id     INT,
   discount_amount DECIMAL(15,2)  NOT NULL,
+  voucher_id      INT,            -- P4.4: personal voucher used (coupon_id = its template)
   used_at         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_cu_coupon   FOREIGN KEY (coupon_id)   REFERENCES coupons(id)   ON DELETE RESTRICT,
   CONSTRAINT fk_cu_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id)  ON DELETE SET NULL,
@@ -1092,6 +1093,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
 CREATE INDEX idx_v_code     ON vouchers(code);
 CREATE INDEX idx_v_status   ON vouchers(status);
 CREATE INDEX idx_v_customer ON vouchers(customer_id);
+ALTER TABLE coupon_usage ADD CONSTRAINT fk_cu_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE SET NULL;
 
 -- 11.5 Flash Sales
 CREATE TABLE IF NOT EXISTS flash_sales (
@@ -1178,6 +1180,25 @@ CREATE TABLE IF NOT EXISTS promotion_combo_items (
   CONSTRAINT fk_pci_product_p FOREIGN KEY (product_id) REFERENCES products(id)          ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 CREATE INDEX idx_pci_combo_p ON promotion_combo_items(combo_id);
+
+-- 11.10 Promotion usage (P4.4) — automatic promotions applied on an invoice
+CREATE TABLE IF NOT EXISTS promotion_usage (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  promotion_type  ENUM('flash_sale','buy_x_get_y','combo') NOT NULL,
+  promotion_id    INT            NOT NULL,   -- flash_sales / promotion_buy_x_get_y / promotion_combos id
+  item_ref_id     INT,                       -- flash_sale_products.id
+  invoice_id      INT            NOT NULL,
+  customer_id     INT,
+  product_id      INT,
+  quantity        INT            NOT NULL,   -- flash units / gift units / combo sets
+  discount_amount DECIMAL(15,2)  NOT NULL,
+  used_at         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pu_invoice  FOREIGN KEY (invoice_id)  REFERENCES invoices(id)  ON DELETE CASCADE,
+  CONSTRAINT fk_pu_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+CREATE INDEX idx_pu_promotion ON promotion_usage(promotion_type, promotion_id);
+CREATE INDEX idx_pu_invoice   ON promotion_usage(invoice_id);
+CREATE INDEX idx_pu_used      ON promotion_usage(used_at);
 
 -- ============================================================
 -- 12. SYSTEM CONFIGURATION
