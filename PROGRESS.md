@@ -172,7 +172,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P4.0 | Bypass xác thực Keycloak cho dev/test | ✅ | _(xem kết quả)_ | Xem [kết quả P4.0](#p40--bypass-xác-thực-keycloak-cho-devtest) — gỡ ở P6.7 |
+| P4.0 | Bypass xác thực Keycloak cho dev/test | ✅ | `97aae2f` | Xem [kết quả P4.0](#p40--bypass-xác-thực-keycloak-cho-devtest) — gỡ ở P6.7 |
 | P4.1 | Staff Module — API & UI | ✅ | `fdb36cd` | Xem [kết quả P4.1](#p41--staff-module--api--ui) |
 | P4.2 | Reports Module — API & UI | ✅ | `335d41d` | Xem [kết quả P4.2](#p42--reports-module--api--ui) |
 | P4.3 | Supplier Module — API & UI | ⬜ | — | |
@@ -1469,7 +1469,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.0 — Bypass xác thực Keycloak cho dev/test
 
-- **Hoàn thành:** 2026-11-09 · **Commit:** _(xem bên dưới)_ · **Vị trí:** `source/bizone/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/trpc.ts`, `server/ws/pos.ts`, `components/layout/AppLayout.tsx`, `app/products/**/page.tsx`, `tests/dev-auth.test.ts`; `source/payment-hub/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/ws/server.ts`, `components/ph/PHLayout.tsx`, `tests/dev-auth.test.ts`; `.env.example` 2 app
+- **Hoàn thành:** 2026-11-09 · **Commit:** `97aae2f` · **Vị trí:** `source/bizone/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/trpc.ts`, `server/ws/pos.ts`, `components/layout/AppLayout.tsx`, `app/products/**/page.tsx`, `tests/dev-auth.test.ts`; `source/payment-hub/lib/auth.ts`, `lib/dev-auth.ts`, `proxy.ts`, `server/ws/server.ts`, `components/ph/PHLayout.tsx`, `tests/dev-auth.test.ts`; `.env.example` 2 app
 - **Đã làm:**
   - `authenticateToken(token)` trong `lib/auth.ts` của mỗi app là **điểm xác thực duy nhất**: token thật → `verifyJwt` như cũ; không có token hoặc token giả `dev-bypass` → user dev khi `AUTH_DEV_BYPASS=true`, ngược lại 401 (`missing_token` / `invalid_token`). Log cảnh báo 1 lần/process khi bypass được dùng
   - Dùng ở mọi điểm vào: BizOne `proxy.ts` (route handler + SSE `/api/inventory/alerts`), `server/trpc.ts` (context tRPC), `server/ws/pos.ts` (WebSocket POS); Payment Hub `proxy.ts` (`/api/internal/*`, `/api/v1/*` không có `X-Api-Key`) và `server/ws/server.ts` (realtime :4001). API merchant có `X-Api-Key` (HMAC) và `/api/ipn/*`, `/api/webhooks/*` không đi qua đây → không đổi
