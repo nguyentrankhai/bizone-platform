@@ -504,7 +504,9 @@ export function PartnerForm({
             hint={
               form.connectorType === "MoMo"
                 ? "Gửi kèm mỗi yêu cầu thanh toán (ipnUrl) — phải truy cập được từ Internet"
-                : "Khai báo URL này trên cổng quản trị của đối tác"
+                : form.connectorType === "ZaloPay"
+                  ? "Gửi kèm mỗi đơn (callback_url) — phải truy cập được từ Internet"
+                  : "Khai báo URL này trên cổng quản trị của đối tác"
             }
           >
             <input

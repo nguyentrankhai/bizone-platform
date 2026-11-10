@@ -74,14 +74,20 @@ export const PARTNER_TYPES: Record<string, PartnerTypeSpec> = {
   },
   ZaloPay: {
     label: "ZaloPay",
-    description: "Ví ZaloPay — connector ở P5.2",
-    merchantCode: { label: "App ID", secret: false },
-    apiKey: { label: "Key1", secret: true },
-    secretKey: { label: "Key2", secret: true },
+    description: "Ví ZaloPay (QR / app ZaloPay) — callback tại /api/ipn/zalopay",
+    merchantCode: {
+      label: "App ID",
+      secret: false,
+      placeholder: "VD: 2553",
+      pattern: /^\d{1,10}$/,
+      patternMessage: "App ID là số",
+    },
+    apiKey: { label: "Key1 (ký yêu cầu)", secret: true },
+    secretKey: { label: "Key2 (kiểm callback)", secret: true },
     usesEndpoints: true,
     defaultEndpointSandbox: "https://sb-openapi.zalopay.vn/v2/create",
     defaultEndpointProduction: "https://openapi.zalopay.vn/v2/create",
-    implemented: false,
+    implemented: true,
   },
 };
 

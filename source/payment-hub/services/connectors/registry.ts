@@ -4,6 +4,7 @@ import type { PartnerConfig } from "@/generated/prisma/client";
 import type { ConnectorConfig, PaymentConnector } from "./types";
 import { VNPAY_SANDBOX_API_URL, VNPAY_SANDBOX_PAY_URL, VnpayConnector } from "./vnpay";
 import { MOMO_SANDBOX_CREATE_URL, MomoConnector, momoApiBase } from "./momo";
+import { ZALOPAY_SANDBOX_CREATE_URL, ZalopayConnector, zalopayApiBase } from "./zalopay";
 
 /**
  * Connector registry — maps a connector code / partner_configs.connector_type to its
@@ -26,7 +27,7 @@ interface ConnectorDefinition {
   apiEndpoint(env: ConnectorConfig["environment"], endpoint: string): string;
   /**
    * Default server-to-server notification URL sent with each payment request (PSPs that take
-   * it per request, e.g. MoMo ipnUrl). partner_configs.webhook_url overrides it.
+   * it per request, e.g. MoMo ipnUrl, ZaloPay callback_url). partner_configs.webhook_url overrides it.
    */
   defaultIpnUrl?: string;
   /**
@@ -55,6 +56,17 @@ const DEFINITIONS: ConnectorDefinition[] = [
     // query/refund live next to /create on the same host (sandbox / production / mock)
     apiEndpoint: (_env, endpoint) => momoApiBase(endpoint),
     defaultIpnUrl: `${APP_URL}/api/ipn/momo`,
+    statusSync: true,
+  },
+  {
+    code: "zalopay",
+    connectorType: "ZaloPay",
+    create: (config) => new ZalopayConnector(config),
+    defaultEndpoint: ZALOPAY_SANDBOX_CREATE_URL,
+    // query / refund / query_refund live next to /v2/create on the same host
+    apiEndpoint: (_env, endpoint) => zalopayApiBase(endpoint),
+    // callback_url sent with each order (ZaloPay calls back only for paid orders)
+    defaultIpnUrl: `${APP_URL}/api/ipn/zalopay`,
     statusSync: true,
   },
 ];

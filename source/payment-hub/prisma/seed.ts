@@ -192,7 +192,50 @@ async function main() {
     });
   }
 
-  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}; ${vietqr}; ${momo}`);
+  // ZaloPay sandbox partner config (P5.2) — same rule as MoMo: created Inactive, activate on
+  // /partners after "Test kết nối" succeeds. app_id → merchant_code, key1 → api_key, key2 → secret_key.
+  let zalopay = "skipped (ZALOPAY_APP_ID / ZALOPAY_KEY1 / ZALOPAY_KEY2 not set)";
+  const zpAppId = process.env.ZALOPAY_APP_ID;
+  const zpKey1 = process.env.ZALOPAY_KEY1;
+  const zpKey2 = process.env.ZALOPAY_KEY2;
+  if (zpAppId && zpKey1 && zpKey2 && process.env.PARTNER_ENCRYPTION_KEY) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:4000";
+    const apiBase = (process.env.ZALOPAY_API_URL ?? "https://sb-openapi.zalopay.vn/v2")
+      .replace(/\/+$/, "")
+      .replace(/\/create$/, "");
+    const existing = await prisma.partnerConfig.findFirst({
+      where: { connectorType: "ZaloPay", environment: "Sandbox" },
+    });
+    if (!existing) {
+      await prisma.partnerConfig.create({
+        data: {
+          connectorType: "ZaloPay",
+          name: "ZaloPay Sandbox",
+          apiKey: encryptSecret(zpKey1),
+          secretKey: encryptSecret(zpKey2),
+          merchantCode: zpAppId,
+          endpointSandbox: `${apiBase}/create`,
+          endpointProduction: "https://openapi.zalopay.vn/v2/create",
+          callbackUrl: `${appUrl}/pay/zalopay/return`,
+          webhookUrl: `${appUrl}/api/ipn/zalopay`,
+          timeout: 30000,
+          status: "Inactive",
+          environment: "Sandbox",
+        },
+      });
+      zalopay = "ZaloPay Sandbox partner config created (Inactive — test + activate on /partners)";
+    } else {
+      zalopay = "ZaloPay Sandbox partner config exists (unchanged)";
+    }
+    await prisma.connector.update({
+      where: { code: "zalopay" },
+      data: { status: "Installed", isActive: true },
+    });
+  }
+
+  console.log(
+    `Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}; ${vietqr}; ${momo}; ${zalopay}`,
+  );
 }
 
 main()

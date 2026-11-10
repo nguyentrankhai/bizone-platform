@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P5.1 — MoMo connector: tạo thanh toán + QR MoMo qua Route Engine, IPN `/api/ipn/momo` kiểm HMAC-SHA256, truy vấn trạng thái khi mất IPN, hoàn tiền ở mức connector, cấu hình trên `/partners`; 🟡 chờ credential / truy cập MoMo sandbox thật (#100). Kế tiếp: P5.2)
+**Cập nhật lần cuối:** 2026-11-10 (P5.2 — ZaloPay connector: tạo đơn + QR ZaloPay qua Route Engine, callback `/api/ipn/zalopay` kiểm mac key2, truy vấn trạng thái khi mất callback, hoàn tiền + truy vấn hoàn tiền ở mức connector, cấu hình trên `/partners`; 🟡 chờ credential ZaloPay sandbox (#104). Kế tiếp: P5.3)
 
 ---
 
@@ -17,10 +17,10 @@
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
-| 5 — Payment Hub Mở rộng | 6 | 0 | 1 | 5 |
+| 5 — Payment Hub Mở rộng | 6 | 0 | 2 | 4 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **32** | **4** | **17** |
+| **Tổng** | **53** | **32** | **5** | **16** |
 
 ---
 
@@ -46,7 +46,7 @@
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
 | ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
-| 18 | `VnpayConnector.refund()` / `MomoConnector.refund()` (P5.1) đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
+| 18 | `VnpayConnector.refund()` / `MomoConnector.refund()` (P5.1) / `ZalopayConnector.refund()` + `queryRefund()` (P5.2) đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
 | 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
 | 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
@@ -130,8 +130,11 @@
 | ~~99~~ | ~~Thấp (đọc code)~~ | ~~QA-3~~ | ✅ QA-3 fix (5 mục) |
 | 100 | **[Chờ người dùng]** MoMo sandbox chưa nghiệm thu thật: `test-payment.momo.vn` trả **403 (nginx)** cho mọi API từ máy dev — cả với bộ credential demo công khai trong mã mẫu của MoMo; `MOMO_*` trong `.env.development` là placeholder. Cần Partner Code / Access Key / Secret Key sandbox thật (business.momo.vn — có thể kèm whitelist IP) và URL public cho IPN (ngrok) | P5.1 | Người dùng → hoàn tất P5.1 |
 | 101 | Phản hồi `create` / `query` / `refund` của MoMo không có chữ ký theo tài liệu → Hub tin qua HTTPS tới endpoint đã cấu hình + kiểm phản hồi lặp lại `partnerCode` / `orderId` / `requestId`. Nếu sandbox thật trả chữ ký phản hồi thì bổ sung xác thực | P5.1 | Khi có sandbox thật (#100) |
-| 102 | QR MoMo chỉ trả trong `qr_code` lúc tạo GD (`POST /api/v1/transactions`); `POST /api/v1/qr/generate` (`PartnerQR`) và `GET /api/v1/qr/{txn}` vẫn chỉ hỗ trợ VietQR; dòng `qr_codes` `PartnerQR` không có `image_url`. Lấy QR mới = gọi lại `/pay/{txn}?method=momo_qr` (orderId `_2`) | P5.1 | P7.1 (`generateQR` trong IConnector) / khi POS cần |
-| 103 | BizOne POS chưa thử với `PAYHUB_QR_METHOD=momo_qr` (response tương thích: `qr_code.raw_data`, `bank: null`) — chưa kiểm màn hình POS / màn hình khách hiển thị QR MoMo | P5.1 | Khi bật MoMo cho POS |
+| 102 | QR MoMo / ZaloPay (P5.2) chỉ trả trong `qr_code` lúc tạo GD (`POST /api/v1/transactions`); `POST /api/v1/qr/generate` (`PartnerQR`) và `GET /api/v1/qr/{txn}` vẫn chỉ hỗ trợ VietQR; dòng `qr_codes` `PartnerQR` không có `image_url`. Lấy QR mới = gọi lại `/pay/{txn}?method=momo_qr` (orderId `_2`) / `zalopay_qr` (app_trans_id `_2`) | P5.1, P5.2 | P7.1 (`generateQR` trong IConnector) / khi POS cần |
+| 103 | BizOne POS chưa thử với `PAYHUB_QR_METHOD=momo_qr` / `zalopay_qr` (response tương thích: `qr_code.raw_data`, `bank: null`) — chưa kiểm màn hình POS / màn hình khách hiển thị QR MoMo / ZaloPay | P5.1, P5.2 | Khi bật MoMo / ZaloPay cho POS |
+| 104 | **[Chờ người dùng]** ZaloPay sandbox chưa nghiệm thu thật: `sb-openapi.zalopay.vn` **truy cập được** từ máy dev (trả JSON `-402` cho chữ ký sai), nhưng `ZALOPAY_*` trong `.env.development` là placeholder; thử bằng bộ credential demo công khai của ZaloPay bị chặn bởi bộ phân quyền của phiên làm việc (dùng credential bên thứ ba) → cần App ID / Key1 / Key2 sandbox của cửa hàng (cổng merchant ZaloPay) và URL public cho callback (ngrok) | P5.2 | Người dùng → hoàn tất P5.2 |
+| 105 | Phản hồi `query` / `refund` / `query_refund` của ZaloPay không có chữ ký và không lặp lại request → Hub tin qua HTTPS tới endpoint đã cấu hình (khác MoMo có kiểm echo). Hoàn tiền ZaloPay bất đồng bộ: `refund()` gọi `query_refund` một lần, còn xử lý (`return_code 3`, sub `-1`/`-16`) → `pending: true` + `partnerRefundRef` = `m_refund_id` để P5.3 hỏi lại | P5.2 | P5.3 (poll hoàn tiền) |
+| 106 | Hạn mức số tiền ZaloPay không có trong tài liệu công khai → chưa đặt `minAmount`/`maxAmount` cho `zalopay_qr`; ZaloPay từ chối dữ liệu (`-401`) được coi là lỗi nghiệp vụ (400, không fallback). Bổ sung hạn mức khi có hợp đồng / sandbox thật | P5.2 | Khi có sandbox thật (#104) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -226,7 +229,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P5.1 | MoMo Connector | 🟡 | `07ce9dd` | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
-| P5.2 | ZaloPay Connector | ⬜ | — | |
+| P5.2 | ZaloPay Connector | 🟡 | — | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
 | P5.3 | Refund Module — API & UI | ⬜ | — | |
 | P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
 | P5.5 | Payment Hub Reports | ⬜ | — | |
@@ -2060,3 +2063,57 @@ Ngoài plan, theo yêu cầu người dùng.
   - Seed tạo cấu hình MoMo `Inactive` (khác VNPay seed `Active`) — đúng quy tắc P3.5: chỉ kích hoạt sau khi test kết nối đạt.
 
 - **Vấn đề / lưu ý:** mới #100–#103; #18 mở rộng sang MoMo. Để hoàn tất P5.1: lấy credential sandbox MoMo (business.momo.vn), bật URL public cho `/api/ipn/momo` (ngrok) → sửa cấu hình MoMo trên `/partners` (hoặc điền `MOMO_*` vào `source/payment-hub/.env.local` + `npm run db:seed`, rồi test + kích hoạt) → tạo GD `momo_qr`, thanh toán bằng app MoMo test, kiểm IPN thật, refund qua `MomoConnector.refund()`.
+
+
+### P5.2 — ZaloPay Connector
+
+- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential ZaloPay sandbox (#104) · **Commit:** — · **Vị trí:** `source/payment-hub/services/connectors/zalopay/` (`index.ts`, `zalopay.util.ts`), `server/routes/zalopay-callback.ts` + `app/api/ipn/zalopay/`, `server/routes/zalopay-redirect.ts` + `app/pay/zalopay/return/`, `server/routes/wallet-redirect.ts` (dùng chung MoMo / ZaloPay), `services/connectors/{registry,types}.ts`, `services/routing/routeMap.ts`, `server/services/payment.service.ts`, `server/routes/transactions.ts`, `lib/partner-types.ts`, `components/ph/PartnerForm.tsx`, `prisma/seed.ts`, `tests/zalopay.test.ts`
+- **Đã làm:**
+  - **`ZalopayConnector`** (implement `PaymentConnector`, ZaloPay OpenAPI v2; App ID = `merchant_code`, Key1 = `api_key` ký yêu cầu, Key2 = `secret_key` kiểm callback / redirect — cả hai mã hoá AES-256-GCM):
+    - `createTransaction` — `POST …/v2/create`, `mac = HMAC-SHA256(key1, app_id|app_trans_id|app_user|amount|app_time|embed_data|item)`; `embed_data` = `{ redirecturl, preferred_payment_method: ["zalopay_wallet"] }` (QR ví ZaloPay), `bank_code = ""`, `item = "[]"`, `callback_url` = webhook URL của cấu hình (mặc định `{APP_URL}/api/ipn/zalopay`), `expire_duration_seconds` = số giây còn lại của GD (≤ 30 ngày) ⇒ đơn ZaloPay không sống lâu hơn GD; trả `order_url` (payment_url) + `qr_code` (PartnerQR)
+    - `app_trans_id` = `yymmdd(giờ VN)_<txn_code bỏ "-">` (`261110_TXN20261110123456`, ≤ 40 ký tự `[0-9A-Za-z_]`), tạo lại link → hậu tố `_2`, `_3`…; ZaloPay báo trùng (`-68`) → thử lại 1 lần với hậu tố mới; ánh xạ ngược bỏ ngày + hậu tố
+    - `verifySignature` — 2 dạng: callback `{data}` + `mac = HMAC(key2, data)` (chuỗi `data` đúng như nhận) và redirect `checksum = HMAC(key2, appid|apptransid|pmcid|bankcode|amount|discountamount|status)`; so sánh constant-time, `app_id` phải khớp cấu hình
+    - `processResult` — callback (ZaloPay chỉ gọi khi đã thanh toán) → `Success` + `zp_trans_id`, `server_time`; kết quả query: `return_code` 1 → `Success`, 3 → `Pending`, 2 + mã lỗi thanh toán (`-54` hết hạn, `-63` thiếu số dư, `-217` ngân hàng, `-133x/-134x` hạn mức) → `Failed` kèm lý do tiếng Việt; mã lỗi API (`-401/-402/-429/-500/-999`), `-101` không có đơn, `-92` → không kết luận (không bao giờ làm GD thất bại)
+    - `getStatus` — `POST …/v2/query`, `mac = HMAC(key1, app_id|app_trans_id|key1)`; `healthCheck` — query đơn không tồn tại: credential đúng → `2/-101`, sai App ID / Key1 → `-402`
+    - `refund` — `POST …/v2/refund` theo `zp_trans_id`, `m_refund_id = yymmdd_appid_<duy nhất>`, `mac = HMAC(key1, app_id|zp_trans_id|amount|description|timestamp)`; ZaloPay chỉ xác nhận đã nhận yêu cầu ⇒ gọi tiếp `queryRefund()` (`…/v2/query_refund`, `mac = HMAC(key1, app_id|m_refund_id|timestamp)`) — xong → `success`, đang xử lý → `pending: true` (thêm `pending` / `partnerRefundRef` vào `RefundResult`)
+    - Lỗi nghiệp vụ (không fallback, không tính circuit): phương thức / tiền tệ không hỗ trợ, số tiền ≤ 0, GD còn < 5 phút (ZaloPay giữ đơn ≥ 300 s), ZaloPay từ chối dữ liệu `-401`. Lỗi khác (`-402`, `-500`, HTTP 5xx, timeout) → lỗi đối tác ⇒ Route Engine thử đối tác kế
+  - **Registry / Route Engine:** khai báo `ZaloPay` (endpoint mặc định sandbox, API base suy ra từ create URL, `defaultIpnUrl`, `statusSync`); `zalopay_qr` (đã có trong route map từ P3.8) nay được định tuyến. Route map thêm `minExpiryMinutes` (ZaloPay 5): `POST /api/v1/transactions` với `zalopay_qr` + `expiry_minutes` < 5 → **400** trước khi tạo GD
+  - **Callback `POST /api/ipn/zalopay`** (`server/routes/zalopay-callback.ts`, public qua `/api/ipn/`): luôn HTTP 200 `{return_code, return_message}` — `1` đã áp / đã kết thúc / trùng; `2` JSON sai, thiếu mac, mac sai, `app_id` khác, `type` ≠ 1, không có đơn, lệch số tiền; `0` lỗi xử lý (ZaloPay gửi lại). Áp bằng `applyPaymentResult` (cùng `UPDATE … WHERE status='Pending'` + outbox webhook như VNPay / MoMo)
+  - **Trang return `/pay/zalopay/return`**: kiểm checksum, lưu raw, **không** đổi trạng thái; GD còn `Pending` → hỏi ZaloPay 1 lần (≤ 5 s) qua `syncPaymentStatus` rồi chuyển về `return_url` với trạng thái thật. Logic tách thành `server/routes/wallet-redirect.ts` dùng chung với `/pay/momo/return` (P5.1); trang hiển thị lấy trạng thái GD làm chuẩn (trình duyệt báo thành công mà GD còn `Pending` → "Đang xử lý"), GD còn `Pending` sau khi khách huỷ → nút "Thanh toán lại"
+  - **Mất callback:** worker `syncPendingPayments` (P5.1) tự áp dụng cho ZaloPay nhờ `statusSync`; `syncPaymentStatus` lấy `app_trans_id` đã gửi từ raw (`partnerOrderId = orderId ?? app_trans_id`). `applyPaymentResult` chỉ so số tiền khi thành công hoặc đối tác có báo số tiền (query ZaloPay không có `amount` cho đơn chưa trả)
+  - **Cấu hình qua UI đối tác (P3.5):** `lib/partner-types.ts` ZaloPay `implemented: true`, nhãn App ID / Key1 (ký yêu cầu) / Key2 (kiểm callback), App ID phải là số; form điền sẵn `/pay/zalopay/return`, `/api/ipn/zalopay`, gợi ý "callback_url gửi kèm mỗi đơn"
+  - **Seed:** `ZALOPAY_APP_ID/KEY1/KEY2` (+ `ZALOPAY_API_URL`) ⇒ cấu hình "ZaloPay Sandbox" **Inactive** (mã hoá, không ghi đè cấu hình đã có) + bật connector `zalopay`; `.env.example` của app thêm `ZALOPAY_*`
+  - Tài liệu: API-Design §5.1 (`qr_code` ZaloPay, `expiry_minutes` ≥ 5) và §12 (callback, checksum redirect, query trạng thái)
+  - Test Vitest `tests/zalopay.test.ts` (14): `app_trans_id` theo giờ VN + ánh xạ ngược, `m_refund_id`, thời hạn đơn; mac create tính độc lập theo tài liệu; lỗi nghiệp vụ vs lỗi đối tác + thử lại `-68`; mac callback (key2, sửa dữ liệu, sai key, khác app_id); checksum redirect; phân loại query; query / refund / query_refund ký đúng; health `-101` / `-402`; registry
+
+- **Kiểm thử** (`next build` + `next start` :4010 với `APP_URL=http://localhost:4010`, worker `dev:worker` đang chạy đã nạp code mới, **mock ZaloPay cục bộ :3997** (script riêng, tự kiểm mac create / query / refund / query_refund theo tài liệu ZaloPay, giả lập khách thanh toán → gửi callback ký key2 + redirect có checksum; bật/tắt sự cố; đánh dấu đơn hết hạn) + endpoint nhận webhook merchant :3996; merchant `P52TEST` + API key; key mock sinh ngẫu nhiên; script e2e ký HMAC merchant độc lập với code app; trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo GD → ZaloPay order | ✅ với mock: `POST /api/v1/transactions` `zalopay_qr` → 201 `Pending`, `partner: ZaloPay` (38–68 ms), `payment_url` = `order_url`, `qr_code` `PartnerQR` provider ZaloPay; ảnh PNG 300 px giải mã (jsQR) đúng `qr_code`; mock xác nhận mac create hợp lệ, `app_trans_id = yymmdd(VN)_TXN…`, `callback_url` / `redirecturl` đúng, `expire_duration_seconds` 899–900, `item = []`, `preferred_payment_method = zalopay_wallet`; DB: `payment_method`, `partner_config_id`, raw request + response (không có key), 1 dòng `qr_codes` PartnerQR. 🟡 Sandbox thật chưa thử (#104) |
+  | Callback xử lý | ✅ callback (mock ký key2) → `{return_code: 1}`, GD `Success`, `partner_txn_id = zp_trans_id`, `paid_at`, log `partner:zalopay-callback`, webhook `payment.success` tới merchant (có `partner_txn_id`, có chữ ký); callback lặp → 1, vẫn 1 log. Lỗi → `2`: data bị sửa, mac bằng key1, `app_id` khác, thiếu mac, JSON hỏng, `type` 2, đơn không tồn tại, lệch số tiền (GD giữ `Pending`). Trình duyệt quay về `/pay/zalopay/return` → 302 `return_url?…status=Success&result=success`; redirect bị sửa tham số → 400. 🟡 Callback thật từ ZaloPay chưa thử (cần sandbox + URL public) |
+  | Mất callback | ✅ (a) khách quay về trang return → Hub query ZaloPay → `Success` (log `system:zalopay-return`, raw `zalopay:query`) → 302 `status=Success`; (b) không quay về → **worker thật** áp `Success` sau 105 s (log `system:status-sync`); khách huỷ trên ZaloPay → trang "không thành công" + "Thanh toán lại", GD vẫn `Pending`; ZaloPay báo đơn hết hạn (`2/-54`) → GD `Failed` + lý do "hết hạn thanh toán" + webhook `payment.failed` |
+  | Refund thành công | 🟡 `ZalopayConnector.refund()` dựng từ cấu hình mã hoá, gọi mock: hoàn 50.000 rồi 100.000 → `success` (mock trả `3` đang xử lý → `query_refund` → `1`), có `refund_id` + `m_refund_id` `yymmdd_9997_…`; hoàn vượt số đã trả → `2/-14`; `zp_trans_id` không tồn tại → `2/-101`; thiếu `zp_trans_id` → không gọi (unit). Chưa refund trên sandbox thật (#104); luồng nghiệp vụ hoàn tiền là P5.3 (#18) |
+  | Tích hợp route engine | ✅ ZaloPay sập (mock 503) → GD vẫn tạo `Created` + `payment_error`, **VietQR vẫn 201**; tắt cấu hình → `zalopay_qr` 503, `available_methods` không có `zalopay_qr`, picker `/pay` ẩn "Ví ZaloPay"; kích hoạt lại → hiện ngay (không restart); `/pay?method=zalopay_qr` → 302 ZaloPay, gọi lại → `app_trans_id` `_2`, callback cho `_2` áp đúng GD; `expiry_minutes` 4 → 400 `VALIDATION_ERROR` (không tạo GD) |
+  | Cấu hình qua UI đối tác (P3.5) | ✅ API: App ID không phải số → 400; cấu hình key1 sai → test "mã 2/-402", không kích hoạt được (409); cấu hình đúng: kích hoạt trước khi test → 409, test "kết nối và chữ ký hợp lệ (mã 2/-101)" → kích hoạt; secret che `••••`, không có `enc:v1` trong response. Trình duyệt: `/partners/new` chọn ZaloPay (không còn "chưa hỗ trợ") → nhãn App ID / Key1 (ký yêu cầu) / Key2 (kiểm callback), endpoint sandbox / production, callback + webhook URL điền sẵn, gợi ý callback_url; không lỗi console |
+  | Test sandbox | 🟡 `sb-openapi.zalopay.vn` truy cập được (trả `-402` cho chữ ký sai); `ZALOPAY_*` trong `.env.development` là placeholder; thử với credential demo công khai của ZaloPay bị chặn bởi bộ phân quyền của phiên (#104) |
+  | Script e2e | ✅ 54/54 (lần chạy đầu 52/54: 2 kỳ vọng sai trong script — payload webhook dùng `transaction_id`, không phải `txn_code`; đã kiểm lại trực tiếp: 4 `payment.success` đều có `partner_txn_id`, 1 `payment.failed`, tất cả có `X-Signature` + `X-Webhook-Id`) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 84/84; route mới `/api/ipn/zalopay`, `/pay/zalopay/return` đều `ƒ`) |
+  | Dọn dẹp | ✅ dừng :4010, mock :3997 / :3996; xoá GD test (log / raw / QR cascade), `webhook_logs`, endpoint webhook, API key, merchant `P52TEST`, 4 cấu hình ZaloPay test; connector `zalopay` trả về trạng thái ban đầu (`Not_Installed`, tắt); xoá key Redis QR VietQR test; xoá script tạm + file key mock |
+
+- **Khác biệt so với plan:**
+  - Route handler callback đặt ở `app/api/ipn/zalopay` (logic trong `server/routes/zalopay-callback.ts` như PLAN) thay vì `/api/callback/zalopay` của API-Design §12 — thống nhất với `/api/ipn/vnpay`, `/api/ipn/momo`; đã sửa API-Design.
+  - PLAN ghi "processResult (callback GET từ ZaloPay)": callback của ZaloPay là **POST JSON** `{data, mac, type}`; GET là redirect trình duyệt (`checksum`) — chỉ kiểm chữ ký + hiển thị, không áp trạng thái.
+  - "Tạo ZaloPay order + QR": QR lấy từ `qr_code` của API create, Hub vẽ PNG; chỉ trả trong `POST /api/v1/transactions` (#102).
+  - "Test sandbox" chưa thực hiện được (credential placeholder) → kiểm bằng mock theo đặc tả, như P3.3 / P5.1.
+  - Thêm (PLAN không nêu): `minExpiryMinutes` trong route map, trang return dùng chung (`wallet-redirect.ts`), `RefundResult.pending` / `partnerRefundRef`, so số tiền chỉ khi thành công.
+
+- **Quyết định thiết kế:**
+  - Connector thuần (không đụng DB) như MoMo: `attempt` do `payment.service` đếm, connector chỉ dựng `app_trans_id`.
+  - Key1 chỉ dùng để ký yêu cầu đi, Key2 chỉ để kiểm dữ liệu về — đúng vai trò ZaloPay quy định; callback được kiểm bằng key2 của đúng `partner_config_id` đã tạo đơn.
+  - Callback luôn HTTP 200 với `return_code` (ZaloPay đọc body, không đọc HTTP status); `0` chỉ khi lỗi phía Hub để ZaloPay gửi lại, mọi lỗi dữ liệu / chữ ký trả `2` (gửi lại cũng vô ích).
+  - Query trạng thái là nguồn sự thật thứ hai (server-to-server tới endpoint đã cấu hình); chỉ mã lỗi phía thanh toán mới làm GD `Failed`, lỗi API / không tìm thấy đơn để GD tự hết hạn.
+  - `expire_duration_seconds` = thời gian còn lại của GD, GD < 5 phút bị từ chối ⇒ khách không thể trả tiền ZaloPay sau khi Hub cho GD hết hạn (#19).
+  - Seed tạo cấu hình ZaloPay `Inactive` — chỉ kích hoạt sau khi test kết nối đạt (quy tắc P3.5).
+
+- **Vấn đề / lưu ý:** mới #104–#106; mở rộng #18, #102, #103 sang ZaloPay. Để hoàn tất P5.2: lấy App ID / Key1 / Key2 sandbox ZaloPay, bật URL public cho `/api/ipn/zalopay` (ngrok) → tạo cấu hình ZaloPay trên `/partners` (hoặc điền `ZALOPAY_*` vào `source/payment-hub/.env.local` + `npm run db:seed`), test + kích hoạt → tạo GD `zalopay_qr`, thanh toán bằng app ZaloPay sandbox, kiểm callback thật, refund qua `ZalopayConnector.refund()`.

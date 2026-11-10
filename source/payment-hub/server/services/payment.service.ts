@@ -58,7 +58,7 @@ interface RoutingInfo {
   attempts: RouteAttempt[];
 }
 
-/** Wallet QR returned by the PSP (MoMo `qrCodeUrl`), rendered to PNG by Payment Hub. */
+/** Wallet QR returned by the PSP (MoMo `qrCodeUrl`, ZaloPay `qr_code`), rendered to PNG by Payment Hub. */
 export interface PartnerQrDto {
   qr_id: number;
   type: "PartnerQR";
@@ -342,7 +342,11 @@ export async function applyPaymentResult(
     },
   });
 
-  if (Number(txn.amount) !== result.amount) return { kind: "amount_mismatch" };
+  // A paid amount must match; a failure is compared only when the PSP reports an amount
+  // (ZaloPay's query omits it for unpaid orders).
+  if ((result.outcome === "Success" || result.amount > 0) && Number(txn.amount) !== result.amount) {
+    return { kind: "amount_mismatch" };
+  }
   // Non-final PSP status (MoMo 1000/7000/9000…): recorded above, nothing to apply.
   if (result.outcome === "Pending") return { kind: "pending" };
 
@@ -426,7 +430,7 @@ export type SyncOutcome =
  * Ask the PSP for the status of a Pending transaction (server-to-server query) and apply a final
  * answer through applyPaymentResult — same idempotent conditional update as the IPN. Used by the
  * worker for transactions whose IPN is late or lost, and by the MoMo return page so the merchant's
- * return_url carries the real status. Only for connectors with `statusSync` (MoMo).
+ * return_url carries the real status. Only for connectors with `statusSync` (MoMo, ZaloPay).
  */
 export async function syncPaymentStatus(
   txn: { id: number; txnCode: string; status: string; partnerConfigId: number | null },
@@ -444,7 +448,7 @@ export async function syncPaymentStatus(
   const { connector } = connectorFromPartnerConfig(pc);
   const status = await connector.getStatus({
     txnCode: txn.txnCode,
-    partnerOrderId: sent.orderId,
+    partnerOrderId: sent.orderId ?? sent.app_trans_id,
     transactionDate: sent.vnp_CreateDate ?? "",
     ipAddress: "127.0.0.1",
   });

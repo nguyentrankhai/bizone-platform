@@ -310,13 +310,13 @@ Header: Idempotency-Key: <UUID v4>
 |-------|------|-------|
 | `transaction_id` | string | Mã giao dịch nội bộ Payment Hub |
 | `payment_url` | string | URL trang thanh toán (nếu thanh toán online) |
-| `qr_code` | object | QR Code khi `payment_method = vietqr` (`type: VietQR`, có `bank`, `transfer_note`; `payment_url` là trang QR của Hub) hoặc `momo_qr` (`type: PartnerQR`, `provider: MoMo`, `raw_data` = `qrCodeUrl` của MoMo — app MoMo quét, `image_base64` do Hub vẽ, `deeplink` mở app MoMo, `image_url`/`bank` = `null`; `payment_url` là trang thanh toán của MoMo). Phương thức khác: `null` |
+| `qr_code` | object | QR Code khi `payment_method = vietqr` (`type: VietQR`, có `bank`, `transfer_note`; `payment_url` là trang QR của Hub) hoặc `momo_qr` (`type: PartnerQR`, `provider: MoMo`, `raw_data` = `qrCodeUrl` của MoMo — app MoMo quét, `image_base64` do Hub vẽ, `deeplink` mở app MoMo, `image_url`/`bank` = `null`; `payment_url` là trang thanh toán của MoMo) hoặc `zalopay_qr` (`type: PartnerQR`, `provider: ZaloPay`, `raw_data` = `qr_code` của ZaloPay, `deeplink` = `null`; `payment_url` = `order_url` của ZaloPay). Phương thức khác: `null` |
 | `partner` | string | Loại đối tác Route Engine đã chọn (`VNPay`, `VietQR`…) |
 | `fallback_used` | boolean | Có khi đối tác ưu tiên lỗi và GD được chuyển sang đối tác kế tiếp |
 | `payment_error` | object | Có khi mọi đối tác của phương thức lỗi lúc tạo — GD vẫn `Created`, khách chọn phương thức khác trên `payment_url` |
 | `expired_at` | datetime | Thời gian hết hạn giao dịch |
 
-> `amount` ngoài hạn mức của phương thức (`momo_qr`: 1.000 – 50.000.000 ₫) → **400 `VALIDATION_ERROR`** (`details.amount`), không tạo GD.
+> `amount` ngoài hạn mức của phương thức (`momo_qr`: 1.000 – 50.000.000 ₫) → **400 `VALIDATION_ERROR`** (`details.amount`), không tạo GD. `zalopay_qr` cần `expiry_minutes` ≥ 5 (ZaloPay giữ đơn tối thiểu 300 s) → nhỏ hơn: 400 (`details.expiry_minutes`).
 >
 > Phương thức không còn đối tác khả dụng (đối tác Inactive/Error, connector tắt, circuit mở) → **503 `SERVICE_UNAVAILABLE`**, không tạo GD; `error.details` có `skipped` (lý do từng đối tác) và `available_methods`.
 
@@ -1575,13 +1575,13 @@ Payment Hub nhận kết quả thanh toán từ đối tác qua các endpoint sa
 |----------|-------|---------|
 | `GET /api/ipn/vnpay` | IPN từ VNPay (HMAC-SHA512) — luôn HTTP 200 + `{RspCode, Message}` | VNPay |
 | `POST /api/ipn/momo` | IPN từ MoMo (JSON, HMAC-SHA256 trên 13 trường theo thứ tự alphabet) — `204` đã nhận / đã xử lý / còn chờ; `400` sai chữ ký, sai JSON, lệch số tiền; `404` không có đơn; `500` lỗi xử lý | MoMo |
-| `GET /pay/{vnpay,momo}/return` | Trình duyệt khách quay về — chỉ xác thực chữ ký rồi chuyển về `return_url` của merchant, **không** đổi trạng thái | VNPay, MoMo |
-| `/api/callback/zalopay` | Callback từ ZaloPay (P5.2) | ZaloPay |
+| `POST /api/ipn/zalopay` | Callback từ ZaloPay (JSON `{data, mac, type}`, `mac = HMAC-SHA256(key2, data)`, chỉ gửi khi đã thanh toán) — luôn HTTP 200 + `{return_code, return_message}`: `1` đã nhận / đã xử lý / trùng; `2` sai mac / app_id / dữ liệu, không có đơn, lệch số tiền; `0` lỗi xử lý (ZaloPay gửi lại) | ZaloPay |
+| `GET /pay/{vnpay,momo,zalopay}/return` | Trình duyệt khách quay về — chỉ xác thực chữ ký (ZaloPay: `checksum = HMAC-SHA256(key2, appid\|apptransid\|pmcid\|bankcode\|amount\|discountamount\|status)`) rồi chuyển về `return_url` của merchant, **không** đổi trạng thái | VNPay, MoMo, ZaloPay |
 
-Xử lý IPN (P3.3, P5.1):
+Xử lý IPN (P3.3, P5.1, P5.2):
 - Xác thực chữ ký bằng secret của đúng `partner_config_id` đã tạo thanh toán; IPN là nguồn sự thật
 - Xử lý **đồng bộ** (một `UPDATE … WHERE status = 'Pending'`, ~10–30 ms) để mã phản hồi phản ánh kết quả; IPN lặp → không đổi gì
-- "Retry khi thất bại": đối tác tự gửi lại khi nhận mã lỗi; với MoMo, worker còn **truy vấn trạng thái** (`/v2/gateway/api/query`) các GD `Pending` quá 60 s chưa có IPN (mỗi phút, tối đa 20 GD/lượt — `PAYMENT_STATUS_SYNC_*`), và trang `/pay/momo/return` truy vấn một lần khi GD còn `Pending` để `return_url` mang trạng thái thật
+- "Retry khi thất bại": đối tác tự gửi lại khi nhận mã lỗi; với MoMo, worker còn **truy vấn trạng thái** (`/v2/gateway/api/query`) các GD `Pending` quá 60 s chưa có IPN (mỗi phút, tối đa 20 GD/lượt — `PAYMENT_STATUS_SYNC_*`), và trang `/pay/momo/return` truy vấn một lần khi GD còn `Pending` để `return_url` mang trạng thái thật. ZaloPay (P5.2) dùng cùng cơ chế: worker và `/pay/zalopay/return` gọi `POST /v2/query` (`return_code` 1 = đã trả, 3 = chưa trả / đang xử lý, 2 + mã lỗi thanh toán như `-54` hết hạn = thất bại; mã lỗi API `-401/-402/-429/-500/-999`, `-101` không làm GD thất bại)
 
 ---
 

@@ -85,7 +85,11 @@ export interface RefundRequest {
 
 export interface RefundResult {
   success: boolean;
+  /** Accepted by the PSP but not final yet (ZaloPay return_code 3) — query again later. */
+  pending?: boolean;
   partnerRefundId?: string;
+  /** Merchant-side refund reference sent to the PSP (ZaloPay m_refund_id) — for status queries. */
+  partnerRefundRef?: string;
   responseCode: string;
   message: string;
   signatureValid: boolean;
@@ -95,7 +99,7 @@ export interface RefundResult {
 
 export interface StatusQuery {
   txnCode: string;
-  /** Order id the PSP knows the payment by, when it differs from txnCode (MoMo `_2` suffix). */
+  /** Order id the PSP knows the payment by, when it differs from txnCode (MoMo orderId, ZaloPay app_trans_id). */
   partnerOrderId?: string;
   transactionDate: string;
   ipAddress: string;

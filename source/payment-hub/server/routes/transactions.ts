@@ -24,7 +24,7 @@ import {
   initiatePayment,
   type InitiatedPayment,
 } from "@/server/services/payment.service";
-import { amountError, isPaymentMethod } from "@/services/routing/routeMap";
+import { amountError, expiryError, isPaymentMethod } from "@/services/routing/routeMap";
 import { availableMethods, planRoute } from "@/services/routing/routeEngine";
 import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
 
@@ -64,6 +64,9 @@ const createTxnSchema = z
     // PSP amount limits (e.g. MoMo 1 000 – 50 000 000 ₫) — reject before creating the transaction
     const msg = v.payment_method ? amountError(v.payment_method, v.amount) : null;
     if (msg) ctx.addIssue({ code: "custom", path: ["amount"], message: msg });
+    // PSP minimum order lifetime (ZaloPay ≥ 5 minutes)
+    const exp = v.payment_method ? expiryError(v.payment_method, v.expiry_minutes) : null;
+    if (exp) ctx.addIssue({ code: "custom", path: ["expiry_minutes"], message: exp });
   });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

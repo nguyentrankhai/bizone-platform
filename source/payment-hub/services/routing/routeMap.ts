@@ -22,6 +22,8 @@ export interface RouteMethod {
   /** Amount limits (VND) the PSP accepts for this method — outside → 400 / hidden on /pay. */
   minAmount?: number;
   maxAmount?: number;
+  /** Shortest transaction lifetime the PSP accepts (ZaloPay keeps an order open ≥ 5 min). */
+  minExpiryMinutes?: number;
 }
 
 export const ROUTE_MAP = {
@@ -64,6 +66,8 @@ export const ROUTE_MAP = {
     connectorCode: "zalopay",
     kind: "redirect",
     label: "Ví ZaloPay",
+    // expire_duration_seconds ≥ 300 (services/connectors/zalopay/zalopay.util.ts)
+    minExpiryMinutes: 5,
   },
 } as const satisfies Record<string, RouteMethod>;
 
@@ -88,6 +92,15 @@ export function amountError(method: string, amount: number): string | null {
   }
   if (route.maxAmount !== undefined && amount > route.maxAmount) {
     return `${route.label}: số tiền tối đa ${route.maxAmount.toLocaleString("vi-VN")} ₫`;
+  }
+  return null;
+}
+
+/** null when a transaction living `expiryMinutes` suits the method, otherwise a message. */
+export function expiryError(method: string, expiryMinutes: number): string | null {
+  const route = routeFor(method) as RouteMethod | undefined;
+  if (route?.minExpiryMinutes !== undefined && expiryMinutes < route.minExpiryMinutes) {
+    return `${route.label}: thời hạn giao dịch tối thiểu ${route.minExpiryMinutes} phút`;
   }
   return null;
 }
