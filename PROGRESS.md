@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P4.8 xong — kế toán: quỹ tiền mặt / ngân hàng + sổ quỹ, phiếu thu / chi + danh mục dạng cây, nộp tiền ca POS, công nợ tổng hợp + tuổi nợ, lời lỗ, dòng tiền, đối soát thanh toán; thanh toán NCC / thu nợ khách tự lập phiếu (#67). **Giai đoạn 4 hoàn thành**; mới #88–#92; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (QA-3 — rà soát cuối Giai đoạn 4: tiêu chí P4.0–P4.8 chạy lại đạt; phát hiện #93–#99, mức cao #93 WebSocket POS không kiểm chủ ca / chi nhánh — chờ người dùng quyết định sửa. P4.8 xong; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -121,6 +121,13 @@
 | 90 | Thanh toán NCC / thu nợ khách **trước P4.8** không có phiếu thu chi (không bổ sung ngược) → dòng tiền các kỳ trước thiếu khoản này. Công nợ khách không có bảng lịch sử thanh toán (P2.8: chỉ cộng dồn `paid_amount`) — phiếu thu lấy ngày hiện tại, không lùi ngày được; huỷ thanh toán NCC / nợ khách chưa có (phiếu tự động không huỷ được) | P4.8 | Khi có yêu cầu nghiệp vụ (bảng `customer_debt_payments`, huỷ thanh toán) |
 | 91 | Đối soát thanh toán chỉ tự xác nhận thẻ / QR qua Payment Hub (`pos_payment_intents`) và tiền mặt qua kiểm ca; chuyển khoản / ví và thẻ / QR nhập tay luôn "chưa xác nhận" (dữ liệu dev: 25 HĐ thẻ/QR nhập tay). Chưa đánh dấu "đã đối soát" thủ công, chưa có đơn hàng online (#61) | P4.8 | P5.4 Đối soát (sao kê / báo có ngân hàng) |
 | 92 | Báo cáo lời lỗ / dòng tiền chưa xuất PDF / Excel (sổ thu chi + sổ quỹ xuất CSV); dòng tiền: hoàn cọc đơn đặt trước tính theo `preorders.updated_at` (không có cột thời điểm hoàn), hoàn tiền trả hàng theo ngày trả | P4.8 | P6.x (xuất báo cáo tài chính) / khi có yêu cầu |
+| 93 | **[Cao]** WebSocket POS (`server/ws/pos.ts` `authorize`) chỉ kiểm quyền `pos:read`/`pos:write`, **không kiểm ca thuộc ai / chi nhánh nào**: nhân viên chi nhánh A kết nối `/ws/pos/{id}` (id tăng dần) của ca chi nhánh B → thêm hàng, giảm giá 100 %, tách/gộp/bỏ đơn chờ, và `display:qr` đẩy **QR ngân hàng tuỳ ý** lên màn hình khách của ca đó (QA-3 đã chạy thật: nhân viên CN-HN chèn hàng + QR giả vào ca CN-HCM, màn hình manager nhận `display:qr`) | QA-3 | QA-3 fix (chờ người dùng) |
+| 94 | POS đọc theo id không kiểm chi nhánh: `pos.session`, `sessionSummary` (QA-3 chạy thật: nhân viên CN-HN đọc được ca + tổng kết tiền ca CN-HCM), `preorder`, `preorderQuote`, `exchangeQuote` (dòng HĐ), `payhubOpen`, `storeInfo` (tài khoản ngân hàng chi nhánh khác) | QA-3 | QA-3 fix |
+| 95 | Thao tác POS bỏ qua phạm vi chi nhánh: `closeSession` / `cancelInvoice` / `cancelPreorder` / `createPairingPin` chỉ xét vai trò (quản lý chi nhánh A thao tác được ca / HĐ chi nhánh B); `refundInvoice` / `exchange` / `completePreorder` không kiểm chi nhánh của HĐ / đơn đặt (đọc code, chưa chạy thật — dev chỉ có HĐ CN-HN) | QA-3 | QA-3 fix |
+| 96 | Ca làm việc / chấm công / doanh số nhân viên không theo chi nhánh: `staff.shift.create/update/delete/assign/unassign` không `assertBranch` dù ca có `branch_id`; `attendance.timesheet` (quyền quản lý), `staff.sales`, `commission.list` trả mọi chi nhánh | QA-3 | QA-3 fix |
+| 97 | Ghép màn hình bằng PIN: giới hạn 10 lần/phút theo IP lấy từ `X-Forwarded-For` do client gửi → đổi header để dò PIN 6 số; không gian PIN chung mọi tenant. Cần IP tin cậy (proxy) + giới hạn tổng / PIN dài hơn | QA-3 | QA-3 fix / P6.6 |
+| 98 | `staff:write` (gán được cho vai trò tuỳ chỉnh qua catalog) = quyền quản trị: người có quyền này gán được vai trò hệ thống `admin` (kể cả cho mình) và đặt lại mật khẩu admin. Cần `admin:*` để cấp vai trò admin/manager, đặt lại mật khẩu admin, và không cho cấp quyền mình không có | QA-3 | QA-3 fix (quyết định: theo thiết kế hay chặn) |
+| 99 | Thấp (đọc code): `branch.get` / `branch.config` đọc cấu hình (tài khoản ngân hàng) chi nhánh khác với `config:read`; Web Push dùng vai trò lưu lúc đăng ký (giáng chức vẫn nhận push của vai trò cũ tới khi đăng ký lại); khoá ca đua với HĐ đang ghi (HĐ có thể vào ca đã khoá, thiếu trong tổng kết); `reports.emailReport` chỉ cần `report:read` (vai trò viewer gửi báo cáo tới 5 email ngoài bất kỳ); `payCommissions` trả tổng tiền sai khi chạy đồng thời | QA-3 | QA-3 fix / P6.6 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -255,6 +262,7 @@
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
+| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | _(điền sau commit)_ |
 
 ---
 
@@ -1917,3 +1925,48 @@ Ngoài plan, theo yêu cầu người dùng.
   - Thanh toán NCC / thu nợ luôn lập phiếu (có hoặc không quỹ) trong cùng transaction → sổ thu chi + dòng tiền đầy đủ từ P4.8.
 
 - **Vấn đề / lưu ý:** đóng #67; cập nhật #57, #61, #65; mới #88–#92. Tenant đã có: `npx prisma migrate deploy` + `npm run db:seed` để có quyền `accounting.read`, danh mục "Thu nợ khách hàng" và quỹ tiền mặt mặc định. **Giai đoạn 4 hoàn thành** (P4.0–P4.8).
+
+### QA-3 — Rà soát cuối Giai đoạn 4 (2026-11-10)
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `PROGRESS.md`, `CLAUDE.md` (chỉ tài liệu — chưa sửa code)
+- **Bối cảnh:** bước B6 — GĐ 4 xong 9/9 (P4.0–P4.8); GĐ 5 chưa bắt đầu. Người dùng chọn rà soát trước P5.1.
+- **Cách làm:** production build BizOne `next start :3001` (+ realtime `:3002`, worker đang chạy bằng `tsx watch` trên cùng code); token Keycloak thật (Authorization Code + PKCE) cho `demo.seller`, `demo.manager` và nhân viên tạm `qa3.seller` tạo qua `staff.create`; script tRPC / REST / WebSocket; một subagent đọc toàn bộ router + service GĐ 4 tìm lỗi phân quyền / cô lập (chỉ đọc), các phát hiện mức cao / trung bình được kiểm lại bằng code hoặc chạy thật. P4.8 dùng kết quả nghiệm thu cùng ngày (code không đổi).
+
+- **Chất lượng (tự động):**
+
+  | Kiểm tra | BizOne | Payment Hub |
+  |----------|--------|-------------|
+  | `format:check` / `lint` / `typecheck` | ✅ / ✅ / ✅ | ✅ / ✅ / ✅ |
+  | `npm test` | ✅ 146/146 (14 file) | ✅ 58/58 (10 file) |
+  | `build` / `build:jobs` | ✅ / ✅ | ✅ / ✅ |
+  | CI GitHub Actions | ✅ 10 lần chạy gần nhất xanh (tới `b2f0b0c`) | |
+  | Prisma: migration / lệch schema | ✅ 7 migration, `migrate status` up to date, `migrate diff` rỗng | ✅ 5 migration, up to date, diff rỗng |
+  | `npm audit --omit=dev` | ⚠️ 2 moderate (`exceljs → uuid`, như QA-2) | ✅ 0 |
+  | `.env.example` đủ biến code dùng | ✅ | ✅ |
+  | Độ phủ test | ⚠️ unit cho quy tắc thuần (giỏ, khuyến mãi, NCC, kế toán, thông báo, chi nhánh, RBAC…); chưa có test tích hợp DB cho service (POS, kho, kế toán) — chỉ script e2e thủ công | ✅ như QA-2 |
+
+- **Tiêu chí nghiệm thu chạy lại:**
+
+  | Task | Tiêu chí (PLAN) | Kết quả QA-3 |
+  |------|-----------------|--------------|
+  | P4.0 | Bypass: không token → user dev; token thật seller 403 trang quản trị; token sai 401 | ✅ không token → 200 (admin dev); token thật seller → `staff.list` / `accounting.records` 403; token giả → 401; manager → `accounting.records` 200 |
+  | P4.1 | Thêm NV → phân quyền → check-in → bán hàng → hoa hồng tự tính; audit log | ✅ `staff.create` (tạo tài khoản Keycloak, vai trò seller @ CN-HN) → token thật của NV mới → check-in → mở ca → HĐ 40.000 (62 ms) → worker tính hoa hồng 800 = 2 % (quy tắc tạm); audit `staff.create`, `check_in`; NV seller xem DS nhân viên → 403 |
+  | P4.2 | Report < 3 s; export < 5 s; so sánh cùng kỳ; filter | ✅ revenue / profit / products / staff / branches 7–10 ms; xuất xlsx 232 ms, pdf 238 ms (worker); kỳ so sánh 22–31/10 liền kề, cùng 10 ngày; lọc danh mục 2.825.505 ≤ tổng 19.897.100 |
+  | P4.3 | PO → nhập kho → phiếu nhập tự động; công nợ NCC; so sánh giá | ✅ PO 10 × 12.000 vào kho tạm → nhận đủ → `received` + phiếu nhập `purchase_receipt` gắn đơn; công nợ đơn 120.000 (hạn theo điều khoản NCC); so sánh giá SP #11 giữa các NCC |
+  | P4.4 | Coupon áp POS đúng; flash sale đúng giờ; mua X tặng Y tự thêm quà | ✅ mã cố định 5.000 → `discountAmount` 5.000; flash sale đang chạy SP #9 45.000 → 30.000, flash sale chưa tới giờ → giá thường; mua 2 tặng 1 → dòng `gift-…` 0₫ |
+  | P4.5 | QR Payment Hub; đổi trả; tách HĐ; ghép PIN | ✅ PIN 6 số → `/api/pos/pair` → token `pdt_`, dùng lại PIN 404, token hợp lệ đúng ca, màn hình khách nhận trạng thái qua WS; đổi hàng: chênh lệch 10.000 → phiếu trả + HĐ mới. ⏭ QR qua Payment Hub: `.env.local` đang để `PAYHUB_API_SECRET` placeholder → "Chưa cấu hình Payment Hub" (đã nghiệm thu P4.5 với cấu hình tạm); ⏭ tách HĐ (chỉ qua WS, unit `pos-advanced` 14 test) |
+  | P4.6 | User A thấy branch A; đổi branch → dữ liệu đổi; báo cáo tổng hợp | ✅ NV gán CN-HN: `branch.mine` chỉ CN-HN, `X-Branch-ID` CN-HCM → 403, "tất cả" → 403; doanh thu HN 19.897.100 / HCM 0, `reports.branches` tổng = tổng 2 chi nhánh. ❌ **đọc theo id / WebSocket POS không kiểm chi nhánh** (#93, #94) |
+  | P4.7 | Đơn online → thông báo; template → email đúng nội dung; WS real-time | ✅ `order.create` Shopee → WS `/ws/notifications` (token thật manager) nhận `notification:new` sau **46 ms**, có trong trung tâm thông báo; gửi thử mẫu `order_new_email` → log gửi `sent` (provider `log`, chưa cấu hình SMTP), tiêu đề đã thay biến |
+  | P4.8 | Thu / chi / sổ quỹ / lời lỗ | ✅ theo nghiệm thu P4.8 cùng ngày (code không đổi) |
+
+- **Bảo mật & cô lập (subagent đọc code + kiểm lại):**
+  - ❌ **#93 (cao, đã chạy thật)**: ca CN-HCM do manager mở; NV CN-HN kết nối `/ws/pos/9` bằng token thật → `cart:add` + `display:qr` (QR "ATTACKER") được chấp nhận, màn hình manager nhận `cart:updated` + `display:qr`.
+  - ❌ #94 (đã chạy thật `pos.session` + `sessionSummary` → 200 lộ tiền đầu ca / tiền mặt dự kiến), #95, #96 (đọc code), #97, #98, #99.
+  - ✅ Đúng: mọi procedure GĐ 4 có capability phù hợp; kế toán, đơn nhập, kho / chuyển kho / kiểm kê, đơn hàng, báo cáo, HĐ `get`/`print`, danh sách POS lọc chi nhánh đúng; key Redis / kênh pub-sub / job BullMQ mang tenant, WS + route public chạy trong `runWithTenant`; webhook Payment Hub (HMAC `timingSafeEqual`, cửa sổ thời gian, chống trùng, kiểm số tiền); intent Payment Hub dùng 1 lần; giới hạn coupon / flash sale / combo, hoàn hàng, quỹ, thanh toán NCC, đơn nhập đều có khoá / cập nhật có điều kiện; mutation nghiệp vụ GĐ 4 đều có audit; không còn `new Error` trên đường tRPC, không `Number(ctx.user.id)`.
+- **Rà soát vấn đề còn mở:** không mục cũ nào được giải quyết thêm trong QA-3.
+  - Chờ người dùng: #6 (xoá rollback MariaDB 10.3), #16 + #26 + #75 (credential VNPay sandbox), #23 (tài khoản VietQR thật), #65 (chọn cách tính giá vốn), #83 (nhà cung cấp SMS), #84 (VAPID + thử Web Push trên Chrome), #85 (Zalo OA), #98 (theo thiết kế hay chặn).
+  - Đưa vào GĐ 5: #18, #29, #74 (P5.3 hoàn tiền); #19, #24, #33, #88, #91 (P5.4 đối soát); #55 (trước khi merchant tích hợp).
+  - GĐ 6: #7 + #15 (P6.7 đăng nhập trình duyệt — cũng cần cho #56), #12 + #13 + #28 + #32 + #37 + #53 (P6.5 / P6.6), #54 (sidebar 375 px, P6.4 PWA), #61 + #72 + #82 + #87 (P6.1).
+- **Vận hành:** dev server `npm run dev` khởi động trước khi `prisma generate` của P4.8 vẫn giữ Prisma client cũ → mọi truy vấn kế toán lỗi `Unknown argument status` trên :3000 (bản build :3001 bình thường). Khởi động lại `npm run dev` (và `dev:realtime`, `dev:worker` nếu không tự nạp lại) sau mỗi migration — đã ghi vào `CLAUDE.md`.
+- **Dọn dẹp:** xoá mọi dòng tạo trong phiên (so `max(id)` từng bảng với snapshot: 2 ca POS, 2 HĐ + dòng / thanh toán, 1 phiếu trả, 4 phiếu kho, kho tạm, PO + công nợ, mã giảm giá, 2 flash sale, 1 mua X tặng Y, quy tắc + 2 dòng hoa hồng, chấm công, đơn online, 2 thông báo + log gửi, 21 audit, user `qa3.seller` + phân quyền, user cục bộ `demo.manager@bizone.vn` tạo khi mở ca); khôi phục tồn kho / lô / lượt dùng mã / chi tiêu khách — **so với snapshot: giống hệt**; xoá key Redis (giỏ ca 9, token ghép màn hình, cache rbac, file báo cáo); xoá user Keycloak `qa3.seller`; dừng :3001. Không đụng ca POS #6 đang mở của admin.
+- **Đề xuất:** sửa #93 (cao) và #94–#96 trước P5.1 (cùng một nhóm: phạm vi chi nhánh cho POS / ca làm việc); #97, #99 cùng lượt nếu đồng ý; #98 cần người dùng chọn (theo thiết kế: `staff:write` = quản trị, hay chặn cấp vai trò admin/manager).
