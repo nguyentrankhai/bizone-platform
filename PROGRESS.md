@@ -262,7 +262,7 @@
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
-| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99, sửa #93–#97, #99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` (rà soát), _(điền sau commit)_ (sửa) |
+| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99, sửa #93–#97, #99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` (rà soát), `69b4d85` (sửa) |
 
 ---
 
@@ -1973,7 +1973,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 #### QA-3 fix — sửa lỗi (2026-11-10)
 
-- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone` — `lib/pos/access.ts`, `lib/client-ip.ts`, `lib/rate-limit.ts`, `server/ws/pos.ts`, `server/routers/{pos,staff,branch,reports}.ts`, `server/middleware/branchScope.ts`, `server/services/{cashSession,invoice,preorder,posPairing,payhubPayment,attendance,commission,notificationDelivery}.service.ts`, `app/api/pos/pair/route.ts`, `.env.example`, `tests/qa3.test.ts`
+- **Hoàn thành:** 2026-11-10 · **Commit:** `69b4d85` · **Vị trí:** `source/bizone` — `lib/pos/access.ts`, `lib/client-ip.ts`, `lib/rate-limit.ts`, `server/ws/pos.ts`, `server/routers/{pos,staff,branch,reports}.ts`, `server/middleware/branchScope.ts`, `server/services/{cashSession,invoice,preorder,posPairing,payhubPayment,attendance,commission,notificationDelivery}.service.ts`, `app/api/pos/pair/route.ts`, `.env.example`, `tests/qa3.test.ts`
 - **Đã làm** (người dùng chọn sửa #93–#97, #99; #98 để quyết định sau):
   - **#93 WebSocket POS** — `sessionAccess` (hàm thuần, `lib/pos/access.ts`): chi nhánh của ca phải nằm trong phạm vi P4.6 của người dùng (không → từ chối kết nối 403); người mở ca và quản lý (admin / manager) của chi nhánh đó được ghi, nhân viên khác chỉ xem (mọi lệnh ghi, kể cả `display:qr`, → `FORBIDDEN`). Kiểm lại ở mỗi lệnh ghi và mỗi 60 s (mất quyền / bị chuyển chi nhánh → đóng 4403 hoặc hạ xuống chỉ xem). `actorFor` của WS mang chi nhánh được phép
   - **#94 đọc theo id** — `pos.session`, `sessionSummary`, `storeInfo` (theo ca), `exchangeQuote`, `preorder`, `preorderQuote`, `payhubOpen`: tải bản ghi → `assertBranch(ctx.branch, branchId)`
