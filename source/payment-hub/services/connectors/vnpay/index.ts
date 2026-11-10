@@ -217,6 +217,9 @@ export class VnpayConnector implements PaymentConnector {
       transactionStatus,
       message: data.vnp_Message ?? "",
       partnerTxnId: data.vnp_TransactionNo,
+      ...(data.vnp_Amount && Number.isFinite(Number(data.vnp_Amount))
+        ? { amount: Math.round(Number(data.vnp_Amount) / 100) }
+        : {}),
       signatureValid,
       partnerRaw: data,
     };

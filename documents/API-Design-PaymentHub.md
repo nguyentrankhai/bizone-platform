@@ -991,7 +991,15 @@ config: { "name": "NewPartner", "version": "1.0.0" }
 
 ### 6.7. Reconciliation Management
 
-#### `GET /api/admin/reconciliation` - Danh sách đợt đối soát
+> P5.4: đường dẫn thực tế `/api/internal/reconciliation` (JWT admin như các API nội bộ; đọc: `payhub-admin`/`payhub-viewer`, ghi: `payhub-admin`; token gắn `merchant_id` bị từ chối 403 vì đối soát theo đối tác, mọi merchant). Một đợt = một cấu hình đối tác × một ngày (giờ VN). Phía Payment Hub = GD của cấu hình đó **thanh toán** trong ngày (`Success`/`PartiallyRefunded`/`Refunded`, theo `paid_at`). Phía đối tác lấy từ:
+> - `Api` — tra cứu trạng thái từng GD (GD đã thanh toán + GD tạo trong ngày mà Hub ghi `Pending`/`Expired`/`Failed`, để phát hiện tiền đối tác đã thu mà Hub bỏ — #19). Chạy nền trong worker; job tự động 00:00 (VN) đối soát ngày hôm trước cho mọi đối tác có API (VNPay, MoMo, ZaloPay).
+> - `File` — nhập file sao kê đối tác / ngân hàng (CSV hoặc XLSX, ≤ 10 MB, ≤ 50 000 dòng). Cột nhận theo tên tiêu đề (không phân biệt hoa thường / dấu): số tiền (`amount`, `số tiền`, `ghi có`, `vnp_Amount` ÷ 100) + tham chiếu (`txn_code`, `orderId`, `vnp_TxnRef`, `app_trans_id`, `nội dung`…) hoặc mã GD đối tác (`transId`, `vnp_TransactionNo`, `số tham chiếu`…); tuỳ chọn trạng thái, thời gian. Mã GD Hub được nhận trong mọi dạng tham chiếu (`TXN-…`, `TXN…` không gạch trong nội dung CK, `_2`). Là cách duy nhất cho VietQR (sao kê ngân hàng).
+>
+> Kết quả mỗi dòng: `Matched`, `Unmatched_PaymentHub` (chỉ có ở Hub / đối tác báo chưa trả), `Unmatched_Partner` (chỉ có ở đối tác, kể cả GD Hub ghi hết hạn / thất bại hay thanh toán trùng), `Amount_Mismatch`, `Unverified` (không tra cứu được — không tính chênh lệch). Đối soát **không đổi trạng thái giao dịch**.
+
+#### `GET /api/internal/reconciliation` - Danh sách đợt đối soát
+
+Query: `partner_config_id`, `date_from`, `date_to` (YYYY-MM-DD), `status` (Running/Completed/Failed), `page`, `limit` (≤ 100). `meta` phân trang.
 
 **Response (200):**
 ```json
@@ -1001,8 +1009,12 @@ config: { "name": "NewPartner", "version": "1.0.0" }
     {
       "id": 1,
       "run_date": "2026-06-12",
+      "partner_config_id": 3,
+      "partner_name": "VNPay Production",
       "partner": "VNPay",
       "status": "Completed",
+      "source": "Api",
+      "source_file": null,
       "total_paymenthub": 2340,
       "total_partner": 2340,
       "total_amount_paymenthub": 1500000000,
@@ -1011,28 +1023,34 @@ config: { "name": "NewPartner", "version": "1.0.0" }
       "unmatched_paymenthub": 3,
       "unmatched_partner": 2,
       "amount_mismatch_count": 0,
+      "unverified_count": 0,
       "total_discrepancy": 0,
-      "completed_at": "2026-06-12T00:15:00+07:00"
+      "open_discrepancies": 5,
+      "triggered_by": "system:recon-daily",
+      "completed_at": "2026-06-12T17:00:04.000Z"
     }
-  ]
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
 }
 ```
 
-#### `POST /api/admin/reconciliation` - Chạy đối soát thủ công
+#### `POST /api/internal/reconciliation` - Chạy đối soát thủ công (tra cứu API)
 
-**Request:**
 ```json
-{
-  "partner_config_id": 1,
-  "run_date": "2026-06-12"
-}
+{ "partner_config_id": 1, "run_date": "2026-06-12" }
 ```
 
-#### `GET /api/admin/reconciliation/{id}` - Chi tiết đợt đối soát
+→ `202` đợt `Running` (worker thực hiện; client theo dõi `GET /{id}`). Ngày ≥ hôm nay → 400; đối tác không có API tra cứu (VietQR) → `400 SOURCE_UNSUPPORTED`; đang có đợt `Running` cùng đối tác + ngày → 409.
 
-#### `GET /api/admin/reconciliation/{id}/details` - Chi tiết các giao dịch lệch
+#### `POST /api/internal/reconciliation/import` - Đối soát bằng file sao kê
 
-**Query Parameters:** matchStatus (Matched, Unmatched_PaymentHub, Unmatched_Partner, Amount_Mismatch), status (Open, Resolved), page, pageSize
+`multipart/form-data`: `file` (.csv / .xlsx), `partner_config_id`, `run_date` → `201` đợt `Completed` (xử lý ngay; 10 000 dòng ~2 s) + `skipped` (dòng bỏ qua kèm lý do, ví dụ ghi nợ / thiếu số tiền). `notes` ghi số dòng và cột đã nhận ra. File không có tiêu đề hợp lệ / không có dòng nào → 400.
+
+#### `GET /api/internal/reconciliation/{id}` - Chi tiết đợt đối soát
+
+#### `GET /api/internal/reconciliation/{id}/details` - Các dòng đối soát
+
+**Query Parameters:** `match` (`discrepancy` = 3 loại lệch — mặc định, `all`, hoặc `Matched` / `Unmatched_PaymentHub` / `Unmatched_Partner` / `Amount_Mismatch` / `Unverified`), `status` (Open, Resolved), `search` (mã GD / mã đối tác / tham chiếu), `page`, `limit` (≤ 100). Sắp theo chênh lệch giảm dần.
 
 **Response (200):**
 ```json
@@ -1040,23 +1058,30 @@ config: { "name": "NewPartner", "version": "1.0.0" }
   "success": true,
   "data": [
     {
-      "id": 1,
+      "id": "1",
       "transaction_id": 1001,
       "txn_code": "TXN-20260612-ABCDEF",
       "partner_txn_id": null,
+      "partner_ref": null,
       "match_status": "Unmatched_PaymentHub",
       "paymenthub_amount": 1500000,
       "partner_amount": null,
       "discrepancy_amount": 1500000,
-      "status": "Open"
+      "paymenthub_status": "Success",
+      "partner_status": null,
+      "note": "Không có giao dịch tương ứng ở đối tác",
+      "status": "Open",
+      "resolution": null,
+      "resolved_by": null
     }
   ]
 }
 ```
 
-#### `PUT /api/admin/reconciliation/{runId}/details/{detailId}` - Cập nhật trạng thái xử lý
+#### `PUT /api/internal/reconciliation/{runId}/details/{detailId}` - Cập nhật trạng thái xử lý
 
-**Request:**
+Chỉ dòng lệch; `Resolved` bắt buộc `resolution` (ghi `resolved_by` = username token); `Open` để mở lại.
+
 ```json
 {
   "status": "Resolved",
@@ -1064,7 +1089,11 @@ config: { "name": "NewPartner", "version": "1.0.0" }
 }
 ```
 
-#### `POST /api/admin/reconciliation/export` - Xuất báo cáo đối soát
+#### `GET /api/internal/reconciliation/{id}/export?format=xlsx|pdf` - Xuất báo cáo đối soát
+
+Tải file trực tiếp (không qua task bất đồng bộ): Excel 3 sheet (Tổng hợp, Giao dịch lệch, Giao dịch khớp); PDF tổng hợp + danh sách lệch. Đợt chưa `Completed` → 409.
+
+#### `GET /api/internal/reconciliation/partners` - Cấu hình đối tác chọn được (`api` = có tra cứu API)
 
 ---
 
@@ -1562,7 +1591,7 @@ Scheduler           Payment Hub              Partner API
 ```
 POST /api/admin/transactions/export
 POST /api/admin/reports/export
-POST /api/admin/reconciliation/export
+GET  /api/internal/reconciliation/{id}/export?format=xlsx|pdf   (P5.4 — tải trực tiếp)
 GET  /api/admin/export/{taskId}/status
 GET  /api/admin/export/{taskId}/download
 ```
@@ -1572,7 +1601,7 @@ GET  /api/admin/export/{taskId}/download
 ### 10.2. Import (Reconciliation data)
 
 ```
-POST /api/admin/reconciliation/import
+POST /api/internal/reconciliation/import   (P5.4)
 Content-Type: multipart/form-data
 
 file: <partner_report.xlsx>

@@ -115,6 +115,8 @@ export interface StatusResult {
   transactionStatus?: string;
   message: string;
   partnerTxnId?: string;
+  /** Amount the PSP reports for the payment (VND), when it does — used by reconciliation (P5.4) */
+  amount?: number;
   signatureValid: boolean;
   partnerRaw: unknown;
 }

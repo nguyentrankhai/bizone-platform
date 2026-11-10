@@ -303,6 +303,65 @@ export async function computeAlerts(
       at: now.toISOString(),
     });
   }
+  // P5.4: open reconciliation discrepancies / failed runs of the last 3 days (partner-level, so
+  // only for tokens not bound to a merchant)
+  if (scope.merchantId === undefined) {
+    const since = new Date(now.getTime() - 3 * 86_400_000);
+    const [openRows, failedRuns] = await Promise.all([
+      prisma.reconciliationDetail.findMany({
+        where: {
+          status: "Open",
+          matchStatus: { in: ["Unmatched_PaymentHub", "Unmatched_Partner", "Amount_Mismatch"] },
+          reconciliationRun: { status: "Completed", runDate: { gte: since } },
+        },
+        select: {
+          discrepancyAmount: true,
+          reconciliationRun: {
+            select: { id: true, runDate: true, partnerConfig: { select: { name: true } } },
+          },
+        },
+        orderBy: { reconciliationRunId: "desc" },
+        take: 1000,
+      }),
+      prisma.reconciliationRun.findMany({
+        where: { status: "Failed", runDate: { gte: since } },
+        select: {
+          id: true,
+          runDate: true,
+          errorMessage: true,
+          partnerConfig: { select: { name: true } },
+        },
+        orderBy: { id: "desc" },
+        take: 5,
+      }),
+    ]);
+    if (openRows.length > 0) {
+      const latest = openRows[0].reconciliationRun;
+      const total = openRows.reduce((a, r) => a + Number(r.discrepancyAmount), 0);
+      alerts.push({
+        id: "recon-discrepancy",
+        level: "warning",
+        title: "Đối soát chênh lệch",
+        message: `${openRows.length} giao dịch lệch chưa xử lý, tổng ${total.toLocaleString("vi-VN")} ₫ — gần nhất ${latest.partnerConfig.name} ngày ${latest.runDate.toISOString().slice(0, 10)}`,
+        count: openRows.length,
+        href: `/reconciliation?run=${latest.id}`,
+        at: now.toISOString(),
+      });
+    }
+    if (failedRuns.length > 0) {
+      const f = failedRuns[0];
+      alerts.push({
+        id: "recon-failed",
+        level: "error",
+        title: "Đối soát lỗi",
+        message: `Đối soát ${f.partnerConfig.name} ngày ${f.runDate.toISOString().slice(0, 10)} lỗi: ${(f.errorMessage ?? "").slice(0, 160)}`,
+        count: failedRuns.length,
+        href: `/reconciliation?run=${f.id}`,
+        at: now.toISOString(),
+      });
+    }
+  }
+
   if (stuckRefunds.length > 0) {
     const oldest = stuckRefunds[0].transaction.txnCode;
     alerts.push({

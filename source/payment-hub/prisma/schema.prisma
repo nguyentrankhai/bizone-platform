@@ -105,6 +105,12 @@ enum ReconciliationMatchStatus {
   Unmatched_PaymentHub @map("Unmatched_PaymentHub")
   Unmatched_Partner    @map("Unmatched_Partner")
   Amount_Mismatch      @map("Amount_Mismatch")
+  Unverified
+}
+
+enum ReconciliationSource {
+  Api
+  File
 }
 
 enum ReconciliationDetailStatus {
@@ -461,6 +467,9 @@ model ReconciliationRun {
   runDate               DateTime                @map("run_date") @db.Date
   partnerConfigId       Int                     @map("partner_config_id")
   status                ReconciliationRunStatus @default(Running)
+  /// P5.4: partner side from status queries (Api) or an imported statement (File)
+  source                ReconciliationSource    @default(Api)
+  sourceFile            String?                 @map("source_file") @db.VarChar(255)
   totalPaymenthub       Int                     @default(0) @map("total_paymenthub")
   totalPartner          Int                     @default(0) @map("total_partner")
   totalAmountPaymenthub Decimal                 @default(0) @map("total_amount_paymenthub") @db.Decimal(15, 0)
@@ -469,9 +478,12 @@ model ReconciliationRun {
   unmatchedPaymenthub   Int                     @default(0) @map("unmatched_paymenthub")
   unmatchedPartner      Int                     @default(0) @map("unmatched_partner")
   amountMismatchCount   Int                     @default(0) @map("amount_mismatch_count")
+  unverifiedCount       Int                     @default(0) @map("unverified_count")
   totalDiscrepancy      Decimal                 @default(0) @map("total_discrepancy") @db.Decimal(15, 0)
   reportFile            String?                 @map("report_file") @db.VarChar(500)
   notes                 String?                 @db.Text
+  errorMessage          String?                 @map("error_message") @db.Text
+  triggeredBy           String?                 @map("triggered_by") @db.VarChar(100)
   startedAt             DateTime?               @map("started_at") @db.DateTime(0)
   completedAt           DateTime?               @map("completed_at") @db.DateTime(0)
   createdAt             DateTime                @default(now()) @map("created_at") @db.DateTime(0)
@@ -482,6 +494,7 @@ model ReconciliationRun {
   @@index([runDate], map: "idx_recon_date")
   @@index([partnerConfigId], map: "idx_recon_partner")
   @@index([status], map: "idx_recon_status")
+  @@index([partnerConfigId, runDate], map: "idx_recon_partner_date")
   @@map("reconciliation_runs")
 }
 
@@ -489,14 +502,22 @@ model ReconciliationDetail {
   id                  BigInt                     @id @default(autoincrement())
   reconciliationRunId Int                        @map("reconciliation_run_id")
   transactionId       Int?                       @map("transaction_id")
+  txnCode             String?                    @map("txn_code") @db.VarChar(100)
   partnerTxnId        String?                    @map("partner_txn_id") @db.VarChar(255)
+  /// Reference as written by the partner (order id, transfer note) — P5.4
+  partnerRef          String?                    @map("partner_ref") @db.VarChar(255)
   matchStatus         ReconciliationMatchStatus  @map("match_status")
   paymenthubAmount    Decimal?                   @map("paymenthub_amount") @db.Decimal(15, 0)
   partnerAmount       Decimal?                   @map("partner_amount") @db.Decimal(15, 0)
   discrepancyAmount   Decimal                    @default(0) @map("discrepancy_amount") @db.Decimal(15, 0)
   partnerTxnDate      DateTime?                  @map("partner_txn_date") @db.DateTime(0)
+  paymenthubStatus    String?                    @map("paymenthub_status") @db.VarChar(30)
+  partnerStatus       String?                    @map("partner_status") @db.VarChar(50)
+  note                String?                    @db.VarChar(500)
   status              ReconciliationDetailStatus @default(Open)
   resolution          String?                    @db.Text
+  resolvedBy          String?                    @map("resolved_by") @db.VarChar(100)
+  resolvedAt          DateTime?                  @map("resolved_at") @db.DateTime(0)
   createdAt           DateTime                   @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt           DateTime                   @updatedAt @map("updated_at") @db.DateTime(0)
 
@@ -506,6 +527,7 @@ model ReconciliationDetail {
   @@index([reconciliationRunId], map: "idx_recondetail_run")
   @@index([transactionId], map: "idx_recondetail_txn")
   @@index([matchStatus], map: "idx_recondetail_status")
+  @@index([reconciliationRunId, matchStatus], map: "idx_recondetail_run_match")
   @@map("reconciliation_details")
 }
 

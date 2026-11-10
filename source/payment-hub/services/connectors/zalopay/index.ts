@@ -441,6 +441,7 @@ export class ZalopayConnector implements PaymentConnector {
             : subMessage(sub, str(data.sub_return_message) || str(data.return_message)),
       partnerTxnId:
         data.zp_trans_id && str(data.zp_trans_id) !== "0" ? str(data.zp_trans_id) : undefined,
+      ...(Number(data.amount) > 0 ? { amount: Number(data.amount) } : {}),
       signatureValid: wellFormed,
       partnerRaw: { ...data, app_trans_id: appTransId },
     };

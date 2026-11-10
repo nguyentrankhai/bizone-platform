@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P5.3 — Refund Module: API hoàn tiền merchant + admin (toàn phần / một phần cộng dồn, giữ chỗ số tiền dưới khoá dòng, idempotency), trạng thái `PartiallyRefunded`/`Refunded`, webhook `refund.completed` qua outbox, worker hỏi lại hoàn tiền ZaloPay, xác nhận thủ công khi đối tác không trả lời, form + lịch sử hoàn tiền trong chi tiết GD. Kế tiếp: P5.4)
+**Cập nhật lần cuối:** 2026-11-11 (P5.4 — Reconciliation Module: đối soát theo đối tác × ngày bằng tra cứu API từng GD (job 00:00 + chạy tay qua worker) hoặc nhập sao kê CSV/Excel (gồm sao kê ngân hàng cho VietQR); khớp / chỉ có ở Hub / chỉ có ở đối tác / lệch tiền / chưa tra cứu được; xử lý lệch, xuất Excel/PDF, cảnh báo dashboard; 10 000 GD < 5 s. Kế tiếp: P5.5)
 
 ---
 
@@ -17,10 +17,10 @@
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
-| 5 — Payment Hub Mở rộng | 6 | 1 | 2 | 3 |
+| 5 — Payment Hub Mở rộng | 6 | 2 | 2 | 2 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **33** | **5** | **15** |
+| **Tổng** | **53** | **34** | **5** | **14** |
 
 ---
 
@@ -47,12 +47,12 @@
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
 | ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
 | ~~18~~ | ~~`VnpayConnector.refund()` / `MomoConnector.refund()` / `ZalopayConnector.refund()` chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái, API)~~ | ~~P3.3~~ | ✅ P5.3 |
-| 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
+| 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`). **P5.4: đối soát phát hiện** (dòng `Unmatched_Partner` gắn GD, ghi chú "đối tác đã thu tiền nhưng Payment Hub ghi Expired") — xử lý vẫn thủ công (hoàn tiền ngoài Hub / xác nhận), chưa có thao tác "xác nhận thanh toán" từ dòng đối soát (#115) | P3.3 | #115 |
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
 | 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
 | 22 | Mapper `merchant_id` đã có trên client `payhub-admin-console`, nhưng chưa user Keycloak nào được gán thuộc tính này (token admin hiện xem mọi merchant) | QA-1 | Khi có tài khoản merchant |
 | 23 | VietQR đang dùng **tài khoản demo** (`VIETQR_*` trong `.env.development` / `.env.local`: Vietcombank `0011001234567`) → điền tài khoản nhận thật rồi `npm run db:seed` | P3.4 | Người dùng |
-| 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` | P3.4 | P5.4 Đối soát / connector ngân hàng |
+| 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` **P5.4: nhập sao kê ngân hàng (CSV/XLSX) để đối soát VietQR** — tiền về cho GD `Pending`/`Expired` hiện thành `Unmatched_Partner`, nhưng vẫn không tự xác nhận GD | P3.4 | Connector ngân hàng (Casso/SePay) / #115 |
 | ~~25~~ | ~~`POST /api/v1/transactions` chưa nhận `payment_method: vietqr`; `/pay/{txn}` chưa có VietQR~~ | ~~P3.4~~ | ✅ P3.8 |
 | 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
 | 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
@@ -61,7 +61,7 @@
 | 30 | BizOne `/api/webhooks/payhub`: từ P4.5 áp `payment.success/failed/expired` cho thanh toán thẻ/QR tại POS (`merchant_txn_id = BZ-{tenant}-{intentId}` mang tenant). Còn lại: một bộ `PAYHUB_API_KEY/SECRET` + `PAYHUB_WEBHOOK_SECRET` cho cả app (một merchant Payment Hub cho mọi tenant — chưa map merchant ↔ tenant); đơn hàng online chưa thanh toán qua Payment Hub | P3.6 | P6.1 / onboarding tenant (#20) |
 | 31 | API webhook cho merchant (`POST /api/v1/webhooks`, `POST /api/v1/webhook-test` trong OpenAPI / API-Design §5.4) chưa có — hiện chỉ admin cấu hình qua `/api/internal/webhooks` | P3.6 | Cổng merchant / P7.x |
 | 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | P6.5 / triển khai |
-| 33 | Cảnh báo dashboard dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`: ≥ 5 GD lỗi và ≥ 30 % trong 60 phút; ≥ 5 lần gửi webhook lỗi/giờ; outbox kẹt > 5 phút). Chưa có cảnh báo "đối tác mất kết nối", "đối soát chênh lệch", "hoàn tiền" như mockup — chưa có nguồn dữ liệu | P3.7 | P5.4 (đối soát), P5.6/P7.x (giám sát connector, cấu hình ngưỡng) |
+| 33 | Cảnh báo dashboard dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`: ≥ 5 GD lỗi và ≥ 30 % trong 60 phút; ≥ 5 lần gửi webhook lỗi/giờ; outbox kẹt > 5 phút). Chưa có cảnh báo "đối tác mất kết nối" như mockup — chưa có nguồn dữ liệu. ~~Hoàn tiền~~ ✅ P5.3 (chờ xác nhận > 15'), ~~đối soát chênh lệch~~ ✅ P5.4 (lệch chưa xử lý 3 ngày gần nhất + đợt lỗi) | P3.7 | P5.6/P7.x (giám sát connector, cấu hình ngưỡng) |
 | 34 | Dashboard theo merchant (token có claim `merchant_id`) mới kiểm bằng code + unit, chưa kiểm end-to-end vì chưa có user Keycloak mang claim này (#22) | P3.7 | Khi có tài khoản merchant |
 | 35 | Route Engine chỉ có API admin (`/api/internal/routes/*`), chưa có màn hình cấu hình ưu tiên đối tác theo merchant / xem circuit | P3.8 | Module Merchant / P7.1 (`app/connectors`) |
 | 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB): chưa có Health Monitor định kỳ, chưa dùng bảng `connector_health_logs` / `connector_circuit_breaker_states` (migration_001), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá | P3.8 | P7.1 / P7.5 |
@@ -140,12 +140,18 @@
 | 109 | Chỉ phát webhook `refund.completed` (theo SRS / API-Design; OpenAPI cũ ghi `refund.success`/`refund.failed` — đã sửa). Hoàn tiền bất đồng bộ (ZaloPay) **thất bại sau đó** không có webhook — merchant thấy qua `GET /api/v1/transactions/{id}` (`refunds[]`) | P5.3 | Khi merchant cần (thêm sự kiện `refund.failed`) |
 | 110 | Hoàn tiền / xác nhận thủ công ghi `transaction_logs` + `refunds.requested_by` (username token), chưa vào `audit_logs` (SRS-PH-AUDIT-02-01) — cùng #38. `refunds.processed_by` (FK `users`) không dùng vì user Keycloak không có trong bảng `users`. Chưa tách quyền "hoàn tiền" khỏi `payhub-admin` (SRS: Admin + Operations) | P5.3 | P7.2 Audit Log / phân quyền vận hành |
 | 111 | Chi tiết GD (`/transactions/{id}`) hiện "Tên merchant: —" — `getTransactionById/ByCode` không nạp `merchant` (có từ P3.2) | P5.3 (phát hiện) | Task UI Payment Hub |
+| 112 | Đối soát (P5.4) chỉ đối chiếu **thanh toán**; hoàn tiền (`refunds`) và phí giao dịch chưa đối soát với đối tác — yêu cầu hoàn `Processing` (#108) vẫn xác nhận tay | P5.4 | P5.5 / khi có file đối soát hoàn tiền của đối tác |
+| 113 | Nguồn `Api` = 1 lệnh tra cứu / GD (VNPay `querydr`, MoMo `query`, ZaloPay `query`) — không thấy được tiền đối tác thu cho đơn Hub không biết (chỉ nhập file mới thấy). ZaloPay trả `-101` (không có đơn) cho GD Hub ghi đã trả → `Unverified` thay vì "đối tác thiếu". **Chưa có file đối soát thật** của VNPay / MoMo / ZaloPay / ngân hàng: cột nhận theo tên tiêu đề phổ biến (`statement.ts`), cần kiểm lại với file mẫu thật khi có tài khoản merchant (#16, #100, #104) | P5.4 | Khi có credential / file mẫu đối tác |
+| 114 | Thông báo chênh lệch đối soát (SRS-PH-RECON-01-05) chỉ qua cảnh báo dashboard + sự kiện realtime `recon.completed` + log worker; chưa gửi email / thông báo hệ thống (Payment Hub chưa có dịch vụ email; bảng `notifications` gắn `users` — user Keycloak không có trong bảng) | P5.4 | Module thông báo Payment Hub (P7.x) |
+| 115 | Đối soát không bao giờ đổi trạng thái GD: tiền đối tác đã thu cho GD `Expired`/`Failed`/`Pending` (thanh toán muộn #19, VietQR #24) chỉ được báo + đánh dấu "đã xử lý" bằng ghi chú. Chưa có thao tác "xác nhận thanh toán" / "tạo yêu cầu hoàn" từ dòng lệch, chưa có nút "Tra soát" (P5.6) | P5.4 | P5.6 Tra soát / khi có quyết định nghiệp vụ |
+| 116 | Xuất báo cáo đối soát Excel/PDF tải trực tiếp trong request (10 000 dòng ~0,4 MB, < 2 s), chưa theo mô hình task bất đồng bộ `export/{taskId}` của API-Design §10.1. `npm audit --omit=dev` Payment Hub nay có 2 moderate `exceljs → uuid` (như BizOne, chỉ ảnh hưởng uuid v3/v5/v6 có `buf`) | P5.4 | P5.5 (export báo cáo chung) / khi exceljs cập nhật |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-11 | Thanh toán muộn cho GD đã hết hạn (#19) và tiền VietQR về tài khoản (#24) không có cách nào phát hiện ngoài đọc log; trang `/reconciliation` là dữ liệu tĩnh | Đối soát P5.4: tra cứu API cả GD Hub chưa ghi nhận thanh toán + nhập sao kê ngân hàng → dòng `Unmatched_Partner` gắn GD; UI + cảnh báo dashboard (xử lý vẫn thủ công — #115) |
 | 2026-11-10 | Connector đã có `refund()` nhưng không có luồng hoàn tiền (#18), `refund.completed` không phát (#29), hoàn tiền ZaloPay bất đồng bộ không ai hỏi lại (#105); log GD cùng giây hiện ngược thứ tự | `refund.service` + API merchant / admin + UI (P5.3): giữ chỗ số tiền dưới khoá dòng GD, outbox `refund.completed`, worker `syncPendingRefunds`; log sắp theo `created_at, id` |
 | 2026-11-07 | Lần đầu vào BizOne không vào được trang chức năng: `/` là trang tĩnh với nút "Bắt đầu" không dẫn đi đâu; sidebar link tới 5 module chưa có (`/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings`) → 404; thiếu/ hết hạn `DEV_AUTH_TOKEN` → mọi trang trắng (dashboard `return null`) không giải thích; màn hẹp sidebar che hết nội dung | `/` chuyển về `/dashboard`; mục chưa xây hiện "Sắp có" (không link); `AppLayout` hiện banner "Chưa đăng nhập" (token thiếu/hết hạn, tính mỗi request); sidebar tự thu gọn < 1024 px (`AppShell` tách riêng cho client component). Gốc vẫn là #7 — chưa có đăng nhập Keycloak trên trình duyệt |
 | 2026-11-07 | QA-2 mức cao: dashboard BizOne dùng chung cache giữa tenant (#39); HĐ POS không có audit log, `user_id` luôn NULL (#40); Payment Hub đọc sai header idempotency + 5 request đồng thời tạo 5 GD (#41); `merchant_txn_id` không duy nhất (#42) | Key cache `dashboard:{tenant}:*` TTL 20 s + xoá khi có HĐ; middleware audit tRPC + `invoice.service` tự ghi (gồm thanh toán qua WS); `Idempotency-Key` + claim `SET NX`; unique `(merchant_id, merchant_txn_id)` → 409 (QA-2 fix) |
@@ -237,7 +243,7 @@
 | P5.1 | MoMo Connector | 🟡 | `07ce9dd` | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
 | P5.2 | ZaloPay Connector | 🟡 | `741106a` | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
 | P5.3 | Refund Module — API & UI | ✅ | `3fd8665` | Hoàn tiền kiểm bằng mock VNPay / MoMo / ZaloPay (e2e 57/58 — 1 kỳ vọng sai trong script); hoàn tiền thật trên sandbox chờ credential (#16, #100, #104). Xem [kết quả P5.3](#p53--refund-module--api--ui) |
-| P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
+| P5.4 | Reconciliation Module — API & UI | ✅ | — | Kiểm bằng mock tra cứu VNPay / MoMo / ZaloPay + file sao kê mẫu (e2e 41/41, 10 000 GD: API 4 s, file 1,7 s); file đối soát thật của đối tác chờ credential (#113). Xem [kết quả P5.4](#p54--reconciliation-module--api--ui) |
 | P5.5 | Payment Hub Reports | ⬜ | — | |
 | P5.6 | Dispute Module — API & UI | ⬜ | — | |
 
@@ -2176,3 +2182,51 @@ Ngoài plan, theo yêu cầu người dùng.
   - Kết quả 502 nhả `Idempotency-Key` (không có tiền đi) để merchant gửi lại; 200 / 202 được lưu 24 giờ.
 
 - **Vấn đề / lưu ý:** đóng #18, #29, #105 (poll hoàn tiền); cập nhật #74 (Payment Hub đã có API — BizOne chưa gọi); mới #107–#111. Kiểm thật khi có credential sandbox: hoàn tiền GD VNPay (#16), MoMo (#100), ZaloPay (#104) qua form trong chi tiết GD. Hoàn tiền cho thanh toán muộn (#19) và đối chiếu hoàn tiền thuộc P5.4.
+
+
+### P5.4 — Reconciliation Module — API & UI
+
+- **Hoàn thành:** 2026-11-11 · **Commit:** `—` · **Vị trí:** `source/payment-hub/` — `services/reconciliation/` (`engine.ts` so khớp thuần, `statement.ts` đọc sao kê, `queue.ts`), `server/services/reconciliation.service.ts`, `server/services/reconciliationExport.ts`, `server/jobs/dailyReconciliation.ts` (+ `services/worker.ts`), `server/routes/reconciliation.ts` + `app/api/internal/reconciliation/**`, `app/reconciliation/page.tsx`, `components/ph/{ReconciliationClient,ReconciliationTable,ReconciliationDetail}.tsx` + `recon-api.ts`, `services/connectors/{types,vnpay,momo,zalopay}` (`StatusResult.amount`), `server/services/dashboard.service.ts`, `prisma/migrations/6_reconciliation`, `database/schema_paymenthub.sql`, `next.config.ts`, `tests/reconciliation.test.ts`, API-Design §6.7 / §10
+- **Đã làm:**
+  - **Engine so khớp** (thuần, không DB): phía Hub = GD của 1 cấu hình đối tác thanh toán trong ngày (giờ VN, theo `paid_at`); khoá `partner_txn_id` rồi `txn_code` (`extractTxnCode` nhận `TXN-…`, nội dung CK `TXN…` không gạch, MoMo `_2`, ZaloPay `yymmdd_TXN…_n`). Kết quả: `Matched`, `Amount_Mismatch`, `Unmatched_PaymentHub` (đối tác không có / báo chưa trả), `Unmatched_Partner` (đối tác thu tiền mà Hub không ghi nhận: mã lạ, thanh toán trùng, GD Hub `Pending`/`Expired`/`Failed` — #19), `Unverified` (tra cứu lỗi — không tính chênh lệch). Thanh toán ngày khác được nêu tên trong sao kê → khớp kèm ghi chú, không thành lệch. Tổng hợp: số GD + tổng tiền mỗi bên, số khớp / từng loại lệch, tổng chênh lệch
+  - **Nguồn `Api`** (`queryPartnerSide`): 1 `getStatus` / GD (song song `RECON_API_CONCURRENCY`, mặc định 8) cho GD đã trả trong ngày + GD tạo trong ngày Hub chưa ghi nhận trả; connector VNPay / MoMo / ZaloPay trả thêm `amount` để so số tiền. VietQR không có API → chỉ đối soát bằng file
+  - **Nguồn `File`** (`statement.ts`): CSV (BOM, `,` `;` tab, ngoặc kép) hoặc XLSX (exceljs), ≤ 10 MB / 50 000 dòng; tự tìm dòng tiêu đề (bỏ dòng tiêu đề báo cáo của ngân hàng); nhận cột theo tên (không phân biệt hoa thường / dấu): số tiền (`amount`, `số tiền`, `ghi có`, `vnp_Amount` ÷ 100), tham chiếu, mã GD đối tác, trạng thái (không có cột = đã trả, như sao kê), thời gian (`dd/MM/yyyy HH:mm`, `yyyyMMddHHmmss`, ISO — giờ VN); dòng ghi nợ / thiếu số tiền / thiếu tham chiếu bị bỏ qua và báo theo **số dòng của file**
+  - **Đợt đối soát** (`reconciliation_runs`): tạo `Running` (từ chối ngày chưa kết thúc, đối tác không có API khi chọn API, trùng đợt đang chạy → 409) → thực thi → lưu **mọi dòng** (cả dòng khớp, để báo cáo liệt kê) theo lô 1 000 → `Completed` + tổng; lỗi → `Failed` + `error_message`. Đối soát không đổi trạng thái GD
+  - **Job hằng ngày**: BullMQ job scheduler `recon-daily` (`RECON_DAILY_CRON`, mặc định `0 0 * * *`, tz Asia/Ho_Chi_Minh) trong worker → đối soát ngày hôm qua cho mọi cấu hình có hoạt động + có API tra cứu, bỏ qua cấu hình đã có đợt `Api` hoàn tất (worker khởi động lại / nhiều worker không chạy trùng); đợt chạy tay bằng API cũng thực thi trong worker (queue `payhub-reconciliation`, concurrency 1), Redis lỗi → chạy ngay trong request
+  - **API admin** `/api/internal/reconciliation` (đọc: admin/viewer, ghi: admin; token gắn merchant → 403): danh sách đợt (lọc đối tác / ngày / trạng thái, phân trang), chạy API (202), nhập file (201 + dòng bỏ qua), chi tiết đợt, dòng đối soát (lọc kiểu / xử lý / tìm mã, phân trang ≤ 100, sắp theo chênh lệch), xử lý dòng lệch (`Resolved` bắt buộc ghi cách xử lý, lưu người + thời điểm; mở lại), xuất `xlsx` (Tổng hợp / Giao dịch lệch / Giao dịch khớp) và `pdf` (tổng hợp + danh sách lệch, Roboto tiếng Việt)
+  - **Migration `6_reconciliation`**: đợt thêm `source`, `source_file`, `unverified_count`, `error_message`, `triggered_by` + index (đối tác, ngày); dòng thêm `txn_code`, `partner_ref`, `paymenthub_status`, `partner_status`, `note`, `resolved_by`, `resolved_at`, enum `Unverified` + index (đợt, kiểu)
+  - **UI `/reconciliation`** (mockup "Đối soát tự động", thay trang dữ liệu tĩnh): bảng đợt (ngày, đối tác, nguồn, GD PH/ĐT, khớp, lệch + chưa xử lý / chưa tra cứu, chênh lệch, trạng thái), chọn đợt → 4 thẻ (khớp, đối tác thiếu, PH thiếu, tổng chênh lệch), bảng dòng lệch (link GD, mã đối tác + tham chiếu, kiểu, số tiền 2 bên, chênh lệch, ghi chú, "Xử lý"), lọc / tìm / phân trang, tải Excel / PDF; "Chạy đối soát" (đối tác, ngày, tra cứu API hoặc chọn file — VietQR chỉ file), đợt đang chạy tự cập nhật 3 s; `?run=` mở thẳng một đợt (link từ dashboard)
+  - **Dashboard**: cảnh báo "Đối soát chênh lệch" (dòng lệch chưa xử lý của đợt 3 ngày gần nhất, tổng tiền, link đợt) và "Đối soát lỗi"; sự kiện realtime `recon.completed`
+  - Đóng gói: `exceljs` + `pdfmake` 0.3.12 (cùng bản BizOne) trong `serverExternalPackages`; font Roboto đọc từ `node_modules/pdfmake/fonts` theo `process.cwd()` (`PDF_FONT_DIR`) — `require.resolve` file .ttf làm Turbopack lỗi build / trả module id; `outputFileTracingIncludes` đưa font vào bản standalone (Docker)
+  - Test Vitest `tests/reconciliation.test.ts` (14): nhận mã GD trong mọi dạng tham chiếu; 4 kiểu lệch + tổng; thanh toán muộn; đối tác báo thất bại; `Unverified`; thanh toán trùng + ngày khác; 10 000 GD < 1 s; nhận cột tiếng Việt / VNPay; số tiền / trạng thái / ngày giờ VN; CSV; sao kê ngân hàng (dòng tiêu đề, ghi nợ, số dòng); XLSX; file sai; ranh giới ngày VN
+
+- **Kiểm thử** (`next build` + `next start` :4010, worker `dist/worker.mjs`, **mock tra cứu** VNPay `querydr` :3995 (ký phản hồi HMAC-SHA512) / MoMo `query` :3998 / ZaloPay `query` :3997 — kiểm chữ ký từng yêu cầu, trả lời theo kịch bản từng đơn; merchant `P54TEST`, 4 cấu hình đối tác test; 12 GD kịch bản + **10 000 GD VNPay** ngày 10/11/2026 tạo bằng SQL; job hằng ngày chạy bằng script gọi `runDailyReconciliation`; script e2e gọi API admin; trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Chạy đối soát → matched/unmatched chính xác | ✅ MoMo (API): khớp 401; đối tác báo `1006` cho GD Hub `Success` → `Unmatched_PaymentHub` 200k; đối tác 290k / Hub 300k → `Amount_Mismatch` 10k; GD Hub `Expired` mà đối tác đã thu → `Unmatched_Partner` 150k (ghi chú thanh toán muộn); HTTP 500 → `Unverified`; GD `Pending` đối tác `1000` → không tạo dòng; GD trả ngày khác → không tra cứu. Tổng: PH 4 GD 650k, ĐT 3 GD 540k, chênh lệch 360k. File MoMo (.xlsx, có dòng tiêu đề báo cáo): khớp 2 (gồm GD ngày khác), lệch tiền 1, chỉ PH 2, chỉ đối tác 3 (GD hết hạn, mã lạ, tham chiếu không có mã). Sao kê ngân hàng VietQR (.csv `;`, BOM, 3 dòng tiêu đề): khớp theo nội dung CK, GD `Expired` có tiền về → chỉ đối tác, GD không có tiền → chỉ PH, dòng ghi nợ báo bỏ qua ở dòng 7. Mock: 0 yêu cầu sai chữ ký |
+  | Hiệu năng (SRS: 10 000 GD < 5 phút) | ✅ **API**: 10 000 GD VNPay tra cứu + so khớp trong **~4 s** (mock trả ngay; với đối tác thật ≈ 10 000 × độ trễ / 8 luồng); **File**: sao kê 10 000 dòng → khớp 9 995, lệch tiền 3, chỉ PH 2, chỉ đối tác 1 trong **1,7 s**; `vnp_Amount` ÷ 100 đúng tổng |
+  | Đối soát tự động 00:00 | ✅ job scheduler `recon-daily` có trong Redis (`0 0 * * *`, Asia/Ho_Chi_Minh, lần kế tiếp 12/11 00:00 VN); chạy job cho 10/11: tạo đợt cho VNPay / MoMo / ZaloPay, bỏ VietQR (không có API) và cấu hình VietQR có sẵn; chạy lại → không còn ứng viên (không trùng) |
+  | Cảnh báo khi có lệch | ✅ `GET /api/internal/dashboard` có cảnh báo `recon-discrepancy` (số dòng lệch chưa xử lý, tổng tiền, link `/reconciliation?run=…`); log worker `[recon] … discrepancies`; sự kiện `recon.completed` |
+  | Export báo cáo | ✅ Excel 3 sheet (tổng hợp, 4 dòng lệch + chưa tra cứu, 1 dòng khớp), tên file `doi-soat-momo-2026-11-10-<id>.xlsx`; Excel đợt 10 000 dòng 426 KB; PDF 28 KB mở được, tiếng Việt đúng (kiểm bằng xem trang PDF) — cả `next start` lẫn bản **standalone**; `format=csv` → 400 |
+  | Lưu lịch sử / UI | ✅ API: danh sách đợt + lọc ngày, chi tiết, lọc kiểu (`discrepancy` / `all` / từng kiểu), tìm mã, phân trang; xử lý dòng (thiếu ghi chú 400, dòng khớp 400, dòng của đợt khác 404, mở lại xoá người xử lý). Trình duyệt: bảng đợt, thẻ tổng hợp, bảng lệch, "Xử lý" → 3/3 → 2/3 chưa xử lý; "Chạy đối soát" ZaloPay (API) → worker chạy → trang tự chuyển "Hoàn tất"; chọn VietQR → tuỳ chọn API bị khoá, nhập file CSV → đợt mới hoàn tất 2/2 khớp. Không lỗi console của app |
+  | Kiểm lỗi | ✅ ngày tương lai / sai định dạng → 400; VietQR bằng API → 400 `SOURCE_UNSUPPORTED`; cấu hình / đợt không tồn tại → 404; đợt trùng đang chạy → 409; file rỗng / không phải csv-xlsx / không có cột số tiền + tham chiếu → 400 kèm giải thích |
+  | Script e2e | ✅ 41/41 (lần đầu 39/41: PDF lỗi vì Turbopack đổi `require.resolve` thành module id → sửa đường dẫn font; 1 kỳ vọng sai trong script) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 113/113; 7 route mới + `/reconciliation` đều `ƒ`) |
+  | Dọn dẹp | ✅ dừng :4010, :4011 (standalone), worker, mock; xoá 9 đợt đối soát (dòng cascade), 10 012 GD test, 4 cấu hình đối tác, merchant `P54TEST`; xoá job BullMQ đối soát test (giữ job scheduler `recon-daily` — cấu hình thật của worker); xoá script tạm; khôi phục `.claude/launch.json` |
+
+- **Khác biệt so với plan:**
+  - "Lấy báo cáo từ đối tác": VNPay / MoMo / ZaloPay dùng ở đây không có API liệt kê / tải file đối soát → nguồn tự động là **tra cứu từng GD**; file đối soát đối tác / sao kê ngân hàng nhập tay qua UI/API (SRS-PH-RECON-01-02/06 cho phép file). Tự động không thấy được tiền đối tác thu cho đơn Hub không biết (#113).
+  - Thêm kiểu `Unverified` (tra cứu lỗi) — PLAN/SRS chỉ có 4 kiểu; không gộp vào "lệch" để tránh báo động giả khi đối tác chập chờn.
+  - Đường dẫn `/api/internal/reconciliation` (không phải `/api/admin/*`); xuất file `GET …/{id}/export?format=` tải trực tiếp thay vì `POST /export` + task (#116); file đặt `services/reconciliation/engine.ts`, `server/jobs/dailyReconciliation.ts`, `server/routes/reconciliation.ts` như PLAN, component `ReconciliationTable` / `ReconciliationDetail` + `ReconciliationClient`.
+  - "Cảnh báo nếu có chênh lệch": cảnh báo dashboard + realtime, chưa có email (#114).
+  - "Báo cáo đối soát" tổng hợp nhiều ngày / tab báo cáo thuộc P5.5.
+
+- **Quyết định thiết kế:**
+  - Đối soát chỉ **báo**, không sửa dữ liệu giao dịch: kết luận từ một nguồn bên ngoài (file nhập tay, tra cứu lỗi) không được tự đổi trạng thái tiền; vận hành xác nhận và ghi cách xử lý trên từng dòng.
+  - Một đợt = một cấu hình đối tác × một ngày giờ VN, cho phép chạy lại nhiều lần (lịch sử giữ đủ); job tự động bỏ qua cấu hình đã có đợt API hoàn tất ⇒ chạy lại worker / nhiều worker không trùng.
+  - Lưu cả dòng khớp: báo cáo SRS cần "danh sách GD khớp", và xử lý lệch / tra cứu theo mã không phải đối soát lại.
+  - Tra cứu API chạy trong worker (có thể hàng nghìn lệnh), file chạy ngay trong request (thuần CPU, 10 000 dòng < 2 s) ⇒ người dùng thấy kết quả file ngay.
+  - Nhận cột theo tên tiêu đề thay vì một mẫu cố định: dùng thẳng file xuất từ cổng đối tác / ngân hàng, không cần chỉnh tay.
+
+- **Vấn đề / lưu ý:** cập nhật #19, #24, #33 (đối soát phát hiện + cảnh báo; xử lý vẫn thủ công); mới #112–#116. #27 (layout Payment Hub ở 375 px) cũng áp dụng cho `/reconciliation`. Khi có tài khoản merchant thật: chạy đối soát API cho VNPay / MoMo / ZaloPay sandbox và nhập file đối soát mẫu của từng đối tác để kiểm cột (#113).

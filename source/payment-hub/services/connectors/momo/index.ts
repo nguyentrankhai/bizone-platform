@@ -285,6 +285,7 @@ export class MomoConnector implements PaymentConnector {
       transactionStatus: str(data.resultCode),
       message: resultMessage(code, str(data.message)),
       partnerTxnId: data.transId && str(data.transId) !== "0" ? str(data.transId) : undefined,
+      ...(Number(data.amount) > 0 ? { amount: Number(data.amount) } : {}),
       signatureValid: echoOk,
       partnerRaw: data,
     };

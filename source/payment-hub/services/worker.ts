@@ -8,6 +8,11 @@ import { runExpireJob } from "@/server/jobs/expireTransactions";
 import { runExpireQrJob } from "@/server/jobs/expireQrCodes";
 import { runSyncPendingPayments } from "@/server/jobs/syncPendingPayments";
 import { runSyncPendingRefunds } from "@/server/jobs/syncPendingRefunds";
+import {
+  processReconciliationJob,
+  scheduleDailyReconciliation,
+} from "@/server/jobs/dailyReconciliation";
+import { RECON_QUEUE, type ReconJob } from "./reconciliation/queue";
 
 const webhookWorker = new Worker<WebhookJob>(WEBHOOK_QUEUE, processWebhookJob, {
   connection: queueConnection(),
@@ -37,6 +42,23 @@ webhookWorker
     console.error("[worker] failed to connect to Redis:", err);
     process.exit(1);
   });
+
+// Reconciliation (P5.4): runs started from the admin UI + daily 00:00 (VN) scheduler.
+// Concurrency 1: a run may issue thousands of PSP status queries.
+const reconWorker = new Worker<ReconJob>(RECON_QUEUE, processReconciliationJob, {
+  connection: queueConnection(),
+  concurrency: 1,
+  lockDuration: 10 * 60_000,
+});
+reconWorker.on("failed", (job, err) =>
+  console.error(`[recon] job ${job?.name} #${job?.id} failed: ${err.message}`),
+);
+reconWorker.on("error", (err) => console.error(`[recon] ${describeError(err)}`));
+void scheduleDailyReconciliation()
+  .then(() => console.log(`[worker] reconciliation scheduled (queue "${RECON_QUEUE}")`))
+  .catch((err: unknown) =>
+    console.error("[recon] scheduler:", err instanceof Error ? err.message : err),
+  );
 
 // Webhook outbox sweeper: dispatch transaction events nobody enqueued (Redis was down, crash…)
 const OUTBOX_INTERVAL_MS = 30_000;
@@ -79,7 +101,7 @@ async function shutdown(signal: string) {
   console.log(`[worker] ${signal} received, draining…`);
   // close() waits for Redis; exit before Docker's 10s SIGKILL if Redis is unreachable.
   setTimeout(() => process.exit(1), 8000).unref();
-  await webhookWorker.close();
+  await Promise.all([webhookWorker.close(), reconWorker.close()]);
   process.exit(0);
 }
 
