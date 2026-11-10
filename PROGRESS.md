@@ -229,7 +229,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P5.1 | MoMo Connector | 🟡 | `07ce9dd` | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
-| P5.2 | ZaloPay Connector | 🟡 | — | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
+| P5.2 | ZaloPay Connector | 🟡 | `741106a` | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
 | P5.3 | Refund Module — API & UI | ⬜ | — | |
 | P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
 | P5.5 | Payment Hub Reports | ⬜ | — | |
@@ -2067,7 +2067,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P5.2 — ZaloPay Connector
 
-- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential ZaloPay sandbox (#104) · **Commit:** — · **Vị trí:** `source/payment-hub/services/connectors/zalopay/` (`index.ts`, `zalopay.util.ts`), `server/routes/zalopay-callback.ts` + `app/api/ipn/zalopay/`, `server/routes/zalopay-redirect.ts` + `app/pay/zalopay/return/`, `server/routes/wallet-redirect.ts` (dùng chung MoMo / ZaloPay), `services/connectors/{registry,types}.ts`, `services/routing/routeMap.ts`, `server/services/payment.service.ts`, `server/routes/transactions.ts`, `lib/partner-types.ts`, `components/ph/PartnerForm.tsx`, `prisma/seed.ts`, `tests/zalopay.test.ts`
+- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential ZaloPay sandbox (#104) · **Commit:** `741106a` · **Vị trí:** `source/payment-hub/services/connectors/zalopay/` (`index.ts`, `zalopay.util.ts`), `server/routes/zalopay-callback.ts` + `app/api/ipn/zalopay/`, `server/routes/zalopay-redirect.ts` + `app/pay/zalopay/return/`, `server/routes/wallet-redirect.ts` (dùng chung MoMo / ZaloPay), `services/connectors/{registry,types}.ts`, `services/routing/routeMap.ts`, `server/services/payment.service.ts`, `server/routes/transactions.ts`, `lib/partner-types.ts`, `components/ph/PartnerForm.tsx`, `prisma/seed.ts`, `tests/zalopay.test.ts`
 - **Đã làm:**
   - **`ZalopayConnector`** (implement `PaymentConnector`, ZaloPay OpenAPI v2; App ID = `merchant_code`, Key1 = `api_key` ký yêu cầu, Key2 = `secret_key` kiểm callback / redirect — cả hai mã hoá AES-256-GCM):
     - `createTransaction` — `POST …/v2/create`, `mac = HMAC-SHA256(key1, app_id|app_trans_id|app_user|amount|app_time|embed_data|item)`; `embed_data` = `{ redirecturl, preferred_payment_method: ["zalopay_wallet"] }` (QR ví ZaloPay), `bank_code = ""`, `item = "[]"`, `callback_url` = webhook URL của cấu hình (mặc định `{APP_URL}/api/ipn/zalopay`), `expire_duration_seconds` = số giây còn lại của GD (≤ 30 ngày) ⇒ đơn ZaloPay không sống lâu hơn GD; trả `order_url` (payment_url) + `qr_code` (PartnerQR)
