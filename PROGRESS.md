@@ -262,7 +262,7 @@
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
-| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | _(điền sau commit)_ |
+| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` |
 
 ---
 
@@ -1928,7 +1928,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-3 — Rà soát cuối Giai đoạn 4 (2026-11-10)
 
-- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `PROGRESS.md`, `CLAUDE.md` (chỉ tài liệu — chưa sửa code)
+- **Hoàn thành:** 2026-11-10 · **Commit:** `88e21c9` · **Vị trí:** `PROGRESS.md`, `CLAUDE.md` (chỉ tài liệu — chưa sửa code)
 - **Bối cảnh:** bước B6 — GĐ 4 xong 9/9 (P4.0–P4.8); GĐ 5 chưa bắt đầu. Người dùng chọn rà soát trước P5.1.
 - **Cách làm:** production build BizOne `next start :3001` (+ realtime `:3002`, worker đang chạy bằng `tsx watch` trên cùng code); token Keycloak thật (Authorization Code + PKCE) cho `demo.seller`, `demo.manager` và nhân viên tạm `qa3.seller` tạo qua `staff.create`; script tRPC / REST / WebSocket; một subagent đọc toàn bộ router + service GĐ 4 tìm lỗi phân quyền / cô lập (chỉ đọc), các phát hiện mức cao / trung bình được kiểm lại bằng code hoặc chạy thật. P4.8 dùng kết quả nghiệm thu cùng ngày (code không đổi).
 
