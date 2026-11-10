@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
 import { resolveDbUserId } from "@/server/services/user.service";
 import * as supplier from "@/server/services/supplier.service";
+import { assertFund } from "@/server/services/cashFund.service";
 import {
   createSupplierSchema,
   listSuppliersSchema,
@@ -45,9 +46,14 @@ export const supplierRouter = router({
 
   recordPayment: permissionProcedure("supplier:manage_po")
     .input(recordPaymentSchema)
-    .mutation(async ({ input, ctx }) =>
-      supplier.recordSupplierPayment(input, await resolveDbUserId(ctx.user)),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      const fund = input.fundId ? await assertFund(ctx.branch, input.fundId) : null;
+      return supplier.recordSupplierPayment(
+        input,
+        await resolveDbUserId(ctx.user),
+        fund?.branchId ?? ctx.branch.current,
+      );
+    }),
 
   history: permissionProcedure("supplier:read")
     .input(supplierHistorySchema)

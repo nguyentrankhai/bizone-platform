@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertFund } from "@/server/services/cashFund.service";
 import { router, permissionProcedure } from "@/server/trpc";
 import { resolveDbUserId } from "@/server/services/user.service";
 import {
@@ -62,7 +63,8 @@ export const customerRouter = router({
     .input(z.object({ customerId: z.number().int().positive(), data: payDebtSchema }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user ? await resolveDbUserId(ctx.user) : null;
-      return payDebt(input.customerId, input.data, userId);
+      const fund = input.data.fundId ? await assertFund(ctx.branch, input.data.fundId) : null;
+      return payDebt(input.customerId, input.data, userId, fund?.branchId ?? ctx.branch.current);
     }),
 
   merge: permissionProcedure("crm:write")

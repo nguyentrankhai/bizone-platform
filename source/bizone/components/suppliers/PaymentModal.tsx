@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { apiContext, errorMessage, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
 import { ErrorBox, Field, btnPrimary, btnSecondary, inputCls } from "@/components/staff/shared";
 import { PAYMENT_METHODS, vnToday } from "./shared";
+import { FundSelect, useFundOptions } from "@/components/accounting/shared";
 
 /**
  * Record a payment to a supplier: for one PO (`poId`) or, without it, spread over the oldest
@@ -39,6 +40,14 @@ export function PaymentModal({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // P4.8: quỹ chi tiền — undefined = tự chọn theo hình thức (tiền mặt → quỹ tiền mặt, CK → ngân hàng)
+  const funds = useFundOptions(auth);
+  const [pickedFund, setPickedFund] = useState<number | null | undefined>(undefined);
+  const autoFund =
+    (funds.data ?? []).find(
+      (f) => f.type === (method === "cash" ? "cash" : method === "bank_transfer" ? "bank" : ""),
+    )?.id ?? null;
+  const fundId = pickedFund === undefined ? autoFund : pickedFund;
 
   const value = Number(amount.replace(/[^\d.]/g, ""));
 
@@ -59,13 +68,14 @@ export function PaymentModal({
           paymentDate: date,
           referenceCode: ref.trim() || undefined,
           notes: notes.trim() || undefined,
+          ...(fundId ? { fundId } : {}),
         },
         apiContext(auth),
       );
       toast.success(
         `Đã ghi nhận thanh toán ${fmtMoney(res.amount)}${
           res.payments.length > 1 ? ` cho ${res.payments.length} đơn nhập` : ""
-        }`,
+        } — phiếu chi ${res.voucher.code}`,
       );
       onPaid();
     } catch (err) {
@@ -128,6 +138,18 @@ export function PaymentModal({
             />
           </Field>
         </div>
+        <Field
+          label="Chi từ quỹ"
+          htmlFor="pay-fund"
+          hint="Hệ thống tự lập phiếu chi “Tiền nhập hàng” trong sổ thu chi; chọn quỹ để trừ số dư quỹ"
+        >
+          <FundSelect
+            id="pay-fund"
+            funds={funds.data ?? []}
+            value={fundId}
+            onChange={setPickedFund}
+          />
+        </Field>
         <Field label="Ghi chú" htmlFor="pay-notes">
           <input
             id="pay-notes"

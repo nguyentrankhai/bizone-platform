@@ -84,6 +84,8 @@ const storeConfig: [key: string, value: string, group: string, description: stri
 const revenueExpenseCategories = [
   { code: "revenue_sales", name: "Doanh thu bán hàng", type: "revenue" },
   { code: "revenue_other", name: "Doanh thu khác", type: "revenue" },
+  // P4.8: phiếu thu tự động khi khách trả nợ (không tính vào lời lỗ)
+  { code: "revenue_debt_collection", name: "Thu nợ khách hàng", type: "revenue" },
   { code: "expense_purchase", name: "Tiền nhập hàng", type: "expense" },
   { code: "expense_rent", name: "Tiền thuê mặt bằng", type: "expense" },
   { code: "expense_electricity", name: "Tiền điện", type: "expense" },
@@ -235,11 +237,32 @@ async function main() {
     seededBranch = ", default branch CN01 + warehouse KHO-CN01";
   }
 
+  // P4.8: a tenant without any fund gets one cash fund per active branch (POS shift cash goes in)
+  let seededFunds = "";
+  if ((await prisma.cashFund.count()) === 0) {
+    const branches = await prisma.branch.findMany({
+      where: { status: "active" },
+      select: { id: true, code: true, name: true },
+      orderBy: { id: "asc" },
+    });
+    for (const b of branches) {
+      await prisma.cashFund.create({
+        data: {
+          code: `TM-${b.code}`.slice(0, 50),
+          name: `Quỹ tiền mặt — ${b.name}`,
+          type: "cash",
+          branchId: b.id,
+        },
+      });
+    }
+    seededFunds = `, ${branches.length} cash fund(s)`;
+  }
+
   console.log(
     `Seeded ${roles.length} roles, ${permissions.length} permissions (admin: ${allPermissions.length}), ` +
       `${customerGroups.length} customer groups, ${transactionTypes.length} transaction types, ` +
       `${storeConfig.length} config keys, ${revenueExpenseCategories.length} revenue/expense categories, ` +
-      `${productCategories.length} product categories, ${notificationTemplates.length} notification templates${seededBranch}`,
+      `${productCategories.length} product categories, ${notificationTemplates.length} notification templates${seededBranch}${seededFunds}`,
   );
 }
 

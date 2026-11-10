@@ -68,6 +68,10 @@ export type Permission =
   | "marketing:flash_sale"
   | "marketing:promotion"
   | "marketing:campaign"
+  | "accounting:read"
+  | "accounting:fund"
+  | "accounting:revenue_expense"
+  | "accounting:debt"
   | "config:read"
   | "config:write"
   | "admin:*";

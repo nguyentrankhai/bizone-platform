@@ -13,6 +13,7 @@ import {
   type ApiAuth,
 } from "@/components/inventory/shared";
 import { RANKING, DEBT_STATUS, LOYALTY_TYPE, GENDER_LABEL } from "./shared";
+import { FundSelect, useFundOptions } from "@/components/accounting/shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 
@@ -90,6 +91,13 @@ export function CustomerDetail({ customerId, auth }: Props) {
   const [payDebtId, setPayDebtId] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payingDebt, setPayingDebt] = useState(false);
+  // P4.8: quỹ nhận tiền thu nợ (phiếu thu "Thu nợ khách hàng" tự lập trong sổ thu chi)
+  const funds = useFundOptions(auth);
+  const [pickedFund, setPickedFund] = useState<number | null | undefined>(undefined);
+  const payFundId =
+    pickedFund === undefined
+      ? ((funds.data ?? []).find((f) => f.type === "cash")?.id ?? null)
+      : pickedFund;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,7 +222,10 @@ export function CustomerDetail({ customerId, auth }: Props) {
     setPayingDebt(true);
     try {
       await trpc.customer.payDebt.mutate(
-        { customerId: customer.id, data: { debtId: payDebtId, amount: amt } },
+        {
+          customerId: customer.id,
+          data: { debtId: payDebtId, amount: amt, ...(payFundId ? { fundId: payFundId } : {}) },
+        },
         ctx,
       );
       toast.success("Ghi nhận thanh toán công nợ");
@@ -792,6 +803,21 @@ export function CustomerDetail({ customerId, auth }: Props) {
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
               />
+            </div>
+            <div className="mt-3">
+              <label
+                htmlFor="pay-debt-fund"
+                className="mb-1 block text-xs font-medium text-slate-600"
+              >
+                Quỹ nhận tiền
+              </label>
+              <FundSelect
+                id="pay-debt-fund"
+                funds={funds.data ?? []}
+                value={payFundId}
+                onChange={setPickedFund}
+              />
+              <p className="mt-1 text-xs text-slate-500">Tự lập phiếu thu trong sổ thu chi</p>
             </div>
             <div className="mt-5 flex justify-end gap-3">
               <button

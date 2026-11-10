@@ -54,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: "Omni Channel", href: "/omni", icon: Globe, soon: "P6.1" },
   { label: "Marketing", href: "/marketing", icon: Megaphone },
-  { label: "Kế toán", href: "/accounting", icon: Calculator, soon: "P4.8" },
+  { label: "Kế toán", href: "/accounting", icon: Calculator },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },
   { label: "Cài đặt", href: "/settings/branches", icon: Settings, also: ["/settings"] },
 ];

@@ -21,6 +21,7 @@ import { promotionRouter } from "./promotion";
 import { branchRouter } from "./branch";
 import { notificationRouter } from "./notification";
 import { campaignRouter } from "./campaign";
+import { accountingRouter } from "./accounting";
 
 export const appRouter = router({
   product: productRouter,
@@ -45,6 +46,7 @@ export const appRouter = router({
   branch: branchRouter,
   notification: notificationRouter,
   campaign: campaignRouter,
+  accounting: accountingRouter,
 });
 
 export type AppRouter = typeof appRouter;

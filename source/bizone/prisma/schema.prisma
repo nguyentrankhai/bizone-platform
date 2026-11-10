@@ -81,6 +81,10 @@ model CashFund {
   branchId              Int?                   @map("branch_id")
   name                  String                 @db.VarChar(255)
   code                  String                 @unique(map: "code") @db.VarChar(50)
+  /// P4.8: cash drawer / safe or bank account
+  type                  CashFundType           @default(cash)
+  accountNo             String?                @map("account_no") @db.VarChar(50)
+  description           String?                @db.Text
   balance               Decimal                @default(0.00) @db.Decimal(15, 2)
   isActive              Boolean                @default(true) @map("is_active")
   createdAt             DateTime               @default(now()) @map("created_at") @db.DateTime(0)
@@ -425,6 +429,7 @@ model FundTransaction {
   @@index([createdBy], map: "fk_ft_created")
   @@index([createdAt], map: "idx_ft_created")
   @@index([fundId], map: "idx_ft_fund")
+  @@index([referenceType, referenceId], map: "idx_ft_reference")
   @@map("fund_transactions")
 }
 
@@ -1103,27 +1108,44 @@ model RevenueExpenseCategory {
 }
 
 model RevenueExpenseRecord {
-  id            Int                    @id @default(autoincrement())
-  branchId      Int?                   @map("branch_id")
-  categoryId    Int                    @map("category_id")
-  fundId        Int?                   @map("fund_id")
-  amount        Decimal                @db.Decimal(15, 2)
-  date          DateTime               @db.Date
-  description   String?                @db.Text
-  referenceType String?                @map("reference_type") @db.VarChar(50)
-  referenceId   Int?                   @map("reference_id")
-  createdBy     Int?                   @map("created_by")
-  createdAt     DateTime               @default(now()) @map("created_at") @db.DateTime(0)
-  branch        Branch?                @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_rer_branch")
-  category      RevenueExpenseCategory @relation(fields: [categoryId], references: [id], onUpdate: Restrict, map: "fk_rer_category")
-  createdByUser User?                  @relation(fields: [createdBy], references: [id], onUpdate: Restrict, map: "fk_rer_created")
-  fund          CashFund?              @relation(fields: [fundId], references: [id], onUpdate: Restrict, map: "fk_rer_fund")
+  id              Int                        @id @default(autoincrement())
+  /// P4.8: PT (phiếu thu) / PC (phiếu chi) + yymmdd + sequence
+  code            String?                    @unique(map: "uq_rer_code") @db.VarChar(30)
+  type            RevenueExpenseRecordType   @default(expense)
+  branchId        Int?                       @map("branch_id")
+  categoryId      Int                        @map("category_id")
+  fundId          Int?                       @map("fund_id")
+  amount          Decimal                    @db.Decimal(15, 2)
+  date            DateTime                   @db.Date
+  description     String?                    @db.Text
+  /// Người nộp (thu) / người nhận (chi)
+  partnerName     String?                    @map("partner_name") @db.VarChar(255)
+  referenceType   String?                    @map("reference_type") @db.VarChar(50)
+  referenceId     Int?                       @map("reference_id")
+  status          RevenueExpenseRecordStatus @default(active)
+  cancelReason    String?                    @map("cancel_reason") @db.VarChar(500)
+  cancelledAt     DateTime?                  @map("cancelled_at") @db.DateTime(0)
+  cancelledBy     Int?                       @map("cancelled_by")
+  createdBy       Int?                       @map("created_by")
+  updatedBy       Int?                       @map("updated_by")
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime                   @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  branch          Branch?                    @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_rer_branch")
+  category        RevenueExpenseCategory     @relation(fields: [categoryId], references: [id], onUpdate: Restrict, map: "fk_rer_category")
+  createdByUser   User?                      @relation("RevenueExpenseRecordCreatedBy", fields: [createdBy], references: [id], onUpdate: Restrict, map: "fk_rer_created")
+  updatedByUser   User?                      @relation("RevenueExpenseRecordUpdatedBy", fields: [updatedBy], references: [id], onUpdate: Restrict, map: "fk_rer_updated")
+  cancelledByUser User?                      @relation("RevenueExpenseRecordCancelledBy", fields: [cancelledBy], references: [id], onUpdate: Restrict, map: "fk_rer_cancelled")
+  fund            CashFund?                  @relation(fields: [fundId], references: [id], onUpdate: Restrict, map: "fk_rer_fund")
 
   @@index([createdBy], map: "fk_rer_created")
+  @@index([updatedBy], map: "fk_rer_updated")
+  @@index([cancelledBy], map: "fk_rer_cancelled")
   @@index([fundId], map: "fk_rer_fund")
   @@index([branchId], map: "idx_rer_branch")
   @@index([categoryId], map: "idx_rer_category")
   @@index([date], map: "idx_rer_date")
+  @@index([type, date], map: "idx_rer_type_date")
+  @@index([referenceType, referenceId], map: "idx_rer_reference")
   @@map("revenue_expense_records")
 }
 
@@ -1390,7 +1412,9 @@ model User {
   promotionBuyXGetY        PromotionBuyXGetY[]
   promotionCombos          PromotionCombo[]
   purchaseOrders           PurchaseOrder[]
-  revenueExpenseRecords    RevenueExpenseRecord[]
+  revenueExpenseRecords    RevenueExpenseRecord[]   @relation("RevenueExpenseRecordCreatedBy")
+  revenueExpenseUpdated    RevenueExpenseRecord[]   @relation("RevenueExpenseRecordUpdatedBy")
+  revenueExpenseCancelled  RevenueExpenseRecord[]   @relation("RevenueExpenseRecordCancelledBy")
   shiftAssignments         ShiftAssignment[]
   stockTakeNotesApprovedBy StockTakeNote[]          @relation("StockTakeNoteApprovedBy")
   stockTakeNotesCreatedBy  StockTakeNote[]          @relation("StockTakeNoteCreatedBy")
@@ -1506,6 +1530,21 @@ enum RevenueExpenseCategoryType {
   revenue
   expense
   both
+}
+
+enum RevenueExpenseRecordType {
+  revenue
+  expense
+}
+
+enum RevenueExpenseRecordStatus {
+  active
+  cancelled
+}
+
+enum CashFundType {
+  cash
+  bank
 }
 
 enum OrderRefundStatus {

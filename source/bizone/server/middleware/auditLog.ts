@@ -209,6 +209,45 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "promotion.combo.update": { module: "marketing", action: "update_combo", entityType: "combo" },
   "promotion.combo.setActive": { module: "marketing", action: "toggle_combo", entityType: "combo" },
   "promotion.combo.delete": { module: "marketing", action: "delete_combo", entityType: "combo" },
+  "accounting.createFund": { module: "accounting", action: "create_fund", entityType: "cash_fund" },
+  "accounting.updateFund": { module: "accounting", action: "update_fund", entityType: "cash_fund" },
+  "accounting.transfer": { module: "accounting", action: "transfer", entityType: "cash_fund" },
+  "accounting.adjustFund": { module: "accounting", action: "adjust_fund", entityType: "cash_fund" },
+  "accounting.depositSession": {
+    module: "accounting",
+    action: "deposit_session",
+    entityType: "cash_session",
+  },
+  "accounting.createCategory": {
+    module: "accounting",
+    action: "create_category",
+    entityType: "revenue_expense_category",
+  },
+  "accounting.updateCategory": {
+    module: "accounting",
+    action: "update_category",
+    entityType: "revenue_expense_category",
+  },
+  "accounting.deleteCategory": {
+    module: "accounting",
+    action: "delete_category",
+    entityType: "revenue_expense_category",
+  },
+  "accounting.createRecord": {
+    module: "accounting",
+    action: "create_record",
+    entityType: "revenue_expense_record",
+  },
+  "accounting.updateRecord": {
+    module: "accounting",
+    action: "update_record",
+    entityType: "revenue_expense_record",
+  },
+  "accounting.cancelRecord": {
+    module: "accounting",
+    action: "cancel_record",
+    entityType: "revenue_expense_record",
+  },
 };
 
 export function isAudited(path: string): boolean {
@@ -246,6 +285,8 @@ const ID_KEYS = [
   "userId",
   "supplierId",
   "couponId",
+  "fundId",
+  "fromFundId",
 ] as const;
 
 /** Entity id: result.id when the mutation returns a row, else the id the caller targeted */

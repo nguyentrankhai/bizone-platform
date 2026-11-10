@@ -12,6 +12,7 @@ import type {
   UpdateSupplierInput,
 } from "@/lib/validators/supplier";
 import { PO_REFERENCE_TYPE } from "@/server/services/purchaseOrder.service";
+import { RECORD_SOURCE, postAutoRecord } from "@/server/services/ledger.service";
 
 const conflict = (msg: string) => bizoneError("CONFLICT", msg);
 const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
@@ -285,7 +286,12 @@ export async function listSupplierDebts(supplierId: number) {
  * the oldest open debts first (earliest due date, then oldest). One `supplier_payments` row is
  * written per debt touched. Never more than what is owed (no prepayment / credit balance).
  */
-export async function recordSupplierPayment(input: RecordPaymentInput, userId: number | null) {
+export async function recordSupplierPayment(
+  input: RecordPaymentInput,
+  userId: number | null,
+  /** P4.8: branch of the payment voucher (the fund's branch, else the user's current branch) */
+  branchId: number | null = null,
+) {
   const prisma = getPrisma();
   const supplier = await prisma.supplier.findUnique({
     where: { id: input.supplierId },
@@ -354,10 +360,25 @@ export async function recordSupplierPayment(input: RecordPaymentInput, userId: n
         }),
       );
     }
+    // P4.8: phiếu chi "Tiền nhập hàng" in the cash book (+ fund movement when a fund is given)
+    const voucher = await postAutoRecord(trx, {
+      type: "expense",
+      categoryCode: "expense_purchase",
+      fundId: input.fundId ?? null,
+      branchId,
+      amount: round2(input.amount),
+      date: paymentDate,
+      description: `Thanh toán NCC ${supplier.name}${input.referenceCode ? ` (${input.referenceCode})` : ""}`,
+      partnerName: supplier.name,
+      referenceType: RECORD_SOURCE.supplierPayment,
+      referenceId: created[0].id,
+      userId,
+    });
     return {
       supplierId: supplier.id,
       amount: round2(input.amount),
       payments: created.map((p) => ({ id: p.id, poId: p.poId, amount: num(p.amount) })),
+      voucher: { id: voucher.id, code: voucher.code },
     };
   });
 }

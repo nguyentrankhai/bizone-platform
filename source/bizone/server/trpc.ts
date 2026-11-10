@@ -129,15 +129,18 @@ const enforceRateLimit = (variant: "general" | "pos" = "general") =>
 
 // ─── RBAC middleware factory ──────────────────────────────────────────────────
 
-const enforcePermission = (permission: Permission) =>
+/** One capability, or a list where any one is enough */
+const enforcePermission = (permission: Permission | readonly Permission[]) =>
   t.middleware(async ({ ctx, next }) => {
+    const wanted: readonly Permission[] =
+      typeof permission === "string" ? [permission] : permission;
     if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
     // Runs inside the tenant scope: staff profile (active flag + custom roles) from tenant DB
     const access = await getStaffAccess(ctx.user);
     try {
       if (!access.active) throw new ForbiddenError("Tài khoản nhân viên đã bị vô hiệu hoá");
-      if (!hasPermission(ctx.user, permission, access.capabilities)) {
-        throw new ForbiddenError(`Required permission: ${permission}`);
+      if (!wanted.some((p) => hasPermission(ctx.user!, p, access.capabilities))) {
+        throw new ForbiddenError(`Required permission: ${wanted.join(" | ")}`);
       }
     } catch (e) {
       if (e instanceof ForbiddenError) {
@@ -189,7 +192,7 @@ export const posProcedure = t.procedure
   .use(auditMutations);
 
 /** Factory: protectedProcedure + specific RBAC permission check */
-export const permissionProcedure = (permission: Permission) =>
+export const permissionProcedure = (permission: Permission | readonly Permission[]) =>
   protectedProcedure.use(enforcePermission(permission));
 
 /** protectedProcedure for an active staff member acting on their own data */

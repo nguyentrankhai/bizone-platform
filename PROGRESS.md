@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P4.7 xong — thông báo: trung tâm thông báo + WebSocket, email SMTP, SMS gateway, Web Push, mẫu + cấu hình kênh theo sự kiện, nhắc ca / công nợ / đơn đặt trước, báo cáo định kỳ qua email, chiến dịch SMS/Email; đóng #62, #66, #70; mới #83–#87; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (P4.8 xong — kế toán: quỹ tiền mặt / ngân hàng + sổ quỹ, phiếu thu / chi + danh mục dạng cây, nộp tiền ca POS, công nợ tổng hợp + tuổi nợ, lời lỗ, dòng tiền, đối soát thanh toán; thanh toán NCC / thu nợ khách tự lập phiếu (#67). **Giai đoạn 4 hoàn thành**; mới #88–#92; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 8 | 0 | 1 |
+| 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **31** | **3** | **19** |
+| **Tổng** | **53** | **32** | **3** | **18** |
 
 ---
 
@@ -85,17 +85,17 @@
 | 54 | Layout BizOne (`Sidebar`) chưa responsive: ở 375 px sidebar mở sẵn che nội dung (giống #27 bên Payment Hub; P4.2: `main` chỉ còn 151 px); sidebar còn link tới trang chưa có (`/staff` ✅ P4.1, `/reports` ✅ P4.2, `/suppliers` ✅ P4.3, `/omni`, `/marketing` ✅ P4.4, `/accounting`, `/settings` → 404 khi prefetch) | QA-2 fix (kiểm UI) | P4.x (trang mới) / P6.x PWA |
 | 55 | API tra cứu GD merchant (`GET /api/v1/transactions/{id}`, `/merchant/{merchant_txn_id}`) trả object Prisma camelCase (`txnCode`, `merchantTxnId`) trong khi `POST` và OpenAPI dùng snake_case (`txn_code`…) — đổi sẽ ảnh hưởng hợp đồng API | QA-2 fix | Trước khi có merchant tích hợp thật (P5.x) |
 | 56 | Lần tải lại thứ 2 **cùng URL trong cùng tab** của một số trang client (`/audit-log`, `/staff`, `/staff/shifts`, `/staff/commissions`, `/warehouse`) kẹt ở fallback Suspense "Đang tải..." (component bên trong không render, không gọi API) — P4.0 (2026-11-09) xác nhận xảy ra **cả với `next start`** và cả bản HEAD trước P4.0 (tab mới / điều hướng từ sidebar thì bình thường); có từ trước P4.1 | P4.1 (kiểm UI) | Theo dõi khi nâng Next / task auth UI (#7) |
-| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (kế toán, omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`), marketing từ P4.4 (`marketing:coupon` / `marketing:flash_sale` / `marketing:promotion`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
+| 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`), marketing từ P4.4 (`marketing:coupon` / `marketing:flash_sale` / `marketing:promotion`), kế toán từ P4.8 (`accounting:read` mới + `accounting:fund` / `revenue_expense` / `debt`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | ~~58~~ | ~~WebSocket POS chỉ xét role trong token; nhân viên nghỉ việc giữ kết nối WS tới khi token hết hạn~~ | ~~P4.1~~ | ✅ P4.5 (`getStaffAccess` khi kết nối + mỗi lần ghi + quét 60 s đóng socket 4403) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
 | ~~60~~ | ~~Phân quyền cần chi nhánh mà chưa có màn hình tạo chi nhánh~~ | ~~P4.1~~ | ✅ P4.6 (`/settings/branches`). Nhân viên tạo trước P4.1 chưa có vai trò trong DB vẫn hiện "Chưa phân quyền" tới khi gán |
-| 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
+| 61 | Báo cáo (và dashboard, lời lỗ / dòng tiền / đối soát P4.8) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
 | ~~62~~ | ~~Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động~~ | ~~P4.2~~ | ✅ P4.7 (nút "Gửi email" trên `/reports` + sự kiện "Báo cáo định kỳ" ngày/tuần/tháng, file Excel/PDF đính kèm) |
 | ~~63~~ | ~~Báo cáo khuyến mãi chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing~~ | ~~P4.2~~ | ✅ P4.4 (`promotion_usage` + báo cáo `/marketing/report` theo từng chương trình) |
 | ~~64~~ | ~~Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod~~ | ~~P4.2 (kiểm lỗi)~~ | ✅ P4.3 (`errorFormatter`: câu tiếng Việt + `bizoneCode: VALIDATION_ERROR`, chi tiết theo trường) |
-| 65 | Nhận hàng theo đơn nhập không cập nhật `products.cost_price` (giá vốn): báo cáo lợi nhuận / hoa hồng vẫn dùng giá vốn nhập tay. Cần quy tắc giá vốn (bình quân gia quyền theo lần nhập hoặc giá nhập gần nhất) | P4.3 | P4.8 Kế toán (hoặc task giá vốn riêng) |
+| 65 | Nhận hàng theo đơn nhập không cập nhật `products.cost_price` (giá vốn): báo cáo lợi nhuận / hoa hồng **và báo cáo lời lỗ P4.8** vẫn dùng giá vốn nhập tay (dòng thiếu giá vốn được cảnh báo). Cần quy tắc giá vốn (bình quân gia quyền theo lần nhập hoặc giá nhập gần nhất) — P4.8 không đổi vì ảnh hưởng báo cáo P4.2 / hoa hồng P4.1 | P4.3 | Task giá vốn riêng (cần quyết định nghiệp vụ: bình quân / nhập gần nhất) |
 | ~~66~~ | ~~Chưa có thông báo chủ động khi công nợ NCC sắp/đã quá hạn~~ | ~~P4.3~~ | ✅ P4.7 (quét 08:00: sắp đến hạn N ngày, quá hạn lúc 1 và 30 ngày). Cột `supplier_debts.status` vẫn không ghi `overdue` — quá hạn tính lúc đọc |
-| 67 | Thanh toán NCC chưa sinh phiếu chi trong sổ quỹ (danh mục `expense_purchase` đã có trong seed) | P4.3 | P4.8 Kế toán |
+| ~~67~~ | ~~Thanh toán NCC chưa sinh phiếu chi trong sổ quỹ~~ | ~~P4.3~~ | ✅ P4.8 (phiếu chi "Tiền nhập hàng" tự lập, chọn quỹ chi; khách trả nợ cũng tự lập phiếu thu) |
 | 68 | Chưa có trả hàng cho NCC (`return_out`) / giảm công nợ khi trả; đơn đã nhận đủ không sửa được. Đơn nhận một phần rồi "huỷ phần còn lại" mang trạng thái `cancelled` (hàng + công nợ đã nhận được giữ) | P4.3 | Khi có yêu cầu nghiệp vụ (P4.x) |
 | 69 | "Nhóm hàng cung cấp" (SRS-SUP-01) chưa có cột riêng — ghi trong Ghi chú; chưa gắn NCC mặc định cho sản phẩm (SRS sản phẩm) | P4.3 | Khi có yêu cầu nghiệp vụ |
 | ~~70~~ | ~~Chiến dịch marketing SMS / Email hàng loạt (SRS-MKT-06)~~ | ~~P4.4~~ | ✅ P4.7 (`/marketing/campaigns`). Zalo OA → #85 |
@@ -116,6 +116,11 @@
 | 85 | Kênh Zalo OA (thông báo + chiến dịch, SRS-MKT-06 / SRS §9) chưa làm — chưa có tài khoản Zalo OA | P4.7 | Khi có Zalo OA |
 | 86 | Chiến dịch marketing: chưa có trường đồng ý / từ chối nhận quảng cáo của khách, chưa có link huỷ đăng ký email, chưa giới hạn khung giờ gửi tin quảng cáo (SMS QC cần brandname + tuân quy định chống tin nhắn rác) — chỉ nên dùng thật sau khi bổ sung | P4.7 | Trước khi dùng thật / P6.6 |
 | 87 | Sự kiện "Đồng bộ kênh bán lỗi" (`sync_failed`) đã có cấu hình nhưng chưa có nơi phát (chưa có Omni Channel) | P4.7 | P6.1 |
+| 88 | Tiền bán hàng POS chỉ vào quỹ bằng "nộp tiền ca" (tiền mặt, thao tác tay ở `/accounting/cash-funds`); thẻ / QR / chuyển khoản / ví về tài khoản ngân hàng **không tự ghi vào quỹ ngân hàng** — kế toán ghi phiếu thu "Doanh thu bán hàng" hoặc chuyển quỹ khi đối chiếu sao kê. Chưa tự nộp tiền khi khoá ca | P4.8 | Khi có nguồn báo có ngân hàng (#24) / P5.4 Đối soát |
+| 89 | Sổ quỹ xếp theo **thời điểm ghi sổ** (`fund_transactions.created_at`): phiếu lập lùi ngày chứng từ vẫn ghi biến động quỹ lúc lập, nên tồn quỹ theo "ngày chứng từ" của kỳ cũ không đổi (báo cáo theo ngày chứng từ dùng sổ thu chi). Chưa có khoá sổ kỳ (chặn sửa / huỷ phiếu kỳ đã chốt) | P4.8 | Khi có yêu cầu nghiệp vụ (khoá sổ cuối tháng) |
+| 90 | Thanh toán NCC / thu nợ khách **trước P4.8** không có phiếu thu chi (không bổ sung ngược) → dòng tiền các kỳ trước thiếu khoản này. Công nợ khách không có bảng lịch sử thanh toán (P2.8: chỉ cộng dồn `paid_amount`) — phiếu thu lấy ngày hiện tại, không lùi ngày được; huỷ thanh toán NCC / nợ khách chưa có (phiếu tự động không huỷ được) | P4.8 | Khi có yêu cầu nghiệp vụ (bảng `customer_debt_payments`, huỷ thanh toán) |
+| 91 | Đối soát thanh toán chỉ tự xác nhận thẻ / QR qua Payment Hub (`pos_payment_intents`) và tiền mặt qua kiểm ca; chuyển khoản / ví và thẻ / QR nhập tay luôn "chưa xác nhận" (dữ liệu dev: 25 HĐ thẻ/QR nhập tay). Chưa đánh dấu "đã đối soát" thủ công, chưa có đơn hàng online (#61) | P4.8 | P5.4 Đối soát (sao kê / báo có ngân hàng) |
+| 92 | Báo cáo lời lỗ / dòng tiền chưa xuất PDF / Excel (sổ thu chi + sổ quỹ xuất CSV); dòng tiền: hoàn cọc đơn đặt trước tính theo `preorders.updated_at` (không có cột thời điểm hoàn), hoàn tiền trả hàng theo ngày trả | P4.8 | P6.x (xuất báo cáo tài chính) / khi có yêu cầu |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -203,7 +208,7 @@
 | P4.5 | POS Advanced Features | ✅ | `e0488e5` | Xem [kết quả P4.5](#p45--pos-advanced-features) |
 | P4.6 | Multi-Store Support | ✅ | `b735f80` | Xem [kết quả P4.6](#p46--multi-store-support) |
 | P4.7 | Thông báo — Hệ thống + Email + SMS | ✅ | `99cd07f` | Xem [kết quả P4.7](#p47--thông-báo--hệ-thống--email--sms) |
-| P4.8 | Kế toán & Tài chính — API & UI | ⬜ | — | |
+| P4.8 | Kế toán & Tài chính — API & UI | ✅ | — | Xem [kết quả P4.8](#p48--kế-toán--tài-chính--api--ui) |
 
 ## Giai đoạn 5 — Payment Hub Mở rộng (Tuần 9–12)
 
@@ -1861,3 +1866,54 @@ Ngoài plan, theo yêu cầu người dùng.
   - Hẹn giờ / định kỳ dùng BullMQ (job delay + job scheduler theo giờ VN), chống trùng bằng `dedupe_key`.
 
 - **Vấn đề / lưu ý:** đóng #62, #66, #70; cập nhật #12, #78; mới #83–#87. Dev muốn nhận email/SMS thật: điền `SMTP_*` / `SMS_*` trong `.env.local` (mặc định ghi log), chạy `npm run dev:worker`; Web Push cần `VAPID_*` + Chrome (#84). Quyền `marketing.manage_campaign` mới: chạy `npm run db:seed` trên tenant đã có để vai trò hệ thống nhận quyền. Trong lúc kiểm thử, lệnh nạp thử `database/schema.sql` (file có `USE bizonedb`) đã chạy nhầm vào DB dev: chỉ các lệnh `CREATE … IF NOT EXISTS` / `INSERT` mẫu trùng khoá nên bị từ chối — đã kiểm `prisma migrate diff` rỗng và không có dòng mới (lần sau nạp thử bằng bản sao đã đổi `USE`).
+
+### P4.8 — Kế toán & Tài chính — API & UI
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone/lib/accounting/calc.ts`, `lib/validators/accounting.ts`, `server/services/{cashFund,ledger,accountingReport}.service.ts`, `server/routers/accounting.ts`, `server/trpc.ts` (`permissionProcedure` nhận mảng quyền), `server/services/{supplier,customer,report}.service.ts` + `server/routers/{supplier,customer}.ts` (phiếu tự động), `app/accounting/**` (7 trang), `components/accounting/*`, `components/suppliers/PaymentModal.tsx`, `components/crm/CustomerDetail.tsx`, `components/layout/Sidebar.tsx`, `lib/{permissions,rbac}.ts`, `types/auth.ts`, `server/middleware/auditLog.ts`, `prisma/migrations/6_accounting`, `prisma/seed.ts`, `tests/accounting.test.ts`; `database/schema.sql`
+- **Đã làm:**
+  - **Quỹ (SRS-ACC-02)** — `cashFund.service`: nhiều quỹ, loại tiền mặt / ngân hàng (số tài khoản), theo chi nhánh hoặc quỹ chung (`branch_id NULL`), số dư đầu kỳ. Mọi thay đổi số dư qua `postMovement` (khoá `FOR UPDATE`, ghi `fund_transactions` số dư trước / sau, chi vượt số dư → 409). Chuyển quỹ (2 biến động tham chiếu nhau, khoá 2 quỹ theo thứ tự id), kiểm quỹ (nhập số đếm / sao kê → biến động điều chỉnh), ngừng quỹ chỉ khi số dư = 0
+  - **Đối soát cuối ca → quỹ**: danh sách ca POS đã khoá 14 ngày (tiền mặt dự kiến / thực đếm / chênh lệch) + "Nộp vào quỹ" (mỗi ca 1 lần, khoá dòng ca; quỹ phải cùng chi nhánh hoặc quỹ chung)
+  - **Sổ quỹ** (`accounting.ledger`, `LedgerTable`): tồn đầu kỳ → từng biến động (thời gian, chứng từ, nội dung, danh mục, người nộp/nhận, người lập, thu / chi / tồn sau) → cộng phát sinh, tồn cuối kỳ; lọc khoảng ngày, chiều thu/chi, danh mục (cả danh mục con); xuất CSV
+  - **Thu chi (SRS-ACC-01)** — `ledger.service`: danh mục dạng cây (tạo / sửa / chuyển cha có chống vòng / ngừng / xoá khi chưa dùng; mã tự sinh không dấu; danh mục con cùng loại cha; danh mục hệ thống không đổi loại, không xoá). Phiếu thu `PT…` / phiếu chi `PC…` (yymmdd + 4 số theo ngày chứng từ, thử lại khi trùng mã): danh mục đúng loại, ngày không ở tương lai, quỹ tuỳ chọn ("không qua quỹ" = chỉ ghi sổ), người nộp/nhận, diễn giải. Sửa (số tiền / quỹ đổi → đảo biến động cũ + ghi mới; kiểm lại dữ liệu dưới khoá), huỷ (đảo biến động, phiếu giữ lại `cancelled` + lý do). Danh sách lọc kỳ / loại / danh mục / quỹ / trạng thái / tìm kiếm + tổng thu / chi / chênh lệch, xuất CSV, chi tiết phiếu kèm biến động quỹ
+  - **Phiếu tự động (#67)**: `postAutoRecord(tx, …)` trong transaction của nghiệp vụ gốc — thanh toán NCC → phiếu chi "Tiền nhập hàng" (`reference_type = supplier_payment`), khách trả nợ (CRM) → phiếu thu "Thu nợ khách hàng" (`customer_debt_payment`); cả hai nhận `fundId` tuỳ chọn (UI tự chọn quỹ theo hình thức: tiền mặt → quỹ tiền mặt, chuyển khoản → quỹ ngân hàng); quỹ không đủ → rollback cả thanh toán. Phiếu tự động không sửa / huỷ ở sổ thu chi
+  - **Công nợ tổng hợp (SRS-ACC-03)**: phải thu (khách) / phải trả (NCC) theo đối tượng — còn nợ, quá hạn, số khoản, hạn sớm nhất, trễ tối đa, tuổi nợ (chưa đến hạn / 1–30 / 31–60 / 61–90 / > 90 ngày, giờ VN), lọc quá hạn, tìm kiếm, link sang trang khách / NCC để ghi thanh toán. Cảnh báo quá hạn chủ động đã có ở P4.7
+  - **Lời lỗ + dòng tiền (SRS-ACC-04)**: lời lỗ = doanh thu thuần + giá vốn từ hoá đơn (dùng lại `linesSql` của P4.2 qua `salesTotals` / `salesByPeriod`) + thu nhập khác − chi phí hoạt động (theo danh mục); danh mục thu tiền bán hàng / thu nợ / tiền nhập hàng (và con) đứng riêng "không tính vào lời lỗ"; biểu đồ doanh thu – chi phí theo ngày / tháng. Dòng tiền: tiền bán hàng theo phương thức (trừ tiền thối, bỏ dòng cấn trừ), tiền cọc đặt trước, hoàn tiền trả hàng / hoàn cọc, mọi phiếu thu / chi; số dư từng quỹ đầu / cuối kỳ
+  - **Đối soát thanh toán (SRS-ACC-05)**: theo phương thức (ghi trên HĐ / đã xác nhận / chưa xác nhận + nguồn đối chiếu: kiểm ca, Payment Hub, sao kê); danh sách cần kiểm tra: thu thiếu (không có công nợ tương ứng) / thu thừa, thẻ-QR nhập tay chưa có xác nhận Payment Hub, lệch số Payment Hub, tiền đã về Payment Hub nhưng chưa gắn HĐ, chênh lệch tiền ca, tiền ca chưa nộp quỹ; tuỳ chọn xem mọi hoá đơn
+  - **Tổng quan** `/accounting`: doanh thu, chi phí, lợi nhuận, tỷ suất; biểu đồ; số dư quỹ; thu chi trong kỳ; công nợ phải thu / phải trả (quá hạn)
+  - **Quyền**: capability mới `accounting:read` (catalog mới `accounting.read`), `accounting:fund` / `revenue_expense` / `debt` (gắn vào 3 mã catalog trước đây để trống) — admin + manager. `fundOptions` cho cả `supplier:manage_po`, `crm:manage_debt` (`permissionProcedure([...])` = một trong các quyền). 11 mutation vào `AUDIT_ROUTES`. Phạm vi chi nhánh P4.6: quỹ theo chi nhánh + quỹ chung, phiếu theo chi nhánh (`assertBranch`)
+  - Migration `6_accounting`: `cash_funds` + `type` / `account_no` / `description`; `revenue_expense_records` + `code` (unique), `type`, `partner_name`, `status` / `cancel_*`, `updated_by` / `updated_at` (+ 4 index, 2 FK); index `fund_transactions(reference_type, reference_id)`. Seed: danh mục `revenue_debt_collection`, một quỹ tiền mặt mỗi chi nhánh khi tenant chưa có quỹ. Sidebar bật mục "Kế toán"
+  - Test Vitest `tests/accounting.test.ts` (19): biến động quỹ / chặn âm, mã PT/PC + số thứ tự, cây danh mục (con, chống vòng, ngoài lời lỗ), lời lỗ, tuổi nợ, validator, quyền theo vai trò + catalog
+
+- **Kiểm thử** (`npm run build` + `next start -p 3001` (dev server :3000 của phiên khác đang chạy), user dev `admin@bizone.vn`; script tRPC thật 50 kiểm tra + UI qua trình duyệt tích hợp; dữ liệu tạm: 2 quỹ `TEST-*`, phiếu TEST, 1 thanh toán NCC 100k, 1 lần khách trả nợ 50k, nộp tiền ca #2):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Ghi thu → quỹ tăng | ✅ Quỹ TM số dư đầu 1.000.000 → phiếu thu `PT2611100001` 500.000 → 1.500.000; khách trả nợ 50.000 vào quỹ → phiếu thu tự động, quỹ +50.000; nộp tiền ca #2 1.000.000 → quỹ +1.000.000 (nộp lần 2 → 409, ca đang mở → 409) |
+  | Ghi chi → quỹ giảm | ✅ Phiếu chi `PC2611100001` 300.000 → 1.200.000; UI "Lập phiếu chi" Tiền nước 120.000 → toast `PC2611100003`, gợi ý "số dư sau 1.210.000₫" đúng; thanh toán NCC 100.000 từ quỹ NH → phiếu chi tự động "Tiền nhập hàng", NH 350.000 → 250.000. Chi vượt số dư → 409 ("Quỹ không đủ số dư (còn 0₫, cần chi 2.000.000₫)"), thanh toán NCC vượt quỹ → 409 và rollback (công nợ NCC giữ nguyên) |
+  | Sổ quỹ đúng số dư | ✅ Sau 11 biến động (đầu kỳ, thu, chi, chuyển quỹ, kiểm quỹ −20.000, sửa phiếu 300k → 350k = đảo + ghi mới, chuyển phiếu sang quỹ khác, huỷ phiếu thu, thu nợ, nộp tiền ca): mỗi dòng `số dư trước` = `số dư sau` dòng trước, tồn đầu 0 + thu 3.200.000 − chi 1.870.000 = tồn cuối 1.330.000 = số dư quỹ; quỹ NH 0 + 700.000 − 350.000 = 350.000 ✅. Lọc theo danh mục chỉ còn phiếu thu + dòng đảo của nó. UI `/accounting/cash-funds` hiện đúng sổ |
+  | Báo cáo lời lỗ: doanh thu − chi phí = lợi nhuận | ✅ 01–10/11: doanh thu 19.847.100 − chi phí 13.069.400 (giá vốn 12.599.400 + chi phí 470.000) = lợi nhuận 6.777.700 (UI); doanh thu thuần 19.847.100 / giá vốn 12.599.400 khớp `reports.profit` (P4.2); tiền nhập hàng 100.000 + thu nợ 50.000 nằm ở "không tính vào lời lỗ"; tổng quan khớp |
+  | Cash funds nhiều quỹ, fund transactions, thu/chi categories tree | ✅ Mã quỹ trùng → 409, quỹ NH thiếu STK → 400, chuyển cùng quỹ → 400, chuyển vượt số dư → 409, kiểm quỹ khớp → 409, ngừng quỹ còn số dư → 409. Danh mục: tạo con (mã `test_tien_dien_thoai`), con khác loại cha → 400, chuyển vào con của nó → 400, xoá danh mục hệ thống → 409, ngừng "Tiền nhập hàng" → 409, xoá danh mục chưa dùng ✅. Phiếu: danh mục chi cho phiếu thu → 400, ngày tương lai → 400, số tiền âm → 400, huỷ / sửa phiếu đã huỷ → 409, huỷ phiếu tự động → 409 |
+  | Công nợ tổng hợp (phải thu + phải trả) | ✅ Phải trả 26.543.000 / 5 NCC + tuổi nợ; phải thu khách #4 còn 400.000 sau khi trả 50.000; UI tab phải thu / phải trả, thanh tuổi nợ |
+  | Báo cáo dòng tiền | ✅ Tiền vào 19.897.100 (bán hàng theo phương thức tổng = doanh thu thuần 19.847.100 + thu nợ 50.000), tiền ra 570.000 (điện, nước, nhập hàng), thuần +19.327.100; số dư quỹ đầu / cuối kỳ |
+  | Đối soát thanh toán | ✅ 7 ngày: 81 HĐ, 58 khớp, 23 cần kiểm tra — đều là thẻ / QR nhập tay không có xác nhận Payment Hub (dữ liệu dev), 1 ca chưa nộp quỹ; tiền mặt khớp kiểm ca |
+  | UI: sổ quỹ dạng sổ, filter thời gian, category | ✅ 7 trang render không lỗi console; 375 px không tràn ngang (sidebar chung vẫn che — #54). Mở lại cùng URL trong cùng tab kẹt "Đang tải..." = lỗi có sẵn #56, tab mới bình thường |
+  | Audit log | ✅ 15 dòng `accounting.*`, `supplier.record_payment`, `crm.pay_debt` đúng entity |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 146/146); migration `6_accounting` áp lên DB dev, `prisma migrate diff`: rỗng; `database/schema.sql` nạp được vào DB trống (DB tạm, đã xoá) |
+  | Dọn dẹp | ✅ Xoá 2 quỹ TEST + 15 biến động, 5 phiếu, thanh toán NCC test, 15 dòng audit test; trả công nợ NCC #1 và nợ khách #1 về đúng giá trị trước test (đối chiếu snapshot); dừng `next start` :3001. Giữ: 2 quỹ tiền mặt do seed tạo (số dư 0), danh mục "Thu nợ khách hàng" |
+
+  Sửa trong lúc test: build lỗi prerender (`Date.now()` trong client component) → bọc trang trong `Suspense` như `/reports`; bảng kết quả kinh doanh hẹp ở màn trung bình → chia cột từ `xl`; ô "Số dư các quỹ" hiện "—" thừa → ghi số dư đầu kỳ vào nhãn.
+
+- **Khác biệt so với plan:**
+  - Thêm `accountingReport.service.ts` (lời lỗ, dòng tiền, công nợ, đối soát) bên cạnh `cashFund` / `ledger` service; thêm các trang `/accounting/records`, `/debts`, `/reports`, `/reconciliation`, `/categories` và tab điều hướng chung (PLAN chỉ nêu `/accounting` + `/accounting/cash-funds`).
+  - API là tRPC `accounting.*` thay cho REST `/api/accounting/*` (API-Design §12) như các module trước. "Xoá phiếu" (`DELETE`) → **huỷ phiếu** (giữ chứng từ, đảo biến động).
+  - Gom #67 (phiếu chi khi thanh toán NCC) và thêm phiếu thu khi khách trả nợ, chọn quỹ ở form thanh toán NCC / CRM.
+  - #65 (giá vốn theo lần nhập) **không** làm ở P4.8: đổi cách tính giá vốn ảnh hưởng báo cáo P4.2 và hoa hồng P4.1 → cần quyết định nghiệp vụ, chuyển sang task riêng.
+
+- **Quyết định thiết kế:**
+  - Sổ quỹ chỉ thêm (append-only): sửa / huỷ phiếu ghi biến động đảo chiều thay vì sửa số cũ → `balance_after` của từng dòng luôn là số dư thật, đối chiếu được; phiếu huỷ giữ lại kèm lý do.
+  - Phiếu thu chi có cột `type` riêng (thêm bằng migration) vì danh mục kiểu `both` không xác định được chiều tiền.
+  - Lời lỗ dựa trên hoá đơn (doanh thu thuần, giá vốn tại thời điểm bán) + phiếu thu chi; các khoản chỉ là luồng tiền của nghiệp vụ đã tính (thu tiền bán hàng, thu nợ, trả tiền hàng) loại khỏi lời lỗ theo danh mục để không tính hai lần; dòng tiền thì tính tất cả.
+  - Tiền POS vào quỹ qua bước "nộp tiền ca" do người dùng xác nhận số tiền (két có thể giữ lại tiền đầu ca) thay vì tự động khi khoá ca.
+  - Thanh toán NCC / thu nợ luôn lập phiếu (có hoặc không quỹ) trong cùng transaction → sổ thu chi + dòng tiền đầy đủ từ P4.8.
+
+- **Vấn đề / lưu ý:** đóng #67; cập nhật #57, #61, #65; mới #88–#92. Tenant đã có: `npx prisma migrate deploy` + `npm run db:seed` để có quyền `accounting.read`, danh mục "Thu nợ khách hàng" và quỹ tiền mặt mặc định. **Giai đoạn 4 hoàn thành** (P4.0–P4.8).

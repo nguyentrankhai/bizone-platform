@@ -960,6 +960,9 @@ CREATE TABLE IF NOT EXISTS cash_funds (
   branch_id  INT,
   name       VARCHAR(255) NOT NULL,
   code       VARCHAR(50)  NOT NULL UNIQUE,
+  type       ENUM('cash','bank') NOT NULL DEFAULT 'cash',  -- P4.8: quỹ tiền mặt / tài khoản ngân hàng
+  account_no VARCHAR(50),
+  description TEXT,
   balance    DECIMAL(15,2) NOT NULL DEFAULT 0,
   is_active  TINYINT(1)   NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -985,6 +988,7 @@ CREATE TABLE IF NOT EXISTS fund_transactions (
 ) ENGINE=InnoDB;
 CREATE INDEX idx_ft_fund   ON fund_transactions(fund_id);
 CREATE INDEX idx_ft_created ON fund_transactions(created_at);
+CREATE INDEX idx_ft_reference ON fund_transactions(reference_type, reference_id);
 
 -- 10.3 Revenue/Expense Categories (Danh mục thu chi)
 CREATE TABLE IF NOT EXISTS revenue_expense_categories (
@@ -1000,27 +1004,40 @@ CREATE TABLE IF NOT EXISTS revenue_expense_categories (
 ) ENGINE=InnoDB;
 CREATE INDEX idx_rec_parent ON revenue_expense_categories(parent_id);
 
--- 10.4 Revenue/Expense Records (Sổ thu chi)
+-- 10.4 Revenue/Expense Records (Sổ thu chi) — P4.8: phiếu thu (PT…) / phiếu chi (PC…)
 CREATE TABLE IF NOT EXISTS revenue_expense_records (
   id           INT AUTO_INCREMENT PRIMARY KEY,
+  code         VARCHAR(30) UNIQUE,
+  type         ENUM('revenue','expense') NOT NULL DEFAULT 'expense',
   branch_id    INT,
   category_id  INT            NOT NULL,
   fund_id      INT,
   amount       DECIMAL(15,2)  NOT NULL,
   date         DATE           NOT NULL,
   description  TEXT,
-  reference_type VARCHAR(50),
+  partner_name VARCHAR(255),                 -- người nộp / người nhận
+  reference_type VARCHAR(50),                -- supplier_payment / customer_debt_payment (phiếu tự động)
   reference_id   INT,
+  status       ENUM('active','cancelled') NOT NULL DEFAULT 'active',
+  cancel_reason VARCHAR(500),
+  cancelled_at DATETIME,
+  cancelled_by INT,
   created_by   INT,
+  updated_by   INT,
   created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_rer_branch   FOREIGN KEY (branch_id)   REFERENCES branches(id)                ON DELETE SET NULL,
   CONSTRAINT fk_rer_category FOREIGN KEY (category_id) REFERENCES revenue_expense_categories(id) ON DELETE RESTRICT,
   CONSTRAINT fk_rer_fund     FOREIGN KEY (fund_id)     REFERENCES cash_funds(id)              ON DELETE SET NULL,
-  CONSTRAINT fk_rer_created  FOREIGN KEY (created_by)  REFERENCES users(id)                   ON DELETE SET NULL
+  CONSTRAINT fk_rer_created  FOREIGN KEY (created_by)  REFERENCES users(id)                   ON DELETE SET NULL,
+  CONSTRAINT fk_rer_updated  FOREIGN KEY (updated_by)  REFERENCES users(id)                   ON DELETE SET NULL,
+  CONSTRAINT fk_rer_cancelled FOREIGN KEY (cancelled_by) REFERENCES users(id)                 ON DELETE SET NULL
 ) ENGINE=InnoDB;
 CREATE INDEX idx_rer_branch   ON revenue_expense_records(branch_id);
 CREATE INDEX idx_rer_category ON revenue_expense_records(category_id);
 CREATE INDEX idx_rer_date     ON revenue_expense_records(date);
+CREATE INDEX idx_rer_type_date ON revenue_expense_records(type, date);
+CREATE INDEX idx_rer_reference ON revenue_expense_records(reference_type, reference_id);
 
 -- ============================================================
 -- 11. MARKETING & PROMOTIONS
@@ -1540,6 +1557,7 @@ INSERT INTO permissions (module, action, name, code) VALUES
 ('marketing', 'manage_flash_sale', 'Quản lý flash sale', 'marketing.manage_flash_sale'),
 ('marketing', 'manage_promotion', 'Quản lý khuyến mãi', 'marketing.manage_promotion'),
 
+('accounting', 'read', 'Xem sổ quỹ, thu chi, báo cáo tài chính', 'accounting.read'),
 ('accounting', 'manage_fund', 'Quản lý quỹ', 'accounting.manage_fund'),
 ('accounting', 'manage_revenue_expense', 'Quản lý thu chi', 'accounting.manage_revenue_expense'),
 ('accounting', 'manage_debt', 'Quản lý công nợ', 'accounting.manage_debt'),
@@ -1594,6 +1612,7 @@ INSERT INTO store_config (config_key, config_value, group_name, description) VAL
 INSERT INTO revenue_expense_categories (name, code, type, sort_order) VALUES
 ('Doanh thu bán hàng', 'revenue_sales', 'revenue', 1),
 ('Doanh thu khác', 'revenue_other', 'revenue', 2),
+('Thu nợ khách hàng', 'revenue_debt_collection', 'revenue', 3),
 ('Tiền nhập hàng', 'expense_purchase', 'expense', 3),
 ('Tiền thuê mặt bằng', 'expense_rent', 'expense', 4),
 ('Tiền điện', 'expense_electricity', 'expense', 5),

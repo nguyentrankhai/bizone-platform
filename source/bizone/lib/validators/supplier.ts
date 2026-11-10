@@ -71,6 +71,8 @@ export const recordPaymentSchema = z.object({
   paymentMethod: z.enum(["cash", "bank_transfer", "card", "other"]).default("bank_transfer"),
   referenceCode: optText(255),
   notes: optText(1000),
+  /** P4.8: quỹ chi tiền (phiếu chi "Tiền nhập hàng" luôn được ghi; có quỹ thì quỹ giảm) */
+  fundId: z.number().int().positive().optional(),
 });
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 

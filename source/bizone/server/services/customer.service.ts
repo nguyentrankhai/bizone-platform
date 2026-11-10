@@ -1,5 +1,7 @@
 import { getPrisma } from "@/lib/prisma";
 import { bizoneError } from "@/lib/errors";
+import { vnDateKey } from "@/lib/vn-time";
+import { RECORD_SOURCE, postAutoRecord } from "@/server/services/ledger.service";
 import type {
   ListCustomersInput,
   CreateCustomerInput,
@@ -247,9 +249,18 @@ export async function createDebt(customerId: number, input: CreateDebtInput) {
   });
 }
 
-export async function payDebt(customerId: number, input: PayDebtInput, _userId: number | null) {
+export async function payDebt(
+  customerId: number,
+  input: PayDebtInput,
+  userId: number | null,
+  /** P4.8: branch of the receipt voucher (the fund's branch, else the user's current branch) */
+  branchId: number | null = null,
+) {
   const prisma = getPrisma();
-  const debt = await prisma.customerDebt.findUnique({ where: { id: input.debtId } });
+  const debt = await prisma.customerDebt.findUnique({
+    where: { id: input.debtId },
+    include: { customer: { select: { fullName: true, code: true } } },
+  });
   if (!debt || debt.customerId !== customerId)
     throw notFound(`Công nợ #${input.debtId} không tồn tại`);
   if (debt.status === "paid") throw conflict("Công nợ đã được thanh toán đủ");
@@ -271,6 +282,20 @@ export async function payDebt(customerId: number, input: PayDebtInput, _userId: 
     });
     if (count === 0) throw conflict("Công nợ vừa được cập nhật, vui lòng tải lại");
     const after = await tx.customerDebt.findUniqueOrThrow({ where: { id: input.debtId } });
+    // P4.8: phiếu thu "Thu nợ khách hàng" in the cash book (+ fund movement when a fund is given)
+    await postAutoRecord(tx, {
+      type: "revenue",
+      categoryCode: "revenue_debt_collection",
+      fundId: input.fundId ?? null,
+      branchId,
+      amount: input.amount,
+      date: vnDateKey(new Date()),
+      description: `Thu nợ khách ${debt.customer.fullName} (${debt.customer.code}) — công nợ #${debt.id}`,
+      partnerName: debt.customer.fullName,
+      referenceType: RECORD_SOURCE.customerDebtPayment,
+      referenceId: debt.id,
+      userId,
+    });
     return tx.customerDebt.update({
       where: { id: input.debtId },
       data: { status: Number(after.remainingAmount) <= 0 ? "paid" : "partial" },

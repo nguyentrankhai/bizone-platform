@@ -693,3 +693,22 @@ export async function reportOptions(allowedBranchIds?: number[]) {
   ]);
   return { branches, staff, categories, coupons, warehouses };
 }
+
+// ─── P4.8: accounting (lời lỗ / dòng tiền) ───────────────────────────────────
+
+export interface SalesScope {
+  from: string;
+  to: string;
+  branchId?: number;
+  branchIds?: number[];
+}
+
+/** Sales totals of a period (same rules as the reports: net revenue, cost of goods sold…) */
+export function salesTotals(s: SalesScope): Promise<Totals> {
+  return totals(s);
+}
+
+/** Sales totals per VN day ("YYYY-MM-DD") or month ("YYYY-MM") */
+export function salesByPeriod(s: SalesScope, unit: "day" | "month") {
+  return grouped(s, unit === "day" ? "d" : "month");
+}

@@ -31,6 +31,10 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "marketing:flash_sale",
     "marketing:promotion",
     "marketing:campaign",
+    "accounting:read",
+    "accounting:fund",
+    "accounting:revenue_expense",
+    "accounting:debt",
   ],
   "bizone-manager": [
     "pos:write",
@@ -57,6 +61,10 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "marketing:flash_sale",
     "marketing:promotion",
     "marketing:campaign",
+    "accounting:read",
+    "accounting:fund",
+    "accounting:revenue_expense",
+    "accounting:debt",
     "config:read",
   ],
   "bizone-warehouse": [

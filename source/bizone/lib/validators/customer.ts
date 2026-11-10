@@ -58,6 +58,8 @@ export const payDebtSchema = z.object({
   debtId: z.number().int().positive(),
   amount: z.number().positive(),
   notes: z.string().optional(),
+  /** P4.8: quỹ nhận tiền (phiếu thu "Thu nợ khách hàng" luôn được ghi; có quỹ thì quỹ tăng) */
+  fundId: z.number().int().positive().optional(),
 });
 export type PayDebtInput = z.infer<typeof payDebtSchema>;
 
