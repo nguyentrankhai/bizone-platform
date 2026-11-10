@@ -79,6 +79,11 @@ enum RefundStatus {
   Failed
 }
 
+enum RefundChannel {
+  Merchant
+  Admin
+}
+
 enum WebhookConfigStatus {
   Active
   Inactive
@@ -309,9 +314,9 @@ model Transaction {
   disputes      Dispute[]
   reconDetails  ReconciliationDetail[]
 
+  @@unique([merchantId, merchantTxnId], map: "uq_txn_merchant_txn")
   @@index([txnCode], map: "idx_txn_code")
   @@index([merchantId], map: "idx_txn_merchant")
-  @@unique([merchantId, merchantTxnId], map: "uq_txn_merchant_txn")
   @@index([partnerConfigId], map: "idx_txn_partner")
   @@index([partnerTxnId], map: "idx_txn_partner_txn")
   @@index([status], map: "idx_txn_status")
@@ -359,20 +364,32 @@ model TransactionRawData {
 }
 
 model Refund {
-  id              Int          @id @default(autoincrement())
-  transactionId   Int          @map("transaction_id")
-  refundCode      String       @unique @map("refund_code") @db.VarChar(100)
-  amount          Decimal      @db.Decimal(15, 0)
-  reason          String       @db.Text
-  status          RefundStatus @default(Pending)
-  partnerRefundId String?      @map("partner_refund_id") @db.VarChar(255)
-  rawRequest      Json?        @map("raw_request")
-  rawResponse     Json?        @map("raw_response")
-  errorMessage    String?      @map("error_message") @db.Text
-  processedBy     Int?         @map("processed_by")
-  processedAt     DateTime?    @map("processed_at") @db.DateTime(0)
-  createdAt       DateTime     @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt       DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
+  id               Int           @id @default(autoincrement())
+  transactionId    Int           @map("transaction_id")
+  refundCode       String        @unique @map("refund_code") @db.VarChar(100)
+  amount           Decimal       @db.Decimal(15, 0)
+  reason           String        @db.Text
+  internalNote     String?       @map("internal_note") @db.Text
+  status           RefundStatus  @default(Pending)
+  partnerRefundId  String?       @map("partner_refund_id") @db.VarChar(255)
+  /// Merchant-side reference sent to the PSP (ZaloPay m_refund_id) — used to query async refunds (P5.3)
+  partnerRefundRef String?       @map("partner_refund_ref") @db.VarChar(255)
+  responseCode     String?       @map("response_code") @db.VarChar(50)
+  rawRequest       Json?         @map("raw_request")
+  rawResponse      Json?         @map("raw_response")
+  errorMessage     String?       @map("error_message") @db.Text
+  checkCount       Int           @default(0) @map("check_count")
+  lastCheckedAt    DateTime?     @map("last_checked_at") @db.DateTime(0)
+  processedBy      Int?          @map("processed_by")
+  /// Merchant API key (`merchant:{id}`) or admin token username (P5.3)
+  requestedBy      String?       @map("requested_by") @db.VarChar(100)
+  channel          RefundChannel @default(Admin)
+  processedAt      DateTime?     @map("processed_at") @db.DateTime(0)
+  /// Transactional outbox for the refund.completed webhook (P5.3)
+  notifyWebhook    Boolean       @default(false) @map("notify_webhook") @db.TinyInt
+  webhookSentAt    DateTime?     @map("webhook_sent_at") @db.DateTime(0)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_refund_txn")
   processor   User?       @relation("RefundProcessor", fields: [processedBy], references: [id], onDelete: SetNull, map: "fk_refund_processor")
@@ -380,6 +397,7 @@ model Refund {
   @@index([transactionId], map: "idx_refund_txn")
   @@index([refundCode], map: "idx_refund_code")
   @@index([status], map: "idx_refund_status")
+  @@index([notifyWebhook, webhookSentAt], map: "idx_refund_outbox")
   @@map("refunds")
 }
 

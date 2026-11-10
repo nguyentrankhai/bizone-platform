@@ -185,7 +185,7 @@ Xem sơ đồ bên trên (phần tiếng Anh).
 |--------|-------|
 | Giao dịch | Xử lý thanh toán tập trung (kiến trúc connector hot-plug) |
 | QR Thanh toán | Tạo QR VietQR, MoMo, ZaloPay |
-| Hoàn tiền | Hoàn toàn phần / toàn phần |
+| Hoàn tiền | Hoàn một phần / toàn phần |
 | PSP Connectors | Kết nối VNPay, MoMo, ZaloPay, VietQR |
 | Merchant API | API xác thực HMAC-SHA256 cho BizOne |
 | Admin Console | Dashboard, theo dõi giao dịch, cấu hình PSP |

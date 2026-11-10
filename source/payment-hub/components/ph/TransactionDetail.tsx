@@ -1,6 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { StatusBadge, type TxnStatus } from "@/components/ph/StatusBadge";
+import type { RefundOutcomeView, RefundOverviewDto } from "@/lib/refund";
+import { RefundForm, formatVnd } from "@/components/ph/RefundForm";
+import { RefundHistory, RefundSummary } from "@/components/ph/RefundHistory";
 import { TransactionLog, type TxnLogEntry } from "@/components/ph/TransactionLog";
 import { RawDataViewer } from "@/components/ph/RawDataViewer";
 
@@ -32,6 +37,30 @@ export interface TxnDetail {
 
 interface TransactionDetailProps {
   txn: TxnDetail;
+  refund: RefundOverviewDto;
+  authToken: string;
+  /** UI hint only (hides write buttons) — the API enforces payhub-admin itself */
+  canWrite: boolean;
+}
+
+function outcomeText(o: RefundOutcomeView): { ok: boolean; text: string } {
+  const amount = formatVnd(o.refund.amount);
+  if (o.refund.status === "Completed") {
+    return {
+      ok: true,
+      text: `Đã hoàn ${amount} (${o.refund.refund_code}) — đối tác xác nhận thành công`,
+    };
+  }
+  if (o.refund.status === "Failed") {
+    return {
+      ok: false,
+      text: `Hoàn tiền ${amount} thất bại — ${o.refund.message ?? "đối tác từ chối"}`,
+    };
+  }
+  return {
+    ok: true,
+    text: `Đã gửi yêu cầu hoàn ${amount} (${o.refund.refund_code}) — chờ đối tác xác nhận`,
+  };
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -69,8 +98,13 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function TransactionDetail({ txn }: TransactionDetailProps) {
-  const canRefund = txn.status === "Success";
+export function TransactionDetail({ txn, refund, authToken, canWrite }: TransactionDetailProps) {
+  const router = useRouter();
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const isPaid =
+    txn.status === "Success" || txn.status === "PartiallyRefunded" || txn.status === "Refunded";
+  const canRefund = canWrite && refund.eligibility.refundable;
   const canDispute = txn.status === "Failed" || txn.status === "Expired";
 
   return (
@@ -88,7 +122,8 @@ export function TransactionDetail({ txn }: TransactionDetailProps) {
           {canRefund && (
             <button
               type="button"
-              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+              onClick={() => setRefundOpen(true)}
+              className="min-h-11 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
             >
               Hoàn tiền
             </button>
@@ -103,6 +138,19 @@ export function TransactionDetail({ txn }: TransactionDetailProps) {
           )}
         </div>
       </div>
+
+      {notice && (
+        <div
+          role="status"
+          className={
+            notice.ok
+              ? "rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+              : "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          }
+        >
+          {notice.text}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Thông tin cơ bản */}
@@ -155,8 +203,39 @@ export function TransactionDetail({ txn }: TransactionDetailProps) {
             <InfoRow label="Điện thoại" value={txn.customerPhone} />
             <InfoRow label="IP" value={txn.ipAddress} />
           </div>
+
+          {(isPaid || refund.refunds.length > 0) && (
+            <RefundSummary
+              eligibility={refund.eligibility}
+              count={refund.refunds.filter((r) => r.status === "Completed").length}
+              isPaid={isPaid}
+            />
+          )}
         </div>
       </div>
+
+      {refund.refunds.length > 0 && (
+        <RefundHistory
+          refunds={refund.refunds}
+          authToken={authToken}
+          canWrite={canWrite}
+          onChanged={() => router.refresh()}
+        />
+      )}
+
+      {refundOpen && (
+        <RefundForm
+          authToken={authToken}
+          txn={{ id: txn.id, txnCode: txn.txnCode, currency: txn.currency, paidAt: txn.paidAt }}
+          eligibility={refund.eligibility}
+          onClose={() => setRefundOpen(false)}
+          onDone={(outcome) => {
+            setRefundOpen(false);
+            setNotice(outcomeText(outcome));
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Log giao dịch */}
       <div className="rounded-xl border border-gray-200 bg-white p-5">

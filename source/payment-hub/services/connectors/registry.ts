@@ -35,6 +35,27 @@ interface ConnectorDefinition {
    * (server/jobs/syncPendingPayments.ts) — needs a getStatus() that works from stored data.
    */
   statusSync?: boolean;
+  /** Refund support (P5.3) — absent = the PSP has no refund API (refunds are done outside the Hub). */
+  refund?: RefundCapability;
+}
+
+export interface RefundCapability {
+  /** Several partial refunds may be sent (total ≤ the paid amount). */
+  partial: boolean;
+  /** Days after payment during which a refund may be requested (REFUND_WINDOW_DAYS overrides). */
+  windowDays: number;
+  /** The PSP answers asynchronously; the worker polls queryRefund() for Processing refunds. */
+  async?: boolean;
+}
+
+/**
+ * Default refund window. PSP contracts set the real limit (not in the public docs) — keep it
+ * configurable rather than hard-coding a guess per PSP.
+ */
+const DEFAULT_REFUND_WINDOW_DAYS = 30;
+function refundWindowDays(): number {
+  const n = Number(process.env.REFUND_WINDOW_DAYS);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_REFUND_WINDOW_DAYS;
 }
 
 const DEFINITIONS: ConnectorDefinition[] = [
@@ -47,6 +68,8 @@ const DEFINITIONS: ConnectorDefinition[] = [
       env === "Production"
         ? VNPAY_PRODUCTION_API_URL
         : (process.env.VNPAY_API_URL ?? VNPAY_SANDBOX_API_URL),
+    // merchant_webapi refund: 02 full / 03 partial
+    refund: { partial: true, windowDays: DEFAULT_REFUND_WINDOW_DAYS },
   },
   {
     code: "momo",
@@ -57,6 +80,7 @@ const DEFINITIONS: ConnectorDefinition[] = [
     apiEndpoint: (_env, endpoint) => momoApiBase(endpoint),
     defaultIpnUrl: `${APP_URL}/api/ipn/momo`,
     statusSync: true,
+    refund: { partial: true, windowDays: DEFAULT_REFUND_WINDOW_DAYS },
   },
   {
     code: "zalopay",
@@ -68,6 +92,8 @@ const DEFINITIONS: ConnectorDefinition[] = [
     // callback_url sent with each order (ZaloPay calls back only for paid orders)
     defaultIpnUrl: `${APP_URL}/api/ipn/zalopay`,
     statusSync: true,
+    // refund → query_refund; still processing → polled by syncPendingRefunds
+    refund: { partial: true, windowDays: DEFAULT_REFUND_WINDOW_DAYS, async: true },
   },
 ];
 
@@ -167,4 +193,21 @@ export function statusSyncDefinitions(): { code: string; connectorType: string }
     code: d.code,
     connectorType: d.connectorType,
   }));
+}
+
+/** Refund support of a connector type (VietQR / unknown → null). Window from REFUND_WINDOW_DAYS. */
+export function refundCapability(
+  connectorType: string | null | undefined,
+): RefundCapability | null {
+  const def = connectorType ? definitionForConnectorType(connectorType) : undefined;
+  if (!def?.refund) return null;
+  return {
+    ...def.refund,
+    windowDays: process.env.REFUND_WINDOW_DAYS ? refundWindowDays() : def.refund.windowDays,
+  };
+}
+
+/** connector_type values whose Processing refunds the worker may poll (queryRefund). */
+export function asyncRefundConnectorTypes(): string[] {
+  return DEFINITIONS.filter((d) => d.refund?.async).map((d) => d.connectorType);
 }

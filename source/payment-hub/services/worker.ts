@@ -7,6 +7,7 @@ import { sweepWebhookOutbox } from "@/server/services/webhook.service";
 import { runExpireJob } from "@/server/jobs/expireTransactions";
 import { runExpireQrJob } from "@/server/jobs/expireQrCodes";
 import { runSyncPendingPayments } from "@/server/jobs/syncPendingPayments";
+import { runSyncPendingRefunds } from "@/server/jobs/syncPendingRefunds";
 
 const webhookWorker = new Worker<WebhookJob>(WEBHOOK_QUEUE, processWebhookJob, {
   connection: queueConnection(),
@@ -47,12 +48,16 @@ setInterval(() => {
     );
 }, OUTBOX_INTERVAL_MS);
 
-// Query the PSP for Pending transactions whose IPN is overdue (lost / failed IPN), then
-// expire overdue transactions and their QR codes — every minute
+// Query the PSP for Pending transactions whose IPN is overdue (lost / failed IPN) and for
+// asynchronous refunds still Processing, then expire overdue transactions and their QR codes —
+// every minute
 const EXPIRE_INTERVAL_MS = 60_000;
 async function runExpiryJobs(): Promise<void> {
   await runSyncPendingPayments().catch((err: unknown) =>
     console.error("[status-sync] error:", err instanceof Error ? err.message : err),
+  );
+  await runSyncPendingRefunds().catch((err: unknown) =>
+    console.error("[refund-sync] error:", err instanceof Error ? err.message : err),
   );
   await runExpireJob().catch((err: unknown) =>
     console.error("[expire-job] error:", err instanceof Error ? err.message : err),

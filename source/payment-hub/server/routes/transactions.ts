@@ -24,6 +24,7 @@ import {
   initiatePayment,
   type InitiatedPayment,
 } from "@/server/services/payment.service";
+import { listRefundsForMerchant } from "@/server/services/refund.service";
 import { amountError, expiryError, isPaymentMethod } from "@/services/routing/routeMap";
 import { availableMethods, planRoute } from "@/services/routing/routeEngine";
 import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
@@ -313,7 +314,7 @@ export async function handleGetTransaction(req: NextRequest, id: string): Promis
 
   if (!txn) return err("NOT_FOUND", "Transaction not found", 404);
 
-  return ok(serializeTxnFull(txn));
+  return ok(await withRefunds(txn));
 }
 
 // ─── GET /api/v1/transactions/merchant/[merchant_txn_id] ─────────────────────
@@ -333,7 +334,7 @@ export async function handleGetByMerchantTxnId(
   const txn = await getTransactionByMerchantTxnId(merchantTxnId, merchant.merchantId);
   if (!txn) return err("NOT_FOUND", "Transaction not found", 404);
 
-  return ok(serializeTxnFull(txn));
+  return ok(await withRefunds(txn));
 }
 
 // ─── GET /api/v1/transactions ─────────────────────────────────────────────────
@@ -377,6 +378,11 @@ export async function handleListTransactions(req: NextRequest): Promise<Response
 }
 
 // ─── Serialize ────────────────────────────────────────────────────────────────
+
+/** Transaction + its refund history (P5.3) — how a merchant follows an asynchronous refund. */
+async function withRefunds(txn: Parameters<typeof serializeTxnFull>[0] & { id: number }) {
+  return { ...serializeTxnFull(txn), refunds: await listRefundsForMerchant(txn.id) };
+}
 
 function serializeTxnFull(txn: {
   amount: { toString(): string };

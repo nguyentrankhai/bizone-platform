@@ -240,6 +240,8 @@ export const ALERT_RULES = {
   webhookAttemptFailures: 5,
   /** Outbox rows older than this (minutes) are considered stuck. */
   outboxStuckMinutes: 5,
+  /** Refunds still Processing after this many minutes (P5.3). */
+  refundStuckMinutes: 15,
 } as const;
 
 export function failureSpikeAlert(

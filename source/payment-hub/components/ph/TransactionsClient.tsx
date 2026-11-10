@@ -10,6 +10,7 @@ const STATUSES: { value: string; label: string }[] = [
   { value: "Success", label: "Thành công" },
   { value: "Failed", label: "Thất bại" },
   { value: "Expired", label: "Hết hạn" },
+  { value: "PartiallyRefunded", label: "Hoàn một phần" },
   { value: "Refunded", label: "Hoàn tiền" },
 ];
 

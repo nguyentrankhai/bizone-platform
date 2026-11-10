@@ -40,6 +40,10 @@ const STATUS_EVENT: Record<string, WebhookEvent> = {
   Success: "payment.success",
   Failed: "payment.failed",
   Expired: "payment.expired",
+  // A refund (P5.3) may land before the payment.success outbox row was dispatched: only a
+  // payment change sets transactions.notify_webhook, so the pending event is still payment.success.
+  PartiallyRefunded: "payment.success",
+  Refunded: "payment.success",
 };
 
 /** Deterministic UUID for (transaction, event) → the same message keeps the same X-Webhook-Id. */
@@ -128,48 +132,12 @@ export async function dispatchTransactionWebhook(transactionId: number): Promise
     const event = txn ? STATUS_EVENT[txn.status] : undefined;
     if (!txn || !event) return 0;
 
-    const configs = await prisma.webhookConfig.findMany({
-      where: { merchantId: txn.merchantId, status: "Active" },
-      orderBy: { id: "asc" },
-    });
-    const subscribed = configs.filter((c) => eventsOf(c).includes(event));
-    // transactions.webhook_url overrides the endpoint URL (API-Design §5.1); it is signed with the
-    // secret of the merchant's first subscribed endpoint.
-    const targets = txn.webhookUrl
-      ? subscribed.slice(0, 1).map((c) => ({ config: c, url: txn.webhookUrl! }))
-      : subscribed.map((c) => ({ config: c, url: c.url }));
-
-    if (targets.length === 0) {
-      await prisma.transactionLog.create({
-        data: {
-          transactionId,
-          event: "webhook_skipped",
-          fromStatus: txn.status,
-          toStatus: txn.status,
-          description: `No active webhook endpoint subscribed to ${event}`,
-          createdBy: "system:webhook",
-        },
-      });
-      return 0;
-    }
-
-    const deliveryId = deliveryIdFor(txn.txnCode, event);
-    const body = JSON.stringify(buildTransactionPayload(txn, event));
-    for (const { config, url } of targets) {
-      await enqueueWebhook(
-        {
-          deliveryId,
-          webhookConfigId: config.id,
-          url,
-          event,
-          transactionId,
-          body,
-          retryIntervals: intervalsOf(config),
-        },
-        config.retryCount,
-      );
-    }
-    return targets.length;
+    return await enqueueForTransaction(
+      txn,
+      event,
+      deliveryIdFor(txn.txnCode, event),
+      JSON.stringify(buildTransactionPayload(txn, event)),
+    );
   } catch (e) {
     // Release the claim so the sweeper retries the dispatch.
     await prisma.transaction
@@ -182,6 +150,58 @@ export async function dispatchTransactionWebhook(transactionId: number): Promise
   }
 }
 
+/**
+ * Enqueue one job per active endpoint of the transaction's merchant subscribed to `event`.
+ * transactions.webhook_url overrides the endpoint URL (API-Design §5.1); it is signed with the
+ * secret of the merchant's first subscribed endpoint. No endpoint → `webhook_skipped` log.
+ */
+async function enqueueForTransaction(
+  txn: { id: number; merchantId: number; status: string; webhookUrl: string | null },
+  event: WebhookEvent,
+  deliveryId: string,
+  body: string,
+): Promise<number> {
+  const prisma = getPrisma();
+  const configs = await prisma.webhookConfig.findMany({
+    where: { merchantId: txn.merchantId, status: "Active" },
+    orderBy: { id: "asc" },
+  });
+  const subscribed = configs.filter((c) => eventsOf(c).includes(event));
+  const targets = txn.webhookUrl
+    ? subscribed.slice(0, 1).map((c) => ({ config: c, url: txn.webhookUrl! }))
+    : subscribed.map((c) => ({ config: c, url: c.url }));
+
+  if (targets.length === 0) {
+    await prisma.transactionLog.create({
+      data: {
+        transactionId: txn.id,
+        event: "webhook_skipped",
+        fromStatus: txn.status,
+        toStatus: txn.status,
+        description: `No active webhook endpoint subscribed to ${event}`,
+        createdBy: "system:webhook",
+      },
+    });
+    return 0;
+  }
+
+  for (const { config, url } of targets) {
+    await enqueueWebhook(
+      {
+        deliveryId,
+        webhookConfigId: config.id,
+        url,
+        event,
+        transactionId: txn.id,
+        body,
+        retryIntervals: intervalsOf(config),
+      },
+      config.retryCount,
+    );
+  }
+  return targets.length;
+}
+
 /** Fire-and-forget dispatch after a commit; the sweeper covers failures. */
 export function dispatchSoon(transactionId: number): void {
   void dispatchTransactionWebhook(transactionId).catch((e: unknown) =>
@@ -191,18 +211,96 @@ export function dispatchSoon(transactionId: number): void {
 
 /** Re-dispatch outbox rows nobody claimed (called by the worker every 30 s). */
 export async function sweepWebhookOutbox(minAgeMs = 10_000): Promise<number> {
-  const rows = await getPrisma().transaction.findMany({
-    where: {
-      notifyWebhook: true,
-      webhookSentAt: null,
-      updatedAt: { lte: new Date(Date.now() - minAgeMs) },
-    },
-    select: { id: true },
-    take: 200,
-  });
+  const before = new Date(Date.now() - minAgeMs);
+  const prisma = getPrisma();
+  const [rows, refunds] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+      select: { id: true },
+      take: 200,
+    }),
+    prisma.refund.findMany({
+      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+      select: { id: true },
+      take: 200,
+    }),
+  ]);
   let enqueued = 0;
   for (const r of rows) enqueued += await dispatchTransactionWebhook(r.id).catch(() => 0);
+  for (const r of refunds) enqueued += await dispatchRefundWebhook(r.id).catch(() => 0);
   return enqueued;
+}
+
+// ─── Refund outbox (P5.3) ─────────────────────────────────────────────────────
+
+type RefundForPayload = Prisma.RefundGetPayload<{
+  include: {
+    transaction: { include: { partnerConfig: { select: { connectorType: true } } } };
+  };
+}>;
+
+/** refund.completed payload (API-Design §7.2) + the transaction's totals after this refund. */
+export function buildRefundPayload(refund: RefundForPayload) {
+  const txn = refund.transaction;
+  return {
+    event: "refund.completed" as const,
+    transaction_id: txn.txnCode,
+    merchant_txn_id: txn.merchantTxnId,
+    refund_code: refund.refundCode,
+    amount: Number(refund.amount),
+    currency: txn.currency,
+    reason: refund.reason,
+    partner: txn.partnerConfig?.connectorType ?? null,
+    partner_refund_id: refund.partnerRefundId,
+    refunded_at: (refund.processedAt ?? refund.updatedAt).toISOString(),
+    transaction_amount: Number(txn.amount),
+    total_refunded: Number(txn.refundedAmount),
+    transaction_status: txn.status,
+  };
+}
+
+/**
+ * Claim and enqueue the refund.completed webhook of a refund whose outbox flag is set (set in the
+ * same DB transaction that completed the refund). Same claim semantics as transactions.
+ */
+export async function dispatchRefundWebhook(refundId: number): Promise<number> {
+  const prisma = getPrisma();
+  const claimedAt = new Date();
+  const { count } = await prisma.refund.updateMany({
+    where: { id: refundId, notifyWebhook: true, webhookSentAt: null },
+    data: { webhookSentAt: claimedAt },
+  });
+  if (count === 0) return 0;
+  try {
+    const refund = await prisma.refund.findUnique({
+      where: { id: refundId },
+      include: {
+        transaction: { include: { partnerConfig: { select: { connectorType: true } } } },
+      },
+    });
+    if (!refund || refund.status !== "Completed") return 0;
+    const event: WebhookEvent = "refund.completed";
+    return await enqueueForTransaction(
+      refund.transaction,
+      event,
+      deliveryIdFor(refund.refundCode, event),
+      JSON.stringify(buildRefundPayload(refund)),
+    );
+  } catch (e) {
+    await prisma.refund
+      .updateMany({
+        where: { id: refundId, webhookSentAt: claimedAt },
+        data: { webhookSentAt: null },
+      })
+      .catch(() => {});
+    throw e;
+  }
+}
+
+export function dispatchRefundSoon(refundId: number): void {
+  void dispatchRefundWebhook(refundId).catch((e: unknown) =>
+    console.error(`[webhook] refund #${refundId} dispatch deferred: ${(e as Error).message}`),
+  );
 }
 
 // ─── Attempt logging ──────────────────────────────────────────────────────────
@@ -246,7 +344,11 @@ export async function recordAttempt(ctx: AttemptContext, res: SendResult): Promi
       errorMessage: res.error,
     },
   });
-  if (res.ok && ctx.transactionId && ctx.event.startsWith("payment.")) {
+  if (
+    res.ok &&
+    ctx.transactionId &&
+    (ctx.event.startsWith("payment.") || ctx.event.startsWith("refund."))
+  ) {
     await getPrisma()
       .transactionLog.create({
         data: {

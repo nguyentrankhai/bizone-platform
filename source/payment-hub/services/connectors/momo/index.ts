@@ -227,8 +227,14 @@ export class MomoConnector implements PaymentConnector {
     const data = res.data;
     const code = Number(data.resultCode);
     const echoOk = this.echoMatches(data, params);
+    // Not a final answer (P5.3 keeps the refund Processing): MoMo still processing (1000/7000/
+    // 7002/9000, 43 = handled by another request), an unverifiable "success", or an HTTP 5xx.
+    const pending = res.ok
+      ? classifyResultCode(code) === "pending" || code === 43 || (code === 0 && !echoOk)
+      : res.status >= 500;
     return {
       success: res.ok && code === 0 && echoOk,
+      ...(pending ? { pending: true } : {}),
       partnerRefundId: data.transId !== undefined ? str(data.transId) : undefined,
       responseCode: res.ok ? str(data.resultCode) : `HTTP_${res.status}`,
       message: res.ok ? resultMessage(code, str(data.message)) : str(data.message),

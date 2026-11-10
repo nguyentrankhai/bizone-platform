@@ -85,7 +85,11 @@ export interface RefundRequest {
 
 export interface RefundResult {
   success: boolean;
-  /** Accepted by the PSP but not final yet (ZaloPay return_code 3) — query again later. */
+  /**
+   * No final answer yet: accepted but still processing (ZaloPay return_code 3, MoMo 7000…) or an
+   * answer that cannot be trusted (unverifiable success, HTTP 5xx). The refund stays Processing —
+   * queried again when the connector has queryRefund, otherwise confirmed manually.
+   */
   pending?: boolean;
   partnerRefundId?: string;
   /** Merchant-side refund reference sent to the PSP (ZaloPay m_refund_id) — for status queries. */
@@ -136,6 +140,11 @@ export interface PaymentConnector {
   processResult(raw: Record<string, string>): PaymentResult;
   verifySignature(payload: Record<string, string>, signature: string): boolean;
   refund(req: RefundRequest): Promise<RefundResult>;
+  /**
+   * Status of an earlier refund by its merchant-side reference (`RefundResult.partnerRefundRef`) —
+   * only PSPs that refund asynchronously (ZaloPay query_refund). Used by the refund poller (P5.3).
+   */
+  queryRefund?(partnerRefundRef: string): Promise<RefundResult>;
   getStatus(query: StatusQuery): Promise<StatusResult>;
   getConfigSchema(): ConfigSchemaField[];
   healthCheck(): Promise<HealthResult>;

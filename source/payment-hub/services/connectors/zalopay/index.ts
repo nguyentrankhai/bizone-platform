@@ -316,8 +316,12 @@ export class ZalopayConnector implements PaymentConnector {
     const code = Number(data.return_code);
     const sub = Number(data.sub_return_code);
     if (!res.ok || (code !== 1 && code !== 3)) {
+      // HTTP 5xx: ZaloPay may or may not have taken the request — keep it Processing and ask
+      // query_refund later with the m_refund_id we sent.
+      const unknown = !res.ok && res.status >= 500;
       return {
         success: false,
+        ...(unknown ? { pending: true, partnerRefundRef: params.m_refund_id } : {}),
         partnerRefundId: data.refund_id !== undefined ? str(data.refund_id) : undefined,
         responseCode: res.ok
           ? `${str(data.return_code)}/${str(data.sub_return_code)}`

@@ -6,6 +6,9 @@ export const instant = false;
 import { PHLayout } from "@/components/ph/PHLayout";
 import { TransactionDetail, type TxnDetail } from "@/components/ph/TransactionDetail";
 import { getTransactionByCode, getTransactionById } from "@/server/services/transaction.service";
+import { getRefundOverview } from "@/server/services/refund.service";
+import { toEligibilityDto } from "@/lib/refund";
+import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -44,6 +47,9 @@ export default async function TransactionDetailPage({ params }: PageProps) {
   const txn = await fetchTxn(id);
 
   if (!txn) return notFound();
+  const overview = await getRefundOverview(txn.id);
+  if (!overview) return notFound();
+  const token = getDevAuthToken();
 
   return (
     <PHLayout>
@@ -58,7 +64,12 @@ export default async function TransactionDetailPage({ params }: PageProps) {
         <span className="font-mono text-gray-700">{txn.txnCode}</span>
       </div>
 
-      <TransactionDetail txn={txn} />
+      <TransactionDetail
+        txn={txn}
+        refund={{ eligibility: toEligibilityDto(overview.eligibility), refunds: overview.refunds }}
+        authToken={token}
+        canWrite={devTokenCanWrite(token)}
+      />
     </PHLayout>
   );
 }

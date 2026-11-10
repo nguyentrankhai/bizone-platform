@@ -155,8 +155,15 @@ export class VnpayConnector implements PaymentConnector {
     const signatureValid = this.verifyApiResponse(data, REFUND_RESPONSE_FIELDS);
     const { vnp_SecureHash: _hash, ...request } = body;
     void _hash;
+    // Not a final answer (P5.3 keeps the refund Processing): "00" whose signature does not verify,
+    // 94 = duplicate request still being handled, or an HTTP 5xx from merchant_webapi.
+    const pending =
+      (responseCode === "00" && !signatureValid) ||
+      responseCode === "94" ||
+      /^HTTP_5\d\d$/.test(responseCode);
     return {
       success: responseCode === "00" && signatureValid,
+      ...(pending ? { pending: true } : {}),
       partnerRefundId: data.vnp_TransactionNo,
       responseCode,
       message: data.vnp_Message ?? "",

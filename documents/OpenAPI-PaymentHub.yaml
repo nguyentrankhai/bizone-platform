@@ -319,19 +319,49 @@ components:
 
     RefundRequest:
       type: object
-      required: [amount, reason]
+      required: [reason]
       properties:
         amount:
-          type: number
-          minimum: 1000
-          description: Số tiền hoàn (partial hoặc full)
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Số tiền hoàn (VND); bỏ trống = toàn bộ số còn có thể hoàn
           example: 150000
         reason:
           type: string
+          minLength: 3
           maxLength: 255
           example: "Khách hàng đổi ý, hủy đơn"
         metadata:
           type: object
+
+    RefundOutcome:
+      type: object
+      properties:
+        refund:
+          type: object
+          properties:
+            id: { type: integer }
+            refund_code: { type: string, example: "REF-20261110-K7M2QX" }
+            transaction_id: { type: string, example: "TXN-20261110-123456" }
+            amount: { type: integer }
+            currency: { type: string }
+            status: { type: string, enum: [Pending, Processing, Completed, Failed] }
+            reason: { type: string }
+            partner_refund_id: { type: string, nullable: true }
+            response_code: { type: string, nullable: true }
+            message: { type: string, nullable: true }
+            channel: { type: string, enum: [Merchant, Admin] }
+            processed_at: { type: string, format: date-time, nullable: true }
+            created_at: { type: string, format: date-time }
+        transaction:
+          type: object
+          properties:
+            transaction_id: { type: string }
+            status: { type: string, enum: [Success, PartiallyRefunded, Refunded] }
+            amount: { type: integer }
+            refunded_amount: { type: integer }
+            refundable_amount: { type: integer }
 
     QRGenerateRequest:
       type: object
@@ -421,8 +451,7 @@ components:
               - transaction.success
               - transaction.failed
               - transaction.expired
-              - refund.success
-              - refund.failed
+              - refund.completed
         active:
           type: boolean
         secret:
@@ -601,14 +630,17 @@ paths:
       tags: [Refunds]
       summary: Hoàn tiền giao dịch
       description: |
-        Yêu cầu hoàn tiền (full hoặc partial).
+        Yêu cầu hoàn tiền (toàn phần hoặc một phần, cộng dồn nhiều lần) — P5.3.
 
         **Điều kiện**:
-        - Giao dịch phải ở trạng thái `success`
-        - Số tiền hoàn ≤ số tiền gốc - số tiền đã hoàn trước đó
-        - Một số PSP chỉ hỗ trợ full refund (xem từng PSP)
+        - Giao dịch `Success` hoặc `PartiallyRefunded`
+        - Đối tác có API hoàn tiền (VNPay, MoMo, ZaloPay; VietQR không) và GD có mã GD đối tác
+        - Trong `REFUND_WINDOW_DAYS` ngày sau khi thanh toán (mặc định 30)
+        - Số tiền hoàn ≤ số tiền gốc − đã hoàn − các yêu cầu đang chờ đối tác
 
-        **Async**: Hoàn tiền xử lý bất đồng bộ. Kết quả gửi qua webhook `refund.success` hoặc `refund.failed`.
+        **Kết quả**: 200 `Completed` (đối tác xác nhận) · 202 `Processing` (đối tác xử lý bất đồng bộ
+        hoặc chưa có kết quả tin cậy — kết quả cuối qua webhook `refund.completed` hoặc
+        `GET /v1/transactions/{id}` → `refunds[]`) · 502 `PARTNER_ERROR` (đối tác từ chối, `data.refund.status = Failed`).
       security:
         - MerchantHMAC: []
       parameters:
@@ -618,9 +650,9 @@ paths:
         - in: path
           name: id
           required: true
+          description: txn_code hoặc id số của giao dịch
           schema:
             type: string
-            format: uuid
       requestBody:
         required: true
         content:
@@ -628,8 +660,8 @@ paths:
             schema:
               $ref: "#/components/schemas/RefundRequest"
       responses:
-        "202":
-          description: Yêu cầu hoàn tiền đã nhận, đang xử lý
+        "200":
+          description: Hoàn tiền hoàn tất
           content:
             application/json:
               schema:
@@ -638,25 +670,50 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          refundId:
-                            type: string
-                            format: uuid
-                          status:
-                            type: string
-                            enum: [pending]
-                          estimatedCompletionTime:
-                            type: string
-                            format: date-time
+                        $ref: "#/components/schemas/RefundOutcome"
+        "202":
+          description: Đã gửi đối tác, đang chờ xác nhận (refund.status = Processing)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/RefundOutcome"
+        "400":
+          description: VALIDATION_ERROR / REFUND_NOT_SUPPORTED / REFUND_WINDOW_EXPIRED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Giao dịch không tồn tại (hoặc của merchant khác)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: Giao dịch không thể hoàn (trạng thái không hợp lệ)
+          description: TRANSACTION_NOT_REFUNDABLE / REFUND_IN_PROGRESS / trùng Idempotency-Key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "422":
-          description: Số tiền hoàn vượt quá số tiền cho phép
+          description: REFUND_AMOUNT_EXCEEDED — số tiền hoàn vượt số còn có thể hoàn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Quá 30 yêu cầu hoàn tiền / phút / API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: PARTNER_ERROR — đối tác từ chối hoàn tiền (body có data.refund.status = Failed)
           content:
             application/json:
               schema:
@@ -780,8 +837,7 @@ paths:
                       - transaction.success
                       - transaction.failed
                       - transaction.expired
-                      - refund.success
-                      - refund.failed
+                      - refund.completed
                 secret:
                   type: string
                   description: Secret để BizOne verify HMAC-SHA256 trên webhook
@@ -816,7 +872,7 @@ paths:
               properties:
                 eventType:
                   type: string
-                  enum: [transaction.success, refund.success]
+                  enum: [transaction.success, refund.completed]
                   default: transaction.success
       responses:
         "200":

@@ -92,7 +92,7 @@ export async function getTransactionById(id: number, merchantId?: number) {
   const prisma = getPrisma();
   const txn = await prisma.transaction.findUnique({
     where: { id },
-    include: { logs: { orderBy: { createdAt: "desc" }, take: 20 } },
+    include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20 } },
   });
   if (!txn) return null;
   if (merchantId !== undefined && txn.merchantId !== merchantId) return null;
@@ -103,7 +103,7 @@ export async function getTransactionByCode(txnCode: string, merchantId?: number)
   const prisma = getPrisma();
   const txn = await prisma.transaction.findUnique({
     where: { txnCode },
-    include: { logs: { orderBy: { createdAt: "desc" }, take: 20 } },
+    include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20 } },
   });
   if (!txn) return null;
   if (merchantId !== undefined && txn.merchantId !== merchantId) return null;
@@ -114,7 +114,7 @@ export async function getTransactionByMerchantTxnId(merchantTxnId: string, merch
   const prisma = getPrisma();
   return prisma.transaction.findFirst({
     where: { merchantTxnId, merchantId },
-    include: { logs: { orderBy: { createdAt: "desc" }, take: 10 } },
+    include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 } },
   });
 }
 

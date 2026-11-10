@@ -178,7 +178,8 @@ export async function computeAlerts(
       ? Prisma.sql` AND wc.merchant_id = ${scope.merchantId}`
       : Prisma.empty;
 
-  const [windowSummary, exhausted, failedAttempts, stuckOutbox] = await Promise.all([
+  const refundStuckBefore = new Date(now.getTime() - ALERT_RULES.refundStuckMinutes * 60_000);
+  const [windowSummary, exhausted, failedAttempts, stuckOutbox, stuckRefunds] = await Promise.all([
     // Finished in the window = status changed recently; updated_at tracks the last transition.
     prisma.transaction.groupBy({
       by: ["status"],
@@ -238,6 +239,19 @@ export async function computeAlerts(
         merchantId: scope.merchantId,
       },
     }),
+    // P5.3: refunds the PSP has not confirmed — need polling to catch up or a manual confirmation
+    prisma.refund.findMany({
+      where: {
+        status: "Processing",
+        createdAt: { lt: refundStuckBefore },
+        ...(scope.merchantId !== undefined
+          ? { transaction: { merchantId: scope.merchantId } }
+          : {}),
+      },
+      select: { transaction: { select: { txnCode: true } } },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    }),
   ]);
 
   const alerts: DashboardAlert[] = [];
@@ -286,6 +300,18 @@ export async function computeAlerts(
       message: `${stuckOutbox} giao dịch chờ gửi webhook quá ${ALERT_RULES.outboxStuckMinutes} phút — kiểm tra worker/Redis`,
       count: stuckOutbox,
       href: "/webhooks",
+      at: now.toISOString(),
+    });
+  }
+  if (stuckRefunds.length > 0) {
+    const oldest = stuckRefunds[0].transaction.txnCode;
+    alerts.push({
+      id: "refund-processing-stuck",
+      level: "warning",
+      title: "Hoàn tiền chờ xác nhận",
+      message: `${stuckRefunds.length} yêu cầu hoàn tiền chưa được đối tác xác nhận sau ${ALERT_RULES.refundStuckMinutes} phút (cũ nhất: ${oldest}) — kiểm tra trên cổng đối tác rồi xác nhận trong chi tiết giao dịch`,
+      count: stuckRefunds.length,
+      href: `/transactions/${encodeURIComponent(oldest)}`,
       at: now.toISOString(),
     });
   }

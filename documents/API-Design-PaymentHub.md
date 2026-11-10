@@ -187,7 +187,11 @@ Merchant có thể cấu hình IP whitelist trong merchant settings. Request t�
 | RATE_LIMITED | 429 | Vượt quá giới hạn request |
 | INSUFFICIENT_BALANCE | 402 | Không đủ số dư (refund) |
 | PARTNER_ERROR | 502 | Lỗi từ đối tác thanh toán |
-| REFUND_NOT_SUPPORTED | 400 | Đối tác không hỗ trợ refund |
+| REFUND_NOT_SUPPORTED | 400 | Đối tác không hỗ trợ refund (VietQR) / GD thiếu mã GD đối tác |
+| REFUND_WINDOW_EXPIRED | 400 | Quá thời hạn hoàn tiền (`REFUND_WINDOW_DAYS`) |
+| REFUND_AMOUNT_EXCEEDED | 422 | Số tiền hoàn vượt số còn có thể hoàn |
+| REFUND_IN_PROGRESS | 409 | Số tiền còn lại đang nằm trong yêu cầu hoàn chờ đối tác |
+| TRANSACTION_NOT_REFUNDABLE | 409 | GD không ở trạng thái đã thanh toán / đã hoàn toàn bộ |
 | TRANSACTION_EXPIRED | 400 | Giao dịch đã hết hạn |
 | INTERNAL_ERROR | 500 | Lỗi máy chủ |
 
@@ -378,6 +382,8 @@ Giống response trên, tra cứu dựa trên `merchant_txn_id + merchant_id` (t
 
 #### `POST /api/v1/transactions/{transaction_id}/refund` - Yêu cầu hoàn tiền
 
+`transaction_id` = `txn_code` hoặc id số. Header `Idempotency-Key` (khuyến nghị) như §4. Giới hạn 30 request/phút/API key.
+
 **Request:**
 ```json
 {
@@ -388,23 +394,55 @@ Giống response trên, tra cứu dựa trên `merchant_txn_id + merchant_id` (t
 
 | Field | Type | Bắt buộc | Mô tả |
 |-------|------|----------|-------|
-| `amount` | number | Không | null/omitted = toàn phần; số tiền cụ thể = một phần |
-| `reason` | string | Có | Lý do hoàn tiền |
+| `amount` | integer | Không | null/bỏ trống = hoàn toàn bộ số còn có thể hoàn; số cụ thể = một phần |
+| `reason` | string | Có | Lý do hoàn tiền (3–255 ký tự), gửi kèm yêu cầu tới đối tác |
 
-**Response (200):**
+**Điều kiện (P5.3):**
+- GD ở trạng thái `Success` hoặc `PartiallyRefunded` (khác → `409 TRANSACTION_NOT_REFUNDABLE`)
+- Đối tác có API hoàn tiền (VNPay, MoMo, ZaloPay; **VietQR không có** → `400 REFUND_NOT_SUPPORTED`) và GD có mã GD đối tác
+- Trong thời hạn hoàn tiền: `REFUND_WINDOW_DAYS` ngày sau `paid_at` (mặc định 30) → quá hạn `400 REFUND_WINDOW_EXPIRED`
+- `amount` ≤ số tiền gốc − đã hoàn − các yêu cầu đang chờ đối tác (`422 REFUND_AMOUNT_EXCEEDED`, `details` có `refundable`); số tiền còn lại đang chờ đối tác xác nhận → `409 REFUND_IN_PROGRESS`
+- Nhiều lần hoàn một phần được cộng dồn; GD → `PartiallyRefunded`, hoàn đủ → `Refunded`
+
+**Response:**
+
+| HTTP | `refund.status` | Ý nghĩa |
+|------|-----------------|---------|
+| 200 | `Completed` | Đối tác xác nhận hoàn tiền |
+| 202 | `Processing` | Đối tác đang xử lý (ZaloPay) hoặc chưa có kết quả tin cậy (timeout, HTTP 5xx) — kết quả cuối qua webhook `refund.completed` / `GET /api/v1/transactions/{id}` (`refunds[]`) |
+| 502 | `Failed` | Đối tác từ chối (`error.code = PARTNER_ERROR`, body vẫn có `data`) — không trừ tiền, có thể gửi lại |
+
 ```json
 {
   "success": true,
   "data": {
-    "refund_code": "REF-20260612-XXXXXX",
-    "transaction_id": "TXN-20260612-A1B2C3",
-    "amount": 500000,
-    "status": "Completed",
-    "partner_refund_id": "VNPAY_REF_123456",
-    "processed_at": "2026-06-12T15:30:00+07:00"
+    "refund": {
+      "id": 12,
+      "refund_code": "REF-20260612-K7M2QX",
+      "transaction_id": "TXN-20260612-A1B2C3",
+      "amount": 500000,
+      "currency": "VND",
+      "status": "Completed",
+      "reason": "Khách hàng yêu cầu hoàn trả",
+      "partner_refund_id": "VNPAY_REF_123456",
+      "response_code": "00",
+      "message": null,
+      "channel": "Merchant",
+      "processed_at": "2026-06-12T08:30:00.000Z",
+      "created_at": "2026-06-12T08:30:00.000Z"
+    },
+    "transaction": {
+      "transaction_id": "TXN-20260612-A1B2C3",
+      "status": "PartiallyRefunded",
+      "amount": 1500000,
+      "refunded_amount": 500000,
+      "refundable_amount": 1000000
+    }
   }
 }
 ```
+
+`refund_code` = `REF-YYYYMMDD-XXXXXX` (ngày giờ VN). `GET /api/v1/transactions/{id}` trả thêm `refunds[]` (cùng dạng `refund`).
 
 ---
 
@@ -662,14 +700,32 @@ Giống response trên, tra cứu dựa trên `merchant_txn_id + merchant_id` (t
 }
 ```
 
-#### `POST /api/admin/transactions/{id}/refund` - Hoàn tiền (admin UI)
+#### `POST /api/internal/transactions/{id}/refund` - Hoàn tiền (admin UI, P5.3)
 
-**Request:**
+Role `payhub-admin`; cùng điều kiện và response như API merchant (§5.1). Thêm `note` (ghi chú nội bộ, không gửi đối tác). Người yêu cầu = username token.
+
 ```json
 {
   "amount": 500000,
-  "reason": "Khách hàng yêu cầu hoàn trả"
+  "reason": "Khách hàng yêu cầu hoàn trả",
+  "note": "Đơn #A12, đã thu hồi hàng"
 }
+```
+
+#### `GET /api/internal/transactions/{id}/refunds` - Điều kiện + lịch sử hoàn tiền
+
+`{ eligibility: { refundable, code, reason, partner, partial, async, windowDays, windowEndsAt, paidAmount, refundedAmount, inflightAmount, refundableAmount }, refunds: [...] }` — mỗi refund có thêm `requested_by`, `internal_note`, `check_count`, `manual_check` (đang chờ mà đối tác không có API tra cứu → cần xác nhận tay).
+
+#### `POST /api/internal/refunds/{id}/check` - Hỏi lại đối tác
+
+Chỉ cho yêu cầu `Processing` của đối tác có API tra cứu hoàn tiền (ZaloPay `query_refund`); đối tác khác → `400 REFUND_NOT_SUPPORTED`. Worker cũng tự hỏi lại (1, 2, 4 … 60 phút, tối đa 7 ngày).
+
+#### `POST /api/internal/refunds/{id}/resolve` - Xác nhận thủ công
+
+Cho yêu cầu `Processing` không có kết quả tin cậy (timeout, HTTP 5xx, đối tác không có API tra cứu) sau khi đối chiếu trên cổng đối tác. `Completed` → cộng `refunded_amount` + webhook `refund.completed`; `Failed` → trả lại số tiền đang giữ. Yêu cầu đã kết thúc → `409`.
+
+```json
+{ "outcome": "Completed", "note": "Đã đối chiếu trên cổng MoMo", "partner_refund_id": "MOMO-RF-1" }
 ```
 
 #### `POST /api/admin/transactions/export` - Xuất danh sách giao dịch
@@ -1325,7 +1381,7 @@ config: { "name": "NewPartner", "version": "1.0.0" }
 }
 ```
 
-**refund.completed:**
+**refund.completed** (P5.3 — một webhook cho mỗi lần hoàn tiền hoàn tất, `X-Webhook-Id` riêng theo `refund_code`; gửi qua outbox trên bảng `refunds`):
 ```json
 {
   "event": "refund.completed",
@@ -1334,10 +1390,13 @@ config: { "name": "NewPartner", "version": "1.0.0" }
   "refund_code": "REF-20260612-XXXXXX",
   "amount": 500000,
   "currency": "VND",
+  "reason": "Khách hàng yêu cầu hoàn trả",
   "partner": "VNPay",
   "partner_refund_id": "VNPAY_REF_123456",
-  "refunded_at": "2026-06-12T15:30:00+07:00",
-  "signature": "hmac_sha256_signature"
+  "refunded_at": "2026-06-12T08:30:00.000Z",
+  "transaction_amount": 1500000,
+  "total_refunded": 500000,
+  "transaction_status": "PartiallyRefunded"
 }
 ```
 

@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P5.2 — ZaloPay connector: tạo đơn + QR ZaloPay qua Route Engine, callback `/api/ipn/zalopay` kiểm mac key2, truy vấn trạng thái khi mất callback, hoàn tiền + truy vấn hoàn tiền ở mức connector, cấu hình trên `/partners`; 🟡 chờ credential ZaloPay sandbox (#104). Kế tiếp: P5.3)
+**Cập nhật lần cuối:** 2026-11-10 (P5.3 — Refund Module: API hoàn tiền merchant + admin (toàn phần / một phần cộng dồn, giữ chỗ số tiền dưới khoá dòng, idempotency), trạng thái `PartiallyRefunded`/`Refunded`, webhook `refund.completed` qua outbox, worker hỏi lại hoàn tiền ZaloPay, xác nhận thủ công khi đối tác không trả lời, form + lịch sử hoàn tiền trong chi tiết GD. Kế tiếp: P5.4)
 
 ---
 
@@ -17,10 +17,10 @@
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
-| 5 — Payment Hub Mở rộng | 6 | 0 | 2 | 4 |
+| 5 — Payment Hub Mở rộng | 6 | 1 | 2 | 3 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **32** | **5** | **16** |
+| **Tổng** | **53** | **33** | **5** | **15** |
 
 ---
 
@@ -46,7 +46,7 @@
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
 | ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
-| 18 | `VnpayConnector.refund()` / `MomoConnector.refund()` (P5.1) / `ZalopayConnector.refund()` + `queryRefund()` (P5.2) đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
+| ~~18~~ | ~~`VnpayConnector.refund()` / `MomoConnector.refund()` / `ZalopayConnector.refund()` chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái, API)~~ | ~~P3.3~~ | ✅ P5.3 |
 | 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
 | 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
@@ -57,7 +57,7 @@
 | 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
 | 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
 | 28 | Log thay đổi đối tác lấy IP từ `x-forwarded-for` — tin cậy được khi chạy sau reverse proxy ghi đè header này | P3.5 | Khi triển khai (P6.5) |
-| 29 | Sự kiện `refund.completed` đã khai báo (endpoint đăng ký được) nhưng chưa phát — chưa có luồng hoàn tiền | P3.6 | P5.3 |
+| ~~29~~ | ~~Sự kiện `refund.completed` đã khai báo nhưng chưa phát~~ | ~~P3.6~~ | ✅ P5.3 (outbox trên bảng `refunds`, mỗi lần hoàn 1 webhook) |
 | 30 | BizOne `/api/webhooks/payhub`: từ P4.5 áp `payment.success/failed/expired` cho thanh toán thẻ/QR tại POS (`merchant_txn_id = BZ-{tenant}-{intentId}` mang tenant). Còn lại: một bộ `PAYHUB_API_KEY/SECRET` + `PAYHUB_WEBHOOK_SECRET` cho cả app (một merchant Payment Hub cho mọi tenant — chưa map merchant ↔ tenant); đơn hàng online chưa thanh toán qua Payment Hub | P3.6 | P6.1 / onboarding tenant (#20) |
 | 31 | API webhook cho merchant (`POST /api/v1/webhooks`, `POST /api/v1/webhook-test` trong OpenAPI / API-Design §5.4) chưa có — hiện chỉ admin cấu hình qua `/api/internal/webhooks` | P3.6 | Cổng merchant / P7.x |
 | 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | P6.5 / triển khai |
@@ -102,7 +102,7 @@
 | 71 | Đổi/trả hoá đơn (refund) không hoàn suất flash sale / combo đã dùng (chỉ **huỷ** hoá đơn mới hoàn); trả hàng có dòng quà tặng / combo tính theo giá trị dòng đã chia (quà = 0₫) | P4.4 | Khi có yêu cầu nghiệp vụ |
 | 72 | Mã giảm giá / voucher / khuyến mãi mới áp dụng tại POS; đơn hàng online (module Đơn hàng P2.7) và mã `free_shipping` chưa dùng được (kênh `online`/`website`… lưu sẵn) | P4.4 | P6.1 Omni Channel (Website) |
 | 73 | Giới hạn flash sale "mỗi khách" được kiểm khi báo giá + lúc tạo HĐ (tổng suất kiểm có điều kiện), nhưng 2 HĐ đồng thời của **cùng một khách** có thể cùng lọt giới hạn mỗi khách (không khoá theo khách) | P4.4 | P6.5 (nếu cần) |
-| 74 | Huỷ / đổi trả hoá đơn đã trả bằng thẻ / QR qua Payment Hub không hoàn tiền qua Payment Hub (chưa có module hoàn tiền) — thu ngân chọn hình thức hoàn thủ công. Thanh toán Payment Hub khách đã trả nhưng không gắn hoá đơn (huỷ chờ trên POS sau khi tiền về) chỉ được cảnh báo trong tổng kết ca | P4.5 | P5.3 Refund / P5.4 Đối soát |
+| 74 | Huỷ / đổi trả hoá đơn đã trả bằng thẻ / QR qua Payment Hub không hoàn tiền qua Payment Hub — thu ngân chọn hình thức hoàn thủ công. **P5.3: Payment Hub đã có `POST /api/v1/transactions/{id}/refund`** (BizOne chưa gọi: cần nút "Hoàn qua cổng" khi huỷ / trả hàng, map `pos_payment_intents` → `txn_code`, xử lý 202 chờ đối tác). Thanh toán Payment Hub khách đã trả nhưng không gắn hoá đơn chỉ được cảnh báo trong tổng kết ca | P4.5 | Task BizOne ↔ hoàn tiền Payment Hub (P6.x) / P5.4 Đối soát |
 | 75 | Thẻ qua cổng ở dev: đối tác VNPay đang `Error` (credential placeholder #16) → POS báo "Cổng thanh toán thẻ hiện không khả dụng". Luồng thẻ đã kiểm bằng cách tạm bật đối tác + IPN ký đúng | P4.5 | Khi có credential VNPay (#16) |
 | 76 | In ESC/POS (WebUSB / Web Bluetooth) **chưa kiểm với máy in thật** (không có thiết bị); chữ tiếng Việt bị bỏ dấu (bảng mã khác nhau theo máy); Web Bluetooth phải ghép lại sau mỗi lần tải trang; chỉ Chrome/Edge (https/localhost). Mặc định vẫn in qua trình duyệt | P4.5 | Khi có máy in thật (kiểm thử phần cứng) |
 | 77 | Đơn chờ (tách / gộp / lưu tạm) lưu Redis theo ca, TTL 12 giờ, chỉ thao tác khi WebSocket trực tuyến; khoá ca không tự xoá đơn chờ còn lại (hết TTL mới mất) | P4.5 | P6.5 (nếu cần) |
@@ -133,14 +133,20 @@
 | 102 | QR MoMo / ZaloPay (P5.2) chỉ trả trong `qr_code` lúc tạo GD (`POST /api/v1/transactions`); `POST /api/v1/qr/generate` (`PartnerQR`) và `GET /api/v1/qr/{txn}` vẫn chỉ hỗ trợ VietQR; dòng `qr_codes` `PartnerQR` không có `image_url`. Lấy QR mới = gọi lại `/pay/{txn}?method=momo_qr` (orderId `_2`) / `zalopay_qr` (app_trans_id `_2`) | P5.1, P5.2 | P7.1 (`generateQR` trong IConnector) / khi POS cần |
 | 103 | BizOne POS chưa thử với `PAYHUB_QR_METHOD=momo_qr` / `zalopay_qr` (response tương thích: `qr_code.raw_data`, `bank: null`) — chưa kiểm màn hình POS / màn hình khách hiển thị QR MoMo / ZaloPay | P5.1, P5.2 | Khi bật MoMo / ZaloPay cho POS |
 | 104 | **[Chờ người dùng]** ZaloPay sandbox chưa nghiệm thu thật: `sb-openapi.zalopay.vn` **truy cập được** từ máy dev (trả JSON `-402` cho chữ ký sai), nhưng `ZALOPAY_*` trong `.env.development` là placeholder; thử bằng bộ credential demo công khai của ZaloPay bị chặn bởi bộ phân quyền của phiên làm việc (dùng credential bên thứ ba) → cần App ID / Key1 / Key2 sandbox của cửa hàng (cổng merchant ZaloPay) và URL public cho callback (ngrok) | P5.2 | Người dùng → hoàn tất P5.2 |
-| 105 | Phản hồi `query` / `refund` / `query_refund` của ZaloPay không có chữ ký và không lặp lại request → Hub tin qua HTTPS tới endpoint đã cấu hình (khác MoMo có kiểm echo). Hoàn tiền ZaloPay bất đồng bộ: `refund()` gọi `query_refund` một lần, còn xử lý (`return_code 3`, sub `-1`/`-16`) → `pending: true` + `partnerRefundRef` = `m_refund_id` để P5.3 hỏi lại | P5.2 | P5.3 (poll hoàn tiền) |
+| 105 | Phản hồi `query` / `refund` / `query_refund` của ZaloPay không có chữ ký và không lặp lại request → Hub tin qua HTTPS tới endpoint đã cấu hình (khác MoMo có kiểm echo). ~~Poll hoàn tiền bất đồng bộ~~ ✅ P5.3 (`syncPendingRefunds`) | P5.2 | Khi có sandbox thật (#104) |
 | 106 | Hạn mức số tiền ZaloPay không có trong tài liệu công khai → chưa đặt `minAmount`/`maxAmount` cho `zalopay_qr`; ZaloPay từ chối dữ liệu (`-401`) được coi là lỗi nghiệp vụ (400, không fallback). Bổ sung hạn mức khi có hợp đồng / sandbox thật | P5.2 | Khi có sandbox thật (#104) |
+| 107 | Thời hạn hoàn tiền mặc định **30 ngày cho mọi đối tác** (`REFUND_WINDOW_DAYS`, một giá trị chung) — tài liệu công khai VNPay / MoMo / ZaloPay không nêu rõ; cần đối chiếu hợp đồng từng đối tác rồi đặt `windowDays` riêng trong `registry.ts`. Phí hoàn tiền (ZaloPay `refund_fee_amount`) chưa dùng | P5.3 | Khi có hợp đồng / sandbox thật |
+| 108 | Hoàn tiền VNPay / MoMo không có kết quả tin cậy (timeout, HTTP 5xx, VNPay `00` sai chữ ký, `94`, MoMo `7000`/`43`…) nằm ở `Processing` (giữ số tiền) tới khi vận hành **xác nhận thủ công** trong chi tiết GD — chưa gọi API tra cứu hoàn tiền của VNPay (`querydr` loại hoàn) / MoMo (`/v2/gateway/api/refund/query`). Dashboard cảnh báo sau 15 phút | P5.3 | P5.4 Đối soát / P7.1 |
+| 109 | Chỉ phát webhook `refund.completed` (theo SRS / API-Design; OpenAPI cũ ghi `refund.success`/`refund.failed` — đã sửa). Hoàn tiền bất đồng bộ (ZaloPay) **thất bại sau đó** không có webhook — merchant thấy qua `GET /api/v1/transactions/{id}` (`refunds[]`) | P5.3 | Khi merchant cần (thêm sự kiện `refund.failed`) |
+| 110 | Hoàn tiền / xác nhận thủ công ghi `transaction_logs` + `refunds.requested_by` (username token), chưa vào `audit_logs` (SRS-PH-AUDIT-02-01) — cùng #38. `refunds.processed_by` (FK `users`) không dùng vì user Keycloak không có trong bảng `users`. Chưa tách quyền "hoàn tiền" khỏi `payhub-admin` (SRS: Admin + Operations) | P5.3 | P7.2 Audit Log / phân quyền vận hành |
+| 111 | Chi tiết GD (`/transactions/{id}`) hiện "Tên merchant: —" — `getTransactionById/ByCode` không nạp `merchant` (có từ P3.2) | P5.3 (phát hiện) | Task UI Payment Hub |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-10 | Connector đã có `refund()` nhưng không có luồng hoàn tiền (#18), `refund.completed` không phát (#29), hoàn tiền ZaloPay bất đồng bộ không ai hỏi lại (#105); log GD cùng giây hiện ngược thứ tự | `refund.service` + API merchant / admin + UI (P5.3): giữ chỗ số tiền dưới khoá dòng GD, outbox `refund.completed`, worker `syncPendingRefunds`; log sắp theo `created_at, id` |
 | 2026-11-07 | Lần đầu vào BizOne không vào được trang chức năng: `/` là trang tĩnh với nút "Bắt đầu" không dẫn đi đâu; sidebar link tới 5 module chưa có (`/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings`) → 404; thiếu/ hết hạn `DEV_AUTH_TOKEN` → mọi trang trắng (dashboard `return null`) không giải thích; màn hẹp sidebar che hết nội dung | `/` chuyển về `/dashboard`; mục chưa xây hiện "Sắp có" (không link); `AppLayout` hiện banner "Chưa đăng nhập" (token thiếu/hết hạn, tính mỗi request); sidebar tự thu gọn < 1024 px (`AppShell` tách riêng cho client component). Gốc vẫn là #7 — chưa có đăng nhập Keycloak trên trình duyệt |
 | 2026-11-07 | QA-2 mức cao: dashboard BizOne dùng chung cache giữa tenant (#39); HĐ POS không có audit log, `user_id` luôn NULL (#40); Payment Hub đọc sai header idempotency + 5 request đồng thời tạo 5 GD (#41); `merchant_txn_id` không duy nhất (#42) | Key cache `dashboard:{tenant}:*` TTL 20 s + xoá khi có HĐ; middleware audit tRPC + `invoice.service` tự ghi (gồm thanh toán qua WS); `Idempotency-Key` + claim `SET NX`; unique `(merchant_id, merchant_txn_id)` → 409 (QA-2 fix) |
 | 2026-11-07 | QA-2 lỗi nghiệp vụ: lỗi kho/đơn/CRM trả 500 (#43); `created_by` NULL (#44); đơn tổng âm (#45); trả nợ vượt (#46); số dòng lỗi import sai (#47); không drill-down (#49); `shadcn` trong dependencies (#50); `.env.example` thiếu biến (#51); dashboard cộng cả tiền khách đưa (chưa trừ tiền thối) vào "Tiền mặt" | `bizoneError` 409/404/400; `resolveDbUserId`; kiểm giảm giá; trừ nợ có điều kiện; số dòng thật + thông báo tiếng Việt; `dashboard.dayDetail` + panel chi tiết ngày; devDependencies; bổ sung biến; trừ `change_amount` (QA-2 fix) |
@@ -230,7 +236,7 @@
 |----|------|------------|--------|---------|
 | P5.1 | MoMo Connector | 🟡 | `07ce9dd` | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
 | P5.2 | ZaloPay Connector | 🟡 | `741106a` | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
-| P5.3 | Refund Module — API & UI | ⬜ | — | |
+| P5.3 | Refund Module — API & UI | ✅ | — | Hoàn tiền kiểm bằng mock VNPay / MoMo / ZaloPay (e2e 57/58 — 1 kỳ vọng sai trong script); hoàn tiền thật trên sandbox chờ credential (#16, #100, #104). Xem [kết quả P5.3](#p53--refund-module--api--ui) |
 | P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
 | P5.5 | Payment Hub Reports | ⬜ | — | |
 | P5.6 | Dispute Module — API & UI | ⬜ | — | |
@@ -2117,3 +2123,56 @@ Ngoài plan, theo yêu cầu người dùng.
   - Seed tạo cấu hình ZaloPay `Inactive` — chỉ kích hoạt sau khi test kết nối đạt (quy tắc P3.5).
 
 - **Vấn đề / lưu ý:** mới #104–#106; mở rộng #18, #102, #103 sang ZaloPay. Để hoàn tất P5.2: lấy App ID / Key1 / Key2 sandbox ZaloPay, bật URL public cho `/api/ipn/zalopay` (ngrok) → tạo cấu hình ZaloPay trên `/partners` (hoặc điền `ZALOPAY_*` vào `source/payment-hub/.env.local` + `npm run db:seed`), test + kích hoạt → tạo GD `zalopay_qr`, thanh toán bằng app ZaloPay sandbox, kiểm callback thật, refund qua `ZalopayConnector.refund()`.
+
+
+### P5.3 — Refund Module — API & UI
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** `—` · **Vị trí:** `source/payment-hub/` — `lib/refund.ts` (quy tắc thuần + DTO), `server/services/refund.service.ts`, `server/routes/refund.ts` + `app/api/v1/transactions/[id]/refund/`, `app/api/internal/transactions/[id]/{refund,refunds}/`, `app/api/internal/refunds/[id]/{check,resolve}/`, `server/jobs/syncPendingRefunds.ts` (+ `services/worker.ts`), `server/services/webhook.service.ts` (outbox hoàn tiền), `services/connectors/{types,registry}.ts` + `vnpay/`, `momo/`, `zalopay/` (phân loại kết quả mơ hồ), `components/ph/{RefundForm,RefundHistory,TransactionDetail}.tsx`, `components/ph/refund-api.ts`, `prisma/migrations/5_refund_flow`, `database/schema_paymenthub.sql`, `tests/refund.test.ts`, tài liệu API-Design §3.2 / §5.1 / §6.2 / §7.2 + OpenAPI
+- **Đã làm:**
+  - **Quy tắc** (`lib/refund.ts`, dùng chung service + UI + test): chỉ GD `Success` / `PartiallyRefunded`; đối tác có API hoàn tiền (VNPay, MoMo, ZaloPay — VietQR không) và GD có mã GD đối tác; trong `REFUND_WINDOW_DAYS` ngày (mặc định 30) sau `paid_at`; số tiền ≤ gốc − đã hoàn − **các yêu cầu đang chờ đối tác**; bỏ trống `amount` = hoàn toàn bộ số còn lại; `full` (VNPay `02`) chỉ khi hoàn cả số gốc một lần, còn lại `partial` (`03`); GD → `PartiallyRefunded` / `Refunded` theo tổng đã hoàn (state machine P3.1)
+  - **`requestRefund`**: kiểm nhanh → dựng connector từ `partner_config_id` của GD → trong DB transaction khoá `SELECT … FOR UPDATE` dòng GD, kiểm lại và tạo `refunds` `Processing` (**giữ chỗ số tiền** — yêu cầu đồng thời không thể vượt số gốc), log `refund_requested` → gọi đối tác **ngoài** transaction → `applyRefundOutcome`: `Completed` (khoá dòng GD, `refunded_amount +=`, đổi trạng thái, log `refund_completed`, outbox webhook) / `Failed` (trả lại số tiền giữ, log `refund_failed`) / vẫn `Processing` (lưu `partner_refund_ref`, lý do). Mọi cập nhật chỉ áp khi refund còn `Processing` ⇒ request, worker, admin chạy đua không ghi đôi
+  - **Kết quả mơ hồ không bao giờ thành `Failed`**: connector đặt `pending` cho ZaloPay `3` / HTTP 5xx (kèm `m_refund_id`), MoMo `1000/7000/7002/9000/43` / `0` không khớp echo / HTTP 5xx, VNPay `00` sai chữ ký / `94` / HTTP 5xx; timeout / lỗi mạng ⇒ `Processing` + `NO_RESPONSE`. Chỉ mã từ chối rõ ràng của đối tác mới `Failed`
+  - **API merchant** `POST /api/v1/transactions/{id}/refund` (API key + HMAC, `Idempotency-Key` scope `refund`, 30 req/phút/key): 200 `Completed` · 202 `Processing` · 502 `PARTNER_ERROR` (body vẫn có refund `Failed`, key idempotency được nhả để gửi lại) · 400 / 404 / 409 / 422 theo mã lỗi (§3.2). `GET /api/v1/transactions/{id}` (và theo `merchant_txn_id`) trả thêm `refunds[]`
+  - **API admin** (`/api/internal`, JWT): `POST transactions/{id}/refund` (role `payhub-admin`, thêm ghi chú nội bộ, 30 req/phút/user), `GET transactions/{id}/refunds` (điều kiện + lịch sử), `POST refunds/{id}/check` (hỏi lại đối tác có `queryRefund`), `POST refunds/{id}/resolve` (xác nhận thủ công `Completed` / `Failed` kèm căn cứ + mã hoàn đối tác). Token gắn `merchant_id` chỉ thấy merchant đó
+  - **Webhook `refund.completed`** qua outbox trên bảng `refunds` (`notify_webhook` / `webhook_sent_at` đặt trong cùng transaction hoàn tất) → `dispatchRefundWebhook` + quét outbox 30 s của worker; `X-Webhook-Id` tất định theo `refund_code`; payload §7.2 + `reason`, `transaction_amount`, `total_refunded`, `transaction_status`; log `webhook_delivered` trên GD. Outbox GD: trạng thái `PartiallyRefunded`/`Refunded` vẫn ánh xạ `payment.success` (hoàn tiền xảy ra trước khi `payment.success` được gửi không làm mất sự kiện)
+  - **Worker** `syncPendingRefunds` (mỗi phút): hoàn tiền `Processing` của đối tác bất đồng bộ (ZaloPay `query_refund`) được hỏi lại với back-off 1, 2, 4 … 60 phút, tối đa 7 ngày (`REFUND_STATUS_SYNC_*`); `check_count`, `last_checked_at`
+  - **Migration `5_refund_flow`**: `refunds` thêm `internal_note`, `partner_refund_ref`, `response_code`, `check_count`, `last_checked_at`, `requested_by`, `channel` (`Merchant`/`Admin`), `notify_webhook`, `webhook_sent_at` + index outbox; `database/schema_paymenthub.sql` đồng bộ
+  - **UI chi tiết GD** (mockup "Hoàn tiền"): nút "Hoàn tiền" chỉ khi đủ điều kiện + có quyền ghi; thẻ "Hoàn tiền" (đã hoàn, chờ đối tác, có thể hoàn, số lần, hạn hoàn, lý do không hoàn được); form modal (GD gốc bên trái; loại toàn phần / một phần, số tiền có định dạng, lý do bắt buộc, ghi chú nội bộ; khung xác nhận không thể hoàn tác); "Lịch sử hoàn tiền" (mã, thời gian, số tiền, trạng thái, lý do + ghi chú, người yêu cầu + kênh, mã / thông điệp đối tác) với "Kiểm tra" (ZaloPay) và "Xác nhận thủ công" cho yêu cầu đang chờ. Bộ lọc danh sách GD thêm "Hoàn một phần"
+  - **Dashboard**: cảnh báo "Hoàn tiền chờ xác nhận" khi có yêu cầu `Processing` quá 15 phút (link tới GD cũ nhất)
+  - Sửa nhỏ: log GD cùng giây sắp theo `created_at, id` (trước đây có thể hiện ngược thứ tự)
+  - Test Vitest `tests/refund.test.ts` (15): điều kiện (trạng thái, VietQR, thiếu mã đối tác, hết hạn, đang chờ), số tiền (mặc định, vượt, cộng dồn, không nguyên, đối tác chỉ toàn phần), trạng thái sau hoàn + chuyển trạng thái, mã `REF-` theo giờ VN, back-off, capability + env, phân loại kết quả, connector MoMo / VNPay / ZaloPay trả `pending` cho câu trả lời mơ hồ
+
+- **Kiểm thử** (`next build` + `next start` :4010 (`VNPAY_API_URL` trỏ mock), worker `dist/worker.mjs`, **mock cục bộ** VNPay merchant_webapi :3995 / MoMo :3998 / ZaloPay :3997 (tự kiểm chữ ký yêu cầu theo thuật toán từng đối tác, VNPay ký phản hồi HMAC-SHA512; bật/tắt từ chối, treo, chậm, `query_refund` đang xử lý / xong), endpoint nhận webhook :3996 kiểm `X-Signature`; merchant `P53TEST` / `P53OTHER` + API key; cấu hình đối tác + endpoint webhook tạo qua API admin; GD đã thanh toán tạo qua API rồi đặt trạng thái đã trả bằng SQL (luồng thanh toán đã kiểm ở P3.3 / P5.1 / P5.2); script e2e ký HMAC độc lập với code app; trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Hoàn tiền full → GD chuyển Refunded | ✅ VNPay toàn phần (`vnp_TransactionType=02`, số tiền ×100, `vnp_TransactionDate` lấy từ lần tạo URL) → 200 `Completed`, GD `Refunded`; MoMo hoàn nốt phần còn lại (không gửi `amount`) → 600.000 ₫, GD `Refunded`, `refunded_amount = amount`; ZaloPay → `Refunded` sau khi worker hỏi lại; hoàn tiếp GD `Refunded` → 409 `TRANSACTION_NOT_REFUNDABLE` |
+  | Hoàn tiền partial 2 lần → tổng không vượt quá gốc | ✅ MoMo 1,5 tr: 500k → `PartiallyRefunded` (76 ms), 400k → đã hoàn 900k, 1,2 tr → **422** `REFUND_AMOUNT_EXCEEDED` (`details.refundable = 1.000.000`), 2 tr → 422; **5 yêu cầu 300k đồng thời** trên GD 1 tr → đúng 3 × 200 + 2 × 422, đã hoàn 900k; yêu cầu đang chờ đối tác được trừ khỏi số có thể hoàn (giữ 100k → 250k bị 422); VNPay một phần dùng `03`. Mock xác nhận mọi yêu cầu ký đúng |
+  | Lịch sử refund hiển thị | ✅ API: `GET /api/v1/transactions/{id}` có `refunds[3]` (không lộ ghi chú nội bộ), admin `GET …/refunds` có điều kiện + `requested_by`, `manual_check`; log GD `refund_requested` / `refund_completed` / `refund_failed` / `refund_processing`. Trình duyệt: form → validate thiếu lý do, vượt "Tối đa 2.000.000 ₫" → hoàn một phần 500.000 ₫ → thông báo thành công, badge "Hoàn một phần", thẻ "Đã hoàn 500.000 / Có thể hoàn 1.500.000", lịch sử có lý do + ghi chú + người yêu cầu + mã đối tác; "Xác nhận thủ công" một yêu cầu treo → `Hoàn tất` + mã đối tác nhập tay; form vừa màn 375 px (không tràn ngang); không lỗi console của app |
+  | Webhook gửi thành công | ✅ 13 lần hoàn tất (gồm 1 xác nhận thủ công) → đúng **13 webhook `refund.completed`**, tất cả chữ ký hợp lệ, `X-Webhook-Id` khác nhau, payload đúng `refund_code` / số tiền / `partner` / `total_refunded` / `transaction_status`; `webhook_logs` 13 dòng `Success`; outbox không còn dòng chờ; log `webhook_delivered` trên GD |
+  | Kiểm tra điều kiện (prompt) | ✅ VietQR → 400 `REFUND_NOT_SUPPORTED`; GD `Pending` → 409; thanh toán 40 ngày trước → 400 `REFUND_WINDOW_EXPIRED`; thiếu mã GD đối tác → 400; GD của merchant khác → 404; GD không tồn tại → 404; sai HMAC → 401; thiếu lý do / số lẻ → 400; không tạo dòng `refunds` cho mọi yêu cầu bị từ chối |
+  | Idempotency / rate limit | ✅ cùng `Idempotency-Key` → 200 + `Idempotent-Replayed`, cùng mã hoàn, vẫn 1 dòng; cùng key khác body → 409; yêu cầu thứ 31 trong 1 phút → 429 |
+  | Đối tác từ chối / không trả lời | ✅ MoMo `1080` → 502 `PARTNER_ERROR`, refund `Failed`, GD giữ nguyên, gửi lại sau đó → 200; MoMo treo → 202 `Processing` sau 2,06 s (timeout cấu hình 2 s, `NO_RESPONSE`), "Kiểm tra" với MoMo → 400 (không có API tra cứu), xác nhận thủ công `Completed` → `PartiallyRefunded` + webhook, xác nhận lần 2 → 409, xác nhận `Failed` → trả lại số tiền giữ |
+  | Hoàn tiền bất đồng bộ (ZaloPay) | ✅ ZaloPay nhận yêu cầu (`3`) → 202, lưu `m_refund_id` `yymmdd_9997_…`; "Kiểm tra" khi còn xử lý → vẫn `Processing`, `check_count 1`; khi xong → `Completed`; yêu cầu thứ 2 được **worker thật** chốt sau 71 s (log `[refund-sync] … → Completed`) |
+  | Cảnh báo dashboard | ✅ yêu cầu `Processing` lùi 20 phút → `GET /api/internal/dashboard` có cảnh báo `refund-processing-stuck` kèm link GD |
+  | Script e2e | ✅ 57/58 — mục còn lại là kỳ vọng sai trong script (lý do "rl" 2 ký tự → 400 thay vì 404); chính mục đó cho thấy 30 yêu cầu được xử lý rồi yêu cầu 31 → 429 |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 99/99; 5 route mới đều `ƒ`) |
+  | Dọn dẹp | ✅ dừng :4010, worker, mock :3994–:3998; xoá 15 GD test (log / raw / refund), `webhook_logs`, endpoint webhook, 2 API key, 3 cấu hình đối tác, 2 merchant; xoá key Redis idempotency + 15 job BullMQ webhook test; khôi phục `.claude/launch.json` |
+
+- **Khác biệt so với plan:**
+  - Hoàn tiền là **đồng bộ khi đối tác trả lời ngay** (200 `Completed`, như API-Design §5.1 / §8.2) và 202 `Processing` khi đối tác xử lý bất đồng bộ / không trả lời — OpenAPI cũ ghi luôn bất đồng bộ (202 + `refund.success`/`refund.failed`); chọn một sự kiện `refund.completed` (SRS, API-Design) và sửa OpenAPI cho thống nhất.
+  - SRS-PH-REFUND-02-03 ghi "vẫn Success nếu còn dư" — theo PLAN / API-Design / state machine dùng `PartiallyRefunded`.
+  - Đường dẫn admin `/api/internal/*` (không phải `/api/admin/*`), thống nhất với P3.5 / P3.6; route handler trong `server/routes/refund.ts` + `app/api/…` như các task trước.
+  - Thêm (PLAN không nêu): giữ chỗ số tiền cho yêu cầu đang chờ, xác nhận thủ công + hỏi lại đối tác, worker hỏi lại ZaloPay, ghi chú nội bộ (theo mockup), cảnh báo dashboard, mã lỗi `REFUND_WINDOW_EXPIRED` / `REFUND_AMOUNT_EXCEEDED` / `REFUND_IN_PROGRESS` / `TRANSACTION_NOT_REFUNDABLE`.
+  - "Thời gian cho phép" là một giá trị cấu hình chung (`REFUND_WINDOW_DAYS`, mặc định 30) — chưa có số liệu chính thức từng đối tác (#107).
+  - Hoàn tiền thật trên sandbox chưa làm được (credential placeholder #16, #100, #104) → kiểm bằng mock theo đặc tả như P3.3 / P5.1 / P5.2.
+
+- **Quyết định thiết kế:**
+  - Giữ chỗ trước, gọi đối tác sau: dòng `refunds` `Processing` được tạo dưới khoá dòng GD và tính vào số đã dùng ⇒ không bao giờ hoàn quá số gốc dù nhiều yêu cầu song song, và không giữ khoá DB trong lúc chờ đối tác.
+  - Câu trả lời không chắc chắn của đối tác giữ `Processing` thay vì `Failed`: đánh dấu thất bại khi tiền thật ra đã hoàn sẽ dẫn tới hoàn hai lần; giữ chỗ an toàn hơn, vận hành xác nhận khi đối tác không có API tra cứu.
+  - `refunded_amount` của GD chỉ cộng khi hoàn tất (nguồn số liệu cho dashboard / báo cáo); số đang chờ tính từ bảng `refunds`.
+  - Outbox riêng trên `refunds` (giống `transactions` P3.6) vì một GD có thể có nhiều lần hoàn, mỗi lần một sự kiện.
+  - Hoàn tiền dùng đúng cấu hình đối tác đã thu tiền (`partner_config_id` của GD), kể cả khi cấu hình đó đang `Inactive` — tiền phải trả về đúng tài khoản merchant ở đối tác đó.
+  - Kết quả 502 nhả `Idempotency-Key` (không có tiền đi) để merchant gửi lại; 200 / 202 được lưu 24 giờ.
+
+- **Vấn đề / lưu ý:** đóng #18, #29, #105 (poll hoàn tiền); cập nhật #74 (Payment Hub đã có API — BizOne chưa gọi); mới #107–#111. Kiểm thật khi có credential sandbox: hoàn tiền GD VNPay (#16), MoMo (#100), ZaloPay (#104) qua form trong chi tiết GD. Hoàn tiền cho thanh toán muộn (#19) và đối chiếu hoàn tiền thuộc P5.4.
