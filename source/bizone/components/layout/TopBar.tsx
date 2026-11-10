@@ -1,7 +1,8 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import type { ApiAuth } from "@/components/inventory/shared";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ export function TopBar({ className, auth }: TopBarProps) {
       )}
     >
       {/* Search */}
-      <div className="relative max-w-md flex-1">
+      <div className="relative hidden max-w-md flex-1 sm:block">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
@@ -38,11 +39,8 @@ export function TopBar({ className, auth }: TopBarProps) {
         {/* Branch selector (P4.6) */}
         {auth && <BranchSwitcher auth={auth} />}
 
-        {/* Notifications */}
-        <button className="relative rounded-full p-2 text-gray-500 hover:bg-gray-100">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 flex h-2 w-2 rounded-full bg-red-500" />
-        </button>
+        {/* Notifications (P4.7) */}
+        {auth && <NotificationBell auth={auth} />}
 
         {/* Avatar */}
         <button className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">

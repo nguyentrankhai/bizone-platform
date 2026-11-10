@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P4.6 xong — đa chi nhánh: CRUD chi nhánh + cấu hình riêng, chọn chi nhánh trên thanh trên, dữ liệu POS/kho/đơn/báo cáo/dashboard theo chi nhánh, báo cáo tổng hợp; đóng #11, #14, #60; mới #80–#82; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (P4.7 xong — thông báo: trung tâm thông báo + WebSocket, email SMTP, SMS gateway, Web Push, mẫu + cấu hình kênh theo sự kiện, nhắc ca / công nợ / đơn đặt trước, báo cáo định kỳ qua email, chiến dịch SMS/Email; đóng #62, #66, #70; mới #83–#87; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 7 | 0 | 2 |
+| 4 — BizOne Mở rộng | 9 | 8 | 0 | 1 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **30** | **3** | **20** |
+| **Tổng** | **53** | **31** | **3** | **19** |
 
 ---
 
@@ -40,7 +40,7 @@
 | ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
 | ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
 | ~~11~~ | ~~Seed chưa có chi nhánh/kho mặc định~~ | ~~P2.5~~ | ✅ P4.6 (seed tạo CN01 + KHO-CN01 khi DB chưa có chi nhánh; UI `/settings/branches` tạo chi nhánh kèm kho) |
-| 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` (từ P4.2: thiếu worker thì yêu cầu xuất báo cáo PDF/Excel nằm chờ mãi; worker cần `node_modules/pdfmake` — để external khi bundle) | P2.5 | P6.5 / khi triển khai |
+| 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` (từ P4.2: thiếu worker thì yêu cầu xuất báo cáo PDF/Excel nằm chờ mãi; worker cần `node_modules/pdfmake` — để external khi bundle; từ P4.7: thiếu worker thì không gửi email/SMS/push, không nhắc ca/công nợ; thiếu `pos.mjs` thì chuông chỉ cập nhật bằng poll 30 s) | P2.5 | P6.5 / khi triển khai |
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
 | ~~14~~ | ~~Chưa có UI cài đặt tài khoản ngân hàng VietQR và tên cửa hàng~~ | ~~P2.6~~ | ✅ P4.6 (cấu hình riêng theo chi nhánh: tên in hoá đơn, tài khoản VietQR, tiền tố HĐ, lời chào; giá trị chung `store_config` vẫn sửa trong DB — màn hình cài đặt chung làm sau) |
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
@@ -90,15 +90,15 @@
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
 | ~~60~~ | ~~Phân quyền cần chi nhánh mà chưa có màn hình tạo chi nhánh~~ | ~~P4.1~~ | ✅ P4.6 (`/settings/branches`). Nhân viên tạo trước P4.1 chưa có vai trò trong DB vẫn hiện "Chưa phân quyền" tới khi gán |
 | 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
-| 62 | Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động (mockup 07, SRS-RPT-08) | P4.2 | P4.7 Thông báo (email) |
+| ~~62~~ | ~~Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động~~ | ~~P4.2~~ | ✅ P4.7 (nút "Gửi email" trên `/reports` + sự kiện "Báo cáo định kỳ" ngày/tuần/tháng, file Excel/PDF đính kèm) |
 | ~~63~~ | ~~Báo cáo khuyến mãi chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing~~ | ~~P4.2~~ | ✅ P4.4 (`promotion_usage` + báo cáo `/marketing/report` theo từng chương trình) |
 | ~~64~~ | ~~Lỗi validate input (Zod) của tRPC trả `message` là chuỗi JSON thô của Zod~~ | ~~P4.2 (kiểm lỗi)~~ | ✅ P4.3 (`errorFormatter`: câu tiếng Việt + `bizoneCode: VALIDATION_ERROR`, chi tiết theo trường) |
 | 65 | Nhận hàng theo đơn nhập không cập nhật `products.cost_price` (giá vốn): báo cáo lợi nhuận / hoa hồng vẫn dùng giá vốn nhập tay. Cần quy tắc giá vốn (bình quân gia quyền theo lần nhập hoặc giá nhập gần nhất) | P4.3 | P4.8 Kế toán (hoặc task giá vốn riêng) |
-| 66 | Công nợ NCC "quá hạn" tính lúc đọc (hạn < hôm nay giờ VN), cột `supplier_debts.status` không ghi `overdue`; chưa có thông báo chủ động khi sắp/đã quá hạn | P4.3 | P4.7 Thông báo |
+| ~~66~~ | ~~Chưa có thông báo chủ động khi công nợ NCC sắp/đã quá hạn~~ | ~~P4.3~~ | ✅ P4.7 (quét 08:00: sắp đến hạn N ngày, quá hạn lúc 1 và 30 ngày). Cột `supplier_debts.status` vẫn không ghi `overdue` — quá hạn tính lúc đọc |
 | 67 | Thanh toán NCC chưa sinh phiếu chi trong sổ quỹ (danh mục `expense_purchase` đã có trong seed) | P4.3 | P4.8 Kế toán |
 | 68 | Chưa có trả hàng cho NCC (`return_out`) / giảm công nợ khi trả; đơn đã nhận đủ không sửa được. Đơn nhận một phần rồi "huỷ phần còn lại" mang trạng thái `cancelled` (hàng + công nợ đã nhận được giữ) | P4.3 | Khi có yêu cầu nghiệp vụ (P4.x) |
 | 69 | "Nhóm hàng cung cấp" (SRS-SUP-01) chưa có cột riêng — ghi trong Ghi chú; chưa gắn NCC mặc định cho sản phẩm (SRS sản phẩm) | P4.3 | Khi có yêu cầu nghiệp vụ |
-| 70 | Chiến dịch marketing SMS / Email / Zalo hàng loạt (SRS-MKT-06) chưa làm: chưa có kênh gửi (nhà cung cấp SMS, SMTP, Zalo OA) và bảng chiến dịch trong schema | P4.4 | P4.7 Thông báo — Hệ thống + Email + SMS |
+| ~~70~~ | ~~Chiến dịch marketing SMS / Email hàng loạt (SRS-MKT-06)~~ | ~~P4.4~~ | ✅ P4.7 (`/marketing/campaigns`). Zalo OA → #85 |
 | 71 | Đổi/trả hoá đơn (refund) không hoàn suất flash sale / combo đã dùng (chỉ **huỷ** hoá đơn mới hoàn); trả hàng có dòng quà tặng / combo tính theo giá trị dòng đã chia (quà = 0₫) | P4.4 | Khi có yêu cầu nghiệp vụ |
 | 72 | Mã giảm giá / voucher / khuyến mãi mới áp dụng tại POS; đơn hàng online (module Đơn hàng P2.7) và mã `free_shipping` chưa dùng được (kênh `online`/`website`… lưu sẵn) | P4.4 | P6.1 Omni Channel (Website) |
 | 73 | Giới hạn flash sale "mỗi khách" được kiểm khi báo giá + lúc tạo HĐ (tổng suất kiểm có điều kiện), nhưng 2 HĐ đồng thời của **cùng một khách** có thể cùng lọt giới hạn mỗi khách (không khoá theo khách) | P4.4 | P6.5 (nếu cần) |
@@ -106,11 +106,16 @@
 | 75 | Thẻ qua cổng ở dev: đối tác VNPay đang `Error` (credential placeholder #16) → POS báo "Cổng thanh toán thẻ hiện không khả dụng". Luồng thẻ đã kiểm bằng cách tạm bật đối tác + IPN ký đúng | P4.5 | Khi có credential VNPay (#16) |
 | 76 | In ESC/POS (WebUSB / Web Bluetooth) **chưa kiểm với máy in thật** (không có thiết bị); chữ tiếng Việt bị bỏ dấu (bảng mã khác nhau theo máy); Web Bluetooth phải ghép lại sau mỗi lần tải trang; chỉ Chrome/Edge (https/localhost). Mặc định vẫn in qua trình duyệt | P4.5 | Khi có máy in thật (kiểm thử phần cứng) |
 | 77 | Đơn chờ (tách / gộp / lưu tạm) lưu Redis theo ca, TTL 12 giờ, chỉ thao tác khi WebSocket trực tuyến; khoá ca không tự xoá đơn chờ còn lại (hết TTL mới mất) | P4.5 | P6.5 (nếu cần) |
-| 78 | Đơn đặt trước: giá **tính lại khi giao** (không khoá giá lúc đặt), mã giảm giá lúc đặt không áp lại khi giao; không giữ tồn cho đơn đặt; chưa nhắc lịch hẹn giao | P4.5 | P4.7 Thông báo / khi có yêu cầu nghiệp vụ |
+| 78 | Đơn đặt trước: giá **tính lại khi giao** (không khoá giá lúc đặt), mã giảm giá lúc đặt không áp lại khi giao; không giữ tồn cho đơn đặt (nhắc lịch hẹn giao: ✅ P4.7) | P4.5 | Khi có yêu cầu nghiệp vụ |
 | 79 | Màn hình khách ghép bằng PIN: token thiết bị 16 giờ, hết hiệu lực khi ca khoá; chưa có màn hình xem / thu hồi thiết bị đã ghép | P4.5 | P4.6 Multi-store / Cài đặt |
 | 80 | Đa chi nhánh mới tách **dữ liệu giao dịch** (HĐ/ca POS, đơn hàng, đơn đặt trước, kho/phiếu kho/kiểm kê/chuyển kho, đơn nhập, dashboard, báo cáo, lịch ca). Dùng chung toàn cửa hàng: sản phẩm + giá bán, khách hàng + điểm, NCC + công nợ, khuyến mãi, nhân viên/hoa hồng, audit log; dashboard "khách hàng mới" và cảnh báo tồn thấp SSE (`/api/inventory/alerts`) chưa lọc theo chi nhánh | P4.6 | Khi có yêu cầu nghiệp vụ (giá / khuyến mãi theo chi nhánh) |
 | 81 | Phạm vi chi nhánh theo `user_branches` (gán qua vai trò ở module Nhân viên): quyền **cùng một bộ** ở mọi chi nhánh được gán (`user_roles.branch_id` chưa dùng để khác quyền theo chi nhánh); nhân viên chưa gán → chỉ chi nhánh mặc định; quản lý chưa gán → mọi chi nhánh. Đổi phân công có hiệu lực sau ≤ 60 s (cache `rbac:{tenant}`), đổi trạng thái chi nhánh ngay | P4.6 | P6.6 Security Hardening (nếu cần quyền theo chi nhánh) |
 | 82 | Đơn hàng online không gắn chi nhánh chỉ hiện khi chọn "Tất cả chi nhánh"; người chỉ có chi nhánh A không xem / đổi trả được hoá đơn của chi nhánh B (trả hàng khác chi nhánh); hàng trả luôn về kho chi nhánh của hoá đơn gốc | P4.6 | P6.1 Omni Channel / khi có yêu cầu nghiệp vụ |
+| 83 | SMS chỉ có adapter HTTP chung (`SMS_PROVIDER=http`: POST `{to, message, brandname}` + Bearer) và `log` cho dev — chưa có adapter nhà cung cấp cụ thể (eSMS, SpeedSMS, Viettel…), chưa đăng ký brandname; chưa nhận báo cáo trạng thái (DLR) từ nhà mạng | P4.7 | Người dùng chọn nhà cung cấp / P6.5 |
+| 84 | Web Push **chưa kiểm với dịch vụ push thật** (FCM / Mozilla / Apple): trình duyệt tích hợp của app chặn quyền Notification. Đã kiểm phía máy chủ (VAPID + mã hoá `aes128gcm` tới endpoint giả, xoá subscription khi 410) và file `/sw.js`. Cần cặp khoá VAPID (`npx web-push generate-vapid-keys`) trong env + thử trên Chrome; iPhone cần PWA (thêm vào màn hình chính) | P4.7 | Người dùng (Chrome) / P6.x PWA |
+| 85 | Kênh Zalo OA (thông báo + chiến dịch, SRS-MKT-06 / SRS §9) chưa làm — chưa có tài khoản Zalo OA | P4.7 | Khi có Zalo OA |
+| 86 | Chiến dịch marketing: chưa có trường đồng ý / từ chối nhận quảng cáo của khách, chưa có link huỷ đăng ký email, chưa giới hạn khung giờ gửi tin quảng cáo (SMS QC cần brandname + tuân quy định chống tin nhắn rác) — chỉ nên dùng thật sau khi bổ sung | P4.7 | Trước khi dùng thật / P6.6 |
+| 87 | Sự kiện "Đồng bộ kênh bán lỗi" (`sync_failed`) đã có cấu hình nhưng chưa có nơi phát (chưa có Omni Channel) | P4.7 | P6.1 |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -197,7 +202,7 @@
 | P4.4 | Marketing Module — API & UI | ✅ | `524fb15` | Xem [kết quả P4.4](#p44--marketing-module--api--ui) |
 | P4.5 | POS Advanced Features | ✅ | `e0488e5` | Xem [kết quả P4.5](#p45--pos-advanced-features) |
 | P4.6 | Multi-Store Support | ✅ | `b735f80` | Xem [kết quả P4.6](#p46--multi-store-support) |
-| P4.7 | Thông báo — Hệ thống + Email + SMS | ⬜ | — | |
+| P4.7 | Thông báo — Hệ thống + Email + SMS | ✅ | — | Xem [kết quả P4.7](#p47--thông-báo--hệ-thống--email--sms) |
 | P4.8 | Kế toán & Tài chính — API & UI | ⬜ | — | |
 
 ## Giai đoạn 5 — Payment Hub Mở rộng (Tuần 9–12)
@@ -1802,3 +1807,57 @@ Ngoài plan, theo yêu cầu người dùng.
 
 - **Vấn đề / lưu ý:** đóng #11, #14, #60; mới #80–#82. Trang `/settings` (redirect) cũng in cảnh báo "Could not validate `instant`" khi build giống `/` (đã biết, không ảnh hưởng).
 
+
+### P4.7 — Thông báo — Hệ thống + Email + SMS
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau khi commit)_ · **Vị trí:** `source/bizone/lib/notifications/{events,template,schedule}.ts`, `lib/validators/notification.ts`, `server/services/{notification,notificationDelivery,notificationTemplate,notificationScan,campaign,email,sms,push,reportMail}.service.ts`, `server/queue/{notification,notificationWorker}.ts`, `server/ws/notifications.ts` (+ `ws/pos.ts`, `worker.ts`), `server/routers/{notification,campaign}.ts` (+ `reports.emailReport`), sự kiện trong `order.service` / `inventory.service`, `app/notifications/**`, `app/marketing/campaigns`, `components/notifications/*`, `components/marketing/Campaign{List,Form}.tsx`, `components/reports/EmailReportButton.tsx`, `components/layout/TopBar.tsx`, `hooks/useNotifications.ts`, `public/sw.js`, `prisma/migrations/5_notifications`, `prisma/seed.ts`, `tests/notification.test.ts`; `database/schema.sql`, `.env.example`
+- **Đã làm:**
+  - **Danh mục sự kiện** (`lib/notifications/events.ts`, theo SRS §9): đơn hàng mới (online), tồn kho thấp, kiểm kê chênh lệch, công nợ khách quá hạn, công nợ NCC sắp đến hạn / quá hạn (#66), nhắc lịch giao đơn đặt trước (#78), nhắc ca làm việc (gửi riêng nhân viên), báo cáo định kỳ (#62), chiến dịch gửi xong, đồng bộ kênh bán lỗi (chờ P6.1). Mỗi loại có `audience` (capability được xem: `order:read`, `inventory:read`, `crm:manage_debt`, `supplier:manage_po`, `pos:read`, `report:read`, `marketing:campaign`, `admin:*`), kênh mặc định, mẫu email/SMS mặc định, biến mẫu, tuỳ chọn (báo trước N ngày/phút, tần suất báo cáo, nhắn khách)
+  - **`notify()`** (`notification.service`): áp cấu hình của cửa hàng → lưu `notifications` (khoá chống trùng `dedupe_key` — VD tồn thấp tối đa 1 lần/ngày mỗi SP + kho) → publish Redis `bizone:notify:{tenant}` → job `deliver` gửi email/SMS/push. Không bao giờ ném lỗi (không làm hỏng nghiệp vụ gốc). Nguồn: `order.service.createOrder` (kênh ≠ `pos`), `publishLowStockAlerts` (bán hàng, xác nhận phiếu kho, nhận hàng NCC), `completeStockTake`, `campaign.service`, job quét
+  - **Trung tâm thông báo** (`notification.*`): danh sách 30 ngày có phân trang + lọc chưa đọc / loại, số chưa đọc, đánh dấu đã đọc / chưa đọc / tất cả (`notification_reads`). Người xem (`notificationViewer`) = capability theo token + vai trò tuỳ chỉnh, chi nhánh được phép (P4.6 — mọi chi nhánh được gán, không chỉ chi nhánh đang chọn), loại đã tắt; cùng một luật cho SQL (`visibleWhere`) và WS (`isVisibleTo`)
+  - **WebSocket** `/ws/notifications` trong process realtime (cùng cổng 3002 với POS, `server/ws/notifications.ts`): subprotocol `["bizone-notify", token]` + `?tenant=`, gửi `notification:unread` khi kết nối và `notification:new` cho đúng người; làm mới quyền mỗi 60 s, đóng 4403 khi nhân viên bị vô hiệu hoá. Client (`useNotifications`) tự kết nối lại (backoff), mất WS thì poll 30 s
+  - **UI**: chuông trên thanh trên (badge số chưa đọc, dropdown 8 thông báo mới nhất, bấm → đánh dấu đã đọc + mở trang liên quan, toast khi có thông báo mới), `/notifications` (danh sách), `/notifications/preferences` (tắt theo loại cho chuông / push + bật Web Push trên thiết bị), `/notifications/settings` (bật kênh trong app / push / email / SMS theo sự kiện, người nhận, mẫu, tuỳ chọn), `/notifications/templates` (CRUD mẫu + xem trước dữ liệu mẫu + gửi thử), `/notifications/deliveries` (lịch sử gửi 30 ngày: nội dung thực tế, trạng thái, lỗi, nhà cung cấp)
+  - **Email** (`email.service`, nodemailer SMTP; không có `SMTP_HOST` → provider `log`): nội dung mẫu là văn bản thường → HTML đơn giản có thương hiệu (escape, link tự động) + bản text. **SMS** (`sms.service`): `SMS_PROVIDER=http` (POST gateway JSON + Bearer) hoặc `log`; chuẩn hoá SĐT VN, bỏ dấu + ký tự ngoài GSM (₫ → d) trừ khi `SMS_UNICODE=true`. **Web Push** (`push.service`, `web-push` + VAPID; `public/sw.js` hiện thông báo + mở link): subscription lưu theo thiết bị kèm vai trò lúc đăng ký, worker lọc theo quyền / chi nhánh / tuỳ chọn tắt, xoá subscription hết hạn (404/410)
+  - **Gửi tin & thử lại**: mỗi tin là một dòng `notification_deliveries`; job `deliver` thử lại 3 lần (backoff) nhưng chỉ gửi lại tin lỗi; email/SMS cá nhân (nhắc ca) gửi tới email/SĐT trong hồ sơ nhân viên; nhắn khách (nhắc nợ `debt_reminder_sms`, nhắc nhận đơn `preorder_due_sms`) khi bật tuỳ chọn
+  - **Job định kỳ** (queue `bizone-notification`, giờ VN): mỗi 5 phút nhắc ca (trước N phút), 08:00 công nợ khách quá hạn (mốc 1 / 30 ngày), công nợ NCC sắp đến hạn / quá hạn, đơn đặt trước đến hạn hôm nay / ngày mai; 07:00 báo cáo định kỳ; 02:15 xoá thông báo + log gửi quá 30 ngày
+  - **Báo cáo qua email (#62)**: nút "Gửi email" trên `/reports` (tối đa 5 địa chỉ, Excel/PDF theo bộ lọc đang chọn, chi nhánh theo phạm vi P4.6) → worker dựng file như xuất báo cáo và gửi kèm tóm tắt doanh thu thuần / số HĐ / lợi nhuận; sự kiện "Báo cáo định kỳ" gửi báo cáo hôm qua / tuần trước (thứ Hai) / tháng trước (ngày 1), thử lại chỉ gửi người chưa nhận
+  - **Chiến dịch SMS / Email (#70, SRS-MKT-06)** (`campaign.*`, quyền mới `marketing:campaign` ⇐ catalog `marketing.manage_campaign`, admin + manager): đối tượng theo hạng, nhóm khách, chi tiêu tối thiểu, tháng sinh (chỉ khách đang hoạt động có email / SĐT di động hợp lệ, tối đa 5.000), xem trước số khách + 5 khách mẫu, nội dung có biến (`customer_name`, `points`, `ranking`…), lưu nháp / gửi ngay / hẹn giờ (giờ VN) / huỷ; worker gửi từng khách (chạy lại bỏ qua khách đã nhận, huỷ dừng trong 20 tin), cập nhật số đã gửi / lỗi, báo "đã gửi xong"
+  - Migration `5_notifications`: 7 bảng (`notifications`, `notification_reads`, `notification_settings`, `notification_preferences`, `push_subscriptions`, `marketing_campaigns`, `notification_deliveries`) + 11 mẫu mặc định; bỏ chữ "đ" cứng trong mẫu `debt_reminder_sms` (số tiền đã có ₫). Seed không còn ghi đè mẫu đã có. 11 mutation vào `AUDIT_ROUTES`
+  - Thanh trên: ẩn ô tìm kiếm (chưa có chức năng) dưới 640 px để chuông không bị cắt
+  - Test Vitest `tests/notification.test.ts` (13): render mẫu, email HTML escape + link, SMS không dấu / GSM, SĐT VN, luật hiển thị (audience, chi nhánh, cá nhân, tắt riêng), cấu hình mặc định + tuỳ chọn, validator (cấu hình, mẫu, danh sách email, đối tượng), kỳ báo cáo định kỳ theo giờ VN
+
+- **Kiểm thử** (`next dev` :3000 + realtime :3002 + worker (tsx watch) đang chạy trên máy với user dev `admin@bizone.vn`; env tạm: SMTP → Mailpit (container tạm), SMS → gateway giả HTTP, khoá VAPID tạm; script tRPC + WebSocket thật, Mailpit API, UI qua trình duyệt tích hợp; dữ liệu tạm `P47*`: 4 khách, 1 nợ khách, 1 NCC + 2 nợ, 1 ca + phân ca, 1 đơn đặt trước, 5 đơn online, 3 chiến dịch):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo đơn online → notif hiện trên dashboard | ✅ `order.create` kênh Shopee → WS nhận `notification:new` **~70 ms** sau khi gửi request ("Đơn hàng ORD-… từ Shopee - 65.000₫"). UI `/dashboard`: tạo đơn Lazada → toast + badge chuông 2 → 3 ngay, dropdown liệt kê, bấm → mở `/orders/7`, badge còn 2. Đơn kênh `pos` không thông báo |
+  | Cấu hình template → gửi email đúng nội dung | ✅ Sửa mẫu `order_new_email` (tiêu đề + 5 dòng biến) + bật email cho "Đơn hàng mới" tới 2 địa chỉ → tạo đơn Website → Mailpit nhận 2 email, tiêu đề / nội dung text + HTML đúng từng biến (kênh, khách, chi nhánh HCM, tổng 75.000₫, link `/orders/8`); SMS tới gateway đúng mẫu `order_new_sms`. UI: form mẫu xem trước dữ liệu mẫu → "Gửi thử" → email đúng nội dung xem trước |
+  | WebSocket real-time | ✅ Như trên; token sai / thiếu → 401, tenant khác → 403; health `notificationClients`. Lọc: nhân viên bán hàng (chi nhánh mặc định HN) thấy 4 thông báo (không thấy đơn HCM), quản trị thấy 5; nhân viên không có `crm:manage_debt` không có audience công nợ |
+  | Email (SMTP template) / SMS (gateway) | ✅ Gateway trả 503 → tin SMS `failed` → job thử lại sau ~5 s → `sent` (attempts 2), 2 email không gửi lại. SMS không dấu, "₫" → "d". Validation cấu hình: bật email không có người nhận / mẫu sai kênh / email, SĐT sai → 400 câu tiếng Việt |
+  | Events: tồn thấp, kiểm kê, công nợ quá hạn, báo cáo định kỳ, nhắc ca (+ #66, #78) | ✅ Job `daily`: nợ khách quá hạn 5 ngày (SMS nội bộ + SMS nhắc khách), nợ NCC đến hạn sau 2 ngày (email kế toán), nợ NCC quá hạn 40 ngày (mốc 30), đơn đặt trước giao ngày mai (SMS khách); job `scan`: ca bắt đầu sau 20 phút → thông báo riêng + email + SMS tới nhân viên; chạy lại cả 2 job → 0 (chống trùng). Báo cáo định kỳ (hằng ngày, PDF) → 2 email kèm `bao-cao-revenue-2026-11-09_2026-11-09.pdf`, số liệu đúng; chạy lại → không gửi lại. Tồn thấp phát sinh thật từ hoá đơn POS trên app (1 thông báo, giữ nguyên). Kiểm kê chênh lệch, đồng bộ lỗi: kiểm bằng code + unit (không hoàn tất phiếu kiểm kê trên dữ liệu thật) |
+  | Gửi email báo cáo (#62) | ✅ `reports.emailReport` doanh thu 03–09/11 (Excel) → email kèm file 10 KB, doanh thu thuần 15.797.250₫ / 70 HĐ / LN 5.645.350₫ khớp `reports.revenue`; tồn kho (PDF) ✅; email sai → 400 |
+  | Notification templates CRUD + variables | ✅ Sửa, xem trước (biến lạ được cảnh báo), gửi thử email; mẫu đang dùng / mẫu hệ thống không xoá được (409); đổi kênh mẫu đang dùng → 409 |
+  | Notification preferences | ✅ Cấu hình kênh theo sự kiện (6 lần lưu, audit `update_notification_setting`); tuỳ chọn cá nhân: trang hiện đúng loại được xem (unit + UI) |
+  | Web Push Notification | 🟡 Trình duyệt tích hợp chặn quyền Notification (`Notification.permission = denied`) nên chưa đăng ký được subscription thật (#84). Phía máy chủ: subscription giả trỏ endpoint HTTPS giả → request `aes128gcm`, TTL 3600, `Authorization: vapid …`; subscription trả 410 bị xoá; seller (chi nhánh HN) không nhận đơn chi nhánh HCM; chạy lại không gửi trùng. `/sw.js` 200 `application/javascript` |
+  | Lưu 30 ngày | ✅ Job `cleanup`: xoá thông báo 31 ngày + log gửi 31 ngày, giữ bản 29 ngày |
+  | Đánh dấu đã đọc / chưa đọc | ✅ API + UI: đọc 1 / đọc tất cả / bỏ đọc, lọc "Chưa đọc", badge cập nhật |
+  | Chiến dịch SMS / Email (#70) | ✅ Tháng sinh 11: email 2 khách (khách email sai bị loại), SMS 3 khách (SĐT 02… bị loại); gửi ngay → 2/2, email đúng biến (hạng, điểm); gửi lại → 409; hẹn giờ quá khứ → 400; hẹn 16:12 → worker gửi đúng 16:12:00, 3/3 SMS; huỷ chiến dịch hẹn giờ → không gửi, huỷ lần 2 → 409; sửa / xoá chiến dịch đã gửi → 409. UI danh sách + form (đếm 15 khách khi không lọc) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 127/127); bundle `pos.mjs` (cổng thử 3012: health có `notificationClients`) và `worker.mjs` (đăng ký queue `bizone-notification`) khởi động được; migration `5_notifications` áp lên DB dev, `prisma migrate diff`: rỗng; `database/schema.sql` nạp được vào DB trống |
+  | Dọn dẹp | ✅ xoá thông báo / đọc / log gửi / cấu hình / tuỳ chọn / push / chiến dịch test, 5 đơn online, khách + nợ, NCC + nợ, ca + phân ca, đơn đặt trước + ca POS đóng tạm `P47`, user `p47.*` tự tạo, audit test; trả SĐT/email user admin về NULL, trả mẫu `order_new_email` về mặc định; Redis: cache rbac, job test + job chiến dịch hẹn giờ đã huỷ (giữ 4 lịch định kỳ); dừng gateway giả, xoá container + image Mailpit, khôi phục `.env.local`. Không đụng ca POS đang mở (#6) và hoá đơn #115 do app tạo trong lúc test; chi nhánh mặc định CN-HN giữ nguyên |
+
+  Sửa trong lúc test: SMS còn "₫"/"–" làm tin chuyển sang Unicode → thay bằng ký tự ASCII; mẫu `debt_reminder_sms` hiện "2.500.000₫đ" → bỏ "đ" trong mẫu gốc (migration + seed + schema.sql); seed ghi đè mẫu cửa hàng đã sửa → chỉ tạo mới; bảng mẫu hàng cao vì cột "Đang dùng cho" → giới hạn 3 dòng; thẻ cấu hình ép tiêu đề hẹp → xếp dọc dưới `lg`; thanh trên tràn ở 375 px che chuông → ẩn ô tìm kiếm dưới `sm`.
+
+- **Khác biệt so với plan:**
+  - `server/jobs/notificationQueue.ts` → `server/queue/notification.ts` + `notificationWorker.ts` (đúng quy ước queue hiện có; phần dùng nodemailer/pdfmake chỉ ở worker).
+  - Thêm `notificationDelivery`, `notificationTemplate`, `notificationScan`, `push`, `reportMail`, `campaign` service, các trang con `/notifications/*`, `/marketing/campaigns`, nút "Gửi email" báo cáo — gom các vấn đề #62, #66, #70, #78 về P4.7.
+  - WebSocket thông báo chạy trong process realtime sẵn có (cổng 3002, path `/ws/notifications` như API-Design §16) thay vì process riêng; API là tRPC `notification.*` thay cho REST `/api/notifications`.
+  - Chưa có kênh Zalo OA (#85); SMS là adapter HTTP chung (#83).
+
+- **Quyết định thiết kế:**
+  - Thông báo toàn cửa hàng lưu **một dòng** + `audience` (capability) + `branch_id`, quyền xem tính lúc đọc (token + vai trò tuỳ chỉnh + chi nhánh P4.6) — không phải sinh dòng cho từng người, nhân viên mới / đổi quyền thấy đúng ngay; thông báo cá nhân dùng `user_id`. Trạng thái đọc ở `notification_reads`.
+  - Kênh ngoài (email/SMS) cấu hình **theo sự kiện ở mức cửa hàng** (danh sách người nhận + mẫu) — không cần biết vai trò Keycloak của người không đăng nhập; tuỳ chọn cá nhân chỉ tắt chuông / push.
+  - Mọi tin gửi đi được ghi log (nội dung thực tế, nhà cung cấp, lỗi) → kiểm được và thử lại có chọn lọc; provider `log` khi chưa cấu hình để dev chạy không cần SMTP/SMS.
+  - Mẫu là văn bản thường có `{{biến}}` (không HTML) — nhân viên sửa an toàn, email tự dựng HTML đã escape.
+  - Hẹn giờ / định kỳ dùng BullMQ (job delay + job scheduler theo giờ VN), chống trùng bằng `dedupe_key`.
+
+- **Vấn đề / lưu ý:** đóng #62, #66, #70; cập nhật #12, #78; mới #83–#87. Dev muốn nhận email/SMS thật: điền `SMTP_*` / `SMS_*` trong `.env.local` (mặc định ghi log), chạy `npm run dev:worker`; Web Push cần `VAPID_*` + Chrome (#84). Quyền `marketing.manage_campaign` mới: chạy `npm run db:seed` trên tenant đã có để vai trò hệ thống nhận quyền. Trong lúc kiểm thử, lệnh nạp thử `database/schema.sql` (file có `USE bizonedb`) đã chạy nhầm vào DB dev: chỉ các lệnh `CREATE … IF NOT EXISTS` / `INSERT` mẫu trùng khoá nên bị từ chối — đã kiểm `prisma migrate diff` rỗng và không có dòng mới (lần sau nạp thử bằng bản sao đã đổi `USE`).

@@ -71,6 +71,7 @@ model Branch {
   warehouses            Warehouse[]
   preorders             Preorder[]
   configs               BranchConfig[]
+  notifications         Notification[]
 
   @@map("branches")
 }
@@ -1358,17 +1359,17 @@ model UserSession {
 }
 
 model User {
-  id                       Int                    @id @default(autoincrement())
-  username                 String                 @unique(map: "username") @db.VarChar(100)
-  passwordHash             String                 @map("password_hash") @db.VarChar(255)
-  fullName                 String                 @map("full_name") @db.VarChar(255)
-  email                    String?                @db.VarChar(255)
-  phone                    String?                @db.VarChar(20)
-  avatar                   String?                @db.VarChar(500)
-  isActive                 Boolean                @default(true) @map("is_active")
-  lastLoginAt              DateTime?              @map("last_login_at") @db.DateTime(0)
-  createdAt                DateTime               @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt                DateTime               @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  id                       Int                      @id @default(autoincrement())
+  username                 String                   @unique(map: "username") @db.VarChar(100)
+  passwordHash             String                   @map("password_hash") @db.VarChar(255)
+  fullName                 String                   @map("full_name") @db.VarChar(255)
+  email                    String?                  @db.VarChar(255)
+  phone                    String?                  @db.VarChar(20)
+  avatar                   String?                  @db.VarChar(500)
+  isActive                 Boolean                  @default(true) @map("is_active")
+  lastLoginAt              DateTime?                @map("last_login_at") @db.DateTime(0)
+  createdAt                DateTime                 @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt                DateTime                 @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
   attendance               Attendance[]
   auditLogs                AuditLog[]
   cashSessions             CashSession[]
@@ -1384,19 +1385,24 @@ model User {
   orderRefunds             OrderRefund[]
   orderTracking            OrderTracking[]
   orders                   Order[]
-  productsCreatedBy        Product[]              @relation("ProductCreatedBy")
-  productsUpdatedBy        Product[]              @relation("ProductUpdatedBy")
+  productsCreatedBy        Product[]                @relation("ProductCreatedBy")
+  productsUpdatedBy        Product[]                @relation("ProductUpdatedBy")
   promotionBuyXGetY        PromotionBuyXGetY[]
   promotionCombos          PromotionCombo[]
   purchaseOrders           PurchaseOrder[]
   revenueExpenseRecords    RevenueExpenseRecord[]
   shiftAssignments         ShiftAssignment[]
-  stockTakeNotesApprovedBy StockTakeNote[]        @relation("StockTakeNoteApprovedBy")
-  stockTakeNotesCreatedBy  StockTakeNote[]        @relation("StockTakeNoteCreatedBy")
+  stockTakeNotesApprovedBy StockTakeNote[]          @relation("StockTakeNoteApprovedBy")
+  stockTakeNotesCreatedBy  StockTakeNote[]          @relation("StockTakeNoteCreatedBy")
   supplierPayments         SupplierPayment[]
   userBranches             UserBranch[]
   userRoles                UserRole[]
   userSessions             UserSession[]
+  notifications            Notification[]
+  notificationReads        NotificationRead[]
+  notificationPreferences  NotificationPreference[]
+  pushSubscriptions        PushSubscription[]
+  marketingCampaigns       MarketingCampaign[]
 
   @@map("users")
 }
@@ -1773,4 +1779,153 @@ model BranchConfig {
 
   @@unique([branchId, configKey], map: "uq_bc_branch_key")
   @@map("branch_configs")
+}
+
+// ─── P4.7 Notifications ──────────────────────────────────────────────────────
+
+/// In-app notification (event log, 30 days). Visible to `userId` or to holders of `audience` in `branchId`.
+model Notification {
+  id         BigInt                 @id @default(autoincrement())
+  type       String                 @db.VarChar(50)
+  severity   String                 @default("info") @db.VarChar(20)
+  title      String                 @db.VarChar(255)
+  content    String?                @db.Text
+  link       String?                @db.VarChar(500)
+  audience   String?                @db.VarChar(50)
+  userId     Int?                   @map("user_id")
+  branchId   Int?                   @map("branch_id")
+  /// JSON: template variables of the event
+  data       String?                @db.Text
+  dedupeKey  String?                @unique(map: "uq_notif_dedupe") @map("dedupe_key") @db.VarChar(191)
+  showInApp  Boolean                @default(true) @map("show_in_app")
+  createdAt  DateTime               @default(now()) @map("created_at") @db.DateTime(0)
+  user       User?                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notif_user")
+  branch     Branch?                @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_notif_branch")
+  reads      NotificationRead[]
+  deliveries NotificationDelivery[]
+
+  @@index([createdAt], map: "idx_notif_created")
+  @@index([userId, createdAt], map: "idx_notif_user")
+  @@index([audience, createdAt], map: "idx_notif_audience")
+  @@index([branchId], map: "idx_notif_branch")
+  @@map("notifications")
+}
+
+model NotificationRead {
+  notificationId BigInt       @map("notification_id")
+  userId         Int          @map("user_id")
+  readAt         DateTime     @default(now()) @map("read_at") @db.DateTime(0)
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_nr_notification")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_nr_user")
+
+  @@id([notificationId, userId])
+  @@index([userId], map: "idx_nr_user")
+  @@map("notification_reads")
+}
+
+/// Store-level channels per event type (missing row = defaults in lib/notifications/events.ts)
+model NotificationSetting {
+  eventType     String   @id @map("event_type") @db.VarChar(50)
+  inApp         Boolean  @default(true) @map("in_app")
+  email         Boolean  @default(false)
+  sms           Boolean  @default(false)
+  push          Boolean  @default(false)
+  emailTo       String?  @map("email_to") @db.Text
+  smsTo         String?  @map("sms_to") @db.Text
+  emailTemplate String?  @map("email_template") @db.VarChar(100)
+  smsTemplate   String?  @map("sms_template") @db.VarChar(100)
+  /// JSON: per-event options (report frequency, days before due…)
+  options       String?  @db.Text
+  updatedBy     Int?     @map("updated_by")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+
+  @@map("notification_settings")
+}
+
+model NotificationPreference {
+  userId    Int      @map("user_id")
+  eventType String   @map("event_type") @db.VarChar(50)
+  inApp     Boolean  @default(true) @map("in_app")
+  push      Boolean  @default(true)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_np_user")
+
+  @@id([userId, eventType])
+  @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  username      String    @db.VarChar(100)
+  /// Comma list of the token's realm roles when subscribing
+  roles         String    @default("") @db.VarChar(500)
+  endpoint      String    @db.VarChar(1000)
+  endpointHash  String    @unique(map: "uq_push_endpoint") @map("endpoint_hash") @db.Char(64)
+  p256dh        String    @db.VarChar(255)
+  auth          String    @db.VarChar(255)
+  userAgent     String?   @map("user_agent") @db.VarChar(255)
+  failureCount  Int       @default(0) @map("failure_count")
+  lastSuccessAt DateTime? @map("last_success_at") @db.DateTime(0)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_push_user")
+
+  @@index([userId], map: "idx_push_user")
+  @@map("push_subscriptions")
+}
+
+model MarketingCampaign {
+  id              Int                    @id @default(autoincrement())
+  name            String                 @db.VarChar(255)
+  channel         String                 @db.VarChar(20)
+  subject         String?                @db.VarChar(500)
+  content         String                 @db.Text
+  /// JSON: CampaignAudience
+  audience        String                 @db.Text
+  status          String                 @default("draft") @db.VarChar(20)
+  scheduledAt     DateTime?              @map("scheduled_at") @db.DateTime(0)
+  startedAt       DateTime?              @map("started_at") @db.DateTime(0)
+  completedAt     DateTime?              @map("completed_at") @db.DateTime(0)
+  totalRecipients Int                    @default(0) @map("total_recipients")
+  sentCount       Int                    @default(0) @map("sent_count")
+  failedCount     Int                    @default(0) @map("failed_count")
+  createdBy       Int?                   @map("created_by")
+  createdAt       DateTime               @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  createdByUser   User?                  @relation(fields: [createdBy], references: [id], onUpdate: Restrict, map: "fk_mc_created_by")
+  deliveries      NotificationDelivery[]
+
+  @@index([status], map: "idx_mc_status")
+  @@index([createdAt], map: "idx_mc_created")
+  @@index([createdBy], map: "fk_mc_created_by")
+  @@map("marketing_campaigns")
+}
+
+/// Outgoing email / SMS / push (events, report emails, campaigns, tests). Kept 30 days.
+model NotificationDelivery {
+  id                BigInt             @id @default(autoincrement())
+  notificationId    BigInt?            @map("notification_id")
+  campaignId        Int?               @map("campaign_id")
+  customerId        Int?               @map("customer_id")
+  eventType         String             @map("event_type") @db.VarChar(50)
+  channel           String             @db.VarChar(20)
+  recipient         String             @db.VarChar(1000)
+  templateCode      String?            @map("template_code") @db.VarChar(100)
+  subject           String?            @db.VarChar(500)
+  content           String             @db.Text
+  status            String             @default("pending") @db.VarChar(20)
+  provider          String?            @db.VarChar(50)
+  providerMessageId String?            @map("provider_message_id") @db.VarChar(255)
+  error             String?            @db.VarChar(1000)
+  attempts          Int                @default(0)
+  sentAt            DateTime?          @map("sent_at") @db.DateTime(0)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.DateTime(0)
+  notification      Notification?      @relation(fields: [notificationId], references: [id], onUpdate: Restrict, map: "fk_nd_notification")
+  campaign          MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_nd_campaign")
+
+  @@index([createdAt], map: "idx_nd_created")
+  @@index([notificationId], map: "idx_nd_notification")
+  @@index([campaignId, status], map: "idx_nd_campaign")
+  @@index([status], map: "idx_nd_status")
+  @@map("notification_deliveries")
 }

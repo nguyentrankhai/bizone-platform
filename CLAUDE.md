@@ -141,7 +141,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── suppliers/           # P4.3 — /suppliers (DS), /suppliers/[id] (chi tiết: đơn, công nợ, lịch sử, giá), /suppliers/prices
     │   │   ├── purchase-orders/     # P4.3 — /purchase-orders, /new?supplier=, /[id] (nhận hàng, huỷ, thanh toán), /[id]/edit
     │   │   ├── settings/branches/   # P4.6 — quản lý chi nhánh + cấu hình riêng (/settings → redirect)
-    │   │   ├── marketing/           # P4.4 — /marketing (mã giảm giá), /vouchers, /flash-sales, /promotions (mua X tặng Y, combo), /report
+    │   │   ├── marketing/           # P4.4 — /marketing (mã giảm giá), /vouchers, /flash-sales, /promotions (mua X tặng Y, combo), /report; P4.7 — /campaigns (chiến dịch SMS/Email)
+    │   │   ├── notifications/       # P4.7 — /notifications (trung tâm), /preferences (tuỳ chọn + Web Push), /settings (kênh theo sự kiện), /templates, /deliveries (lịch sử gửi)
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
     │   │   └── globals.css          # Tailwind v4 + shadcn theme (primary #2563EB, success/warning/info)
@@ -151,9 +152,11 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/staff/        # P4.1 — StaffTable, ShiftCalendar, AttendanceClient, CommissionClient, CommissionRuleForm, RoleMatrix
     │   ├── components/reports/      # P4.2 — ReportsClient, RevenueReport, ProfitReport, ProductPerformance, StaffPerformance, PromotionInventory
     │   ├── components/branch/       # P4.6 — BranchSwitcher (thanh trên), BranchList, BranchForm
-    │   ├── components/marketing/    # P4.4 — CouponList, CouponForm, VoucherList, FlashSaleList, FlashSaleForm, PromotionList, MarketingReport
+    │   ├── components/marketing/    # P4.4 — CouponList, CouponForm, VoucherList, FlashSaleList, FlashSaleForm, PromotionList, MarketingReport; P4.7 — CampaignList, CampaignForm
+    │   ├── components/notifications/ # P4.7 — NotificationBell (thanh trên), NotificationCenter, NotificationPreferences, NotificationSettings, TemplateList, TemplateForm, DeliveryLog
     │   ├── components/suppliers/    # P4.3 — SupplierTable, SupplierForm, SupplierDetail, PurchaseOrderList, POForm, PurchaseOrderDetail, PaymentModal, PriceComparison
-    │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
+    │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan, useNotifications (P4.7: WS + poll 30 s)
+    │   ├── lib/notifications/       # P4.7 — events.ts (danh mục sự kiện, audience, isVisibleTo), template.ts ({{biến}}, email HTML, SMS không dấu), schedule.ts
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   ├── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), promotions.ts (P4.4 — flash sale / combo / mua X tặng Y), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6), held.ts (P4.5 — tách/gộp dòng)
     │   │   └── printing/            # P4.5 — escpos.ts (mã hoá ESC/POS thuần), printer.ts (WebUSB / Web Bluetooth, cài đặt localStorage)
@@ -166,13 +169,15 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── routers/reports.ts   # P4.2 — revenue/profit/products/staff/promotion/inventory, export + exportStatus
     │   │   ├── routers/branch.ts    # P4.6 — mine, list/get/create/update/setStatus/setDefault/delete, config/setConfig
     │   │   ├── middleware/branchScope.ts # P4.6 — phạm vi chi nhánh (X-Branch-ID + user_branches) + helper lọc/kiểm
+    │   │   ├── routers/notification.ts + campaign.ts # P4.7 — trung tâm thông báo, tuỳ chọn, Web Push, cấu hình kênh, mẫu, lịch sử gửi; chiến dịch SMS/Email
     │   │   ├── routers/coupon.ts + flashSale.ts + promotion.ts # P4.4 — mã giảm giá + voucher; flash sale; mua X tặng Y, combo, báo cáo hiệu quả
     │   │   ├── routers/supplier.ts + purchaseOrder.ts # P4.3 — NCC, công nợ, thanh toán, lịch sử, so sánh giá; đơn nhập (create/update/receive/cancel)
-    │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…; P4.5 — payhubPayment (intent thẻ/QR), preorder, posPairing, payment/paymentHubClient.ts (HMAC merchant API)
+    │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…; P4.5 — payhubPayment (intent thẻ/QR), preorder, posPairing, payment/paymentHubClient.ts (HMAC merchant API); P4.7 — notification (notify, viewer, cài đặt), notificationDelivery (gửi + log), notificationTemplate, notificationScan (nhắc ca, công nợ, đơn đặt), campaign, email (SMTP), sms (gateway HTTP), push (VAPID), reportMail (chỉ worker)
+    │   │   ├── queue/notification.ts + notificationWorker.ts # P4.7 — BullMQ "bizone-notification": deliver, campaign, report-email + lịch scan 5', daily 08:00, report 07:00, cleanup 02:15
     │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
     │   │   ├── queue/commission.ts  # P4.1 — BullMQ "bizone-commission" (tính lại sau HĐ + chốt 00:30 ngày 1)
     │   │   ├── queue/reportExport*.ts # P4.2 — BullMQ "bizone-report-export" (worker dựng PDF/Excel, file Redis 30 phút)
-    │   │   ├── ws/pos.ts            # P2.5 — process WebSocket POS 2 màn hình :3002/ws/pos/{sessionId}
+    │   │   ├── ws/pos.ts            # P2.5 — process WebSocket POS 2 màn hình :3002/ws/pos/{sessionId}; P4.7 — cùng process phục vụ /ws/notifications (ws/notifications.ts)
     │   │   └── worker.ts            # P2.5 — process worker BullMQ
     │   ├── types/                   # TypeScript types dùng chung
     │   ├── tests/                   # Vitest (`npm test`): cart, rbac, tenant
@@ -245,6 +250,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý POS nâng cao (P4.5)**: thẻ/QR qua Payment Hub = `pos_payment_intents` (`merchant_txn_id = BZ-{tenant}-{id}`; webhook `/api/webhooks/payhub` hoặc poll `pos.payhubStatus` → `success`); dòng thanh toán mang `intentId` được kiểm + gắn **một lần** trong transaction (`validateIntentPayments` / `consumeIntents`) — luồng mới nhận tiền POS phải đi qua `prepareSale` (`invoice.service`). Cấu hình `PAYHUB_API_KEY/SECRET/WEBHOOK_SECRET` (placeholder `dev-…` = tắt), route `PAYHUB_QR_METHOD`/`PAYHUB_CARD_METHOD`. Đổi hàng / giao đơn đặt trước = hoá đơn thường + dòng cấn trừ `exchange` / `deposit` (`CREDIT_METHODS`, không nhận từ client; tổng kết ca tách khỏi tiền thu); cọc nằm ở `preorders` (không doanh thu, không trừ tồn tới khi giao). Đơn chờ tách/gộp: Redis `pos:held:{tenant}:{session}`, chỉ qua WS. Màn hình khách khác máy: PIN (Redis `pos:pair:pin:*`, 5 phút) → token `pdt_…` (băm SHA-256, 16 giờ, chỉ đọc 1 ca) dùng làm subprotocol WS. WS kiểm `getStaffAccess` khi kết nối / mỗi lệnh ghi / mỗi 60 s. In ESC/POS bỏ dấu; mặc định in trình duyệt.
 
 **Lưu ý đa chi nhánh (P4.6)**: mọi procedure dùng `permissionProcedure`/`posPermissionProcedure` có `ctx.branch = { current, allowed, canAll }` (`server/middleware/branchScope.ts`, từ header `X-Branch-ID` — client gửi qua `apiContext` theo lựa chọn ở thanh trên, lưu `localStorage["bizone:branch"]`). Danh sách / báo cáo mới có dữ liệu theo chi nhánh: lọc bằng `branchFilter(ctx.branch, input.branchId)` (null = tất cả), thao tác theo id thì `assertBranch` / `assertWarehouse` / `assertInventoryTransaction`; dữ liệu theo kho dùng `scopeWarehouseIds` (kho `branch_id NULL` = kho chung). Cache có số liệu theo chi nhánh phải mang chi nhánh trong key (như `dashboard:{tenant}:{branch|all}:*`). Cấu hình đọc bằng `effectiveConfig(branchId, keys)` (`branch.service`, `branch_configs` → `store_config`). Đổi chi nhánh/phân công: `invalidateBranchCache()` + `invalidateStaffAccess()`. Sản phẩm, khách hàng, NCC, khuyến mãi dùng chung (#80).
+
+**Lưu ý thông báo (P4.7)**: sự kiện mới gọi `notify({ type, title, content, link, branchId, userId?, vars, dedupeKey })` (`notification.service`, không bao giờ ném lỗi) — khai báo loại trong `lib/notifications/events.ts` (`audience` = capability được xem, `null` = gửi riêng 1 user; mẫu email/SMS mặc định, `variables`, `options`). `notify` lưu `notifications` (dedupe key unique → 1 lần), publish Redis `bizone:notify:{tenant}` (process realtime đẩy `notification:new` qua WS `/ws/notifications`, subprotocol `["bizone-notify", token]`, lọc theo `isVisibleTo`: audience + chi nhánh + tắt riêng) và xếp job `deliver` cho worker gửi email/SMS/Web Push (mỗi tin 1 dòng `notification_deliveries`; thử lại chỉ gửi tin lỗi). Kênh theo sự kiện ở `notification_settings` (không có dòng = mặc định trong code). Nhà cung cấp theo env: `SMTP_*` (trống = `log`), `SMS_PROVIDER=http` + `SMS_GATEWAY_URL` (mặc định `log`, SMS bỏ dấu trừ `SMS_UNICODE=true`), `VAPID_*` (trống = tắt push). Email báo cáo (`reportMail.service`) chỉ chạy trong worker. Thông báo + log gửi giữ 30 ngày. Seed không ghi đè mẫu đã có (cửa hàng tự sửa mẫu).
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 

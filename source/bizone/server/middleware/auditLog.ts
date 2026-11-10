@@ -71,6 +71,38 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "pos.payhubCreate": { module: "pos", action: "payhub_create", entityType: "pos_payment_intent" },
   "pos.payhubCancel": { module: "pos", action: "payhub_cancel", entityType: "pos_payment_intent" },
   "pos.createPairingPin": { module: "pos", action: "pairing_pin", entityType: "cash_session" },
+  // P4.7 — notification settings / templates, campaigns, report emails
+  "notification.updateSetting": {
+    module: "config",
+    action: "update_notification_setting",
+    entityType: "notification_setting",
+  },
+  "notification.createTemplate": {
+    module: "config",
+    action: "create_template",
+    entityType: "notification_template",
+  },
+  "notification.updateTemplate": {
+    module: "config",
+    action: "update_template",
+    entityType: "notification_template",
+  },
+  "notification.deleteTemplate": {
+    module: "config",
+    action: "delete_template",
+    entityType: "notification_template",
+  },
+  "notification.sendTest": {
+    module: "config",
+    action: "send_test_notification",
+    entityType: "notification_template",
+  },
+  "campaign.create": { module: "marketing", action: "create", entityType: "campaign" },
+  "campaign.update": { module: "marketing", action: "update", entityType: "campaign" },
+  "campaign.delete": { module: "marketing", action: "delete", entityType: "campaign" },
+  "campaign.send": { module: "marketing", action: "send_campaign", entityType: "campaign" },
+  "campaign.cancel": { module: "marketing", action: "cancel_campaign", entityType: "campaign" },
+  "reports.emailReport": { module: "report", action: "email", entityType: "report" },
   "order.create": { module: "order", action: "create", entityType: "order" },
   "order.updateStatus": { module: "order", action: "update_status", entityType: "order" },
   "order.cancel": { module: "order", action: "cancel", entityType: "order" },

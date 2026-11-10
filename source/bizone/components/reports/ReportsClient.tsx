@@ -19,6 +19,7 @@ import { ProductPerformance } from "./ProductPerformance";
 import { StaffPerformance } from "./StaffPerformance";
 import { InventoryReport, PromotionReport } from "./PromotionInventory";
 import { BranchSummary } from "./BranchSummary";
+import { EmailReportButton } from "./EmailReportButton";
 
 type Tab = "revenue" | "profit" | "products" | "staff" | "branches" | "promotion" | "inventory";
 type Compare = "previous_period" | "previous_year" | "none";
@@ -137,6 +138,7 @@ function ExportButtons({ auth, request }: { auth: ApiAuth; request: () => unknow
       <button className={btnSecondary} disabled={busy !== ""} onClick={() => run("xlsx")}>
         {busy === "xlsx" ? "Đang xuất…" : "Xuất Excel"}
       </button>
+      <EmailReportButton auth={auth} request={request} />
       {msg && <span className="text-xs text-slate-500">{msg}</span>}
       {error && (
         <span className="text-xs text-red-600" role="alert">

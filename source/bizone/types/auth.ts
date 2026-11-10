@@ -67,6 +67,7 @@ export type Permission =
   | "marketing:coupon"
   | "marketing:flash_sale"
   | "marketing:promotion"
+  | "marketing:campaign"
   | "config:read"
   | "config:write"
   | "admin:*";

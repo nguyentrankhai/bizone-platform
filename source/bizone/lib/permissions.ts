@@ -139,6 +139,12 @@ export const PERMISSION_CATALOG: CatalogPermission[] = [
     name: "Quản lý khuyến mãi",
     grants: "marketing:promotion",
   },
+  {
+    module: "marketing",
+    action: "manage_campaign",
+    name: "Chiến dịch SMS / Email",
+    grants: "marketing:campaign",
+  },
   { module: "accounting", action: "manage_fund", name: "Quản lý quỹ", grants: null },
   {
     module: "accounting",

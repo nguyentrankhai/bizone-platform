@@ -14,6 +14,8 @@ import type {
 } from "@/lib/validators/inventory";
 import { currentTenantId } from "@/lib/tenant";
 import { lowStockChannel } from "@/lib/inventory/channels";
+import { vnDateKey } from "@/lib/vn-time";
+import { notify } from "@/server/services/notification.service";
 
 // Prisma 7: nullable field in compound unique cannot be null in where clause — use findFirst + update/create
 export async function upsertInventory(
@@ -518,6 +520,31 @@ export async function publishLowStockAlerts(warehouseId: number, productIds: num
         lowStockChannel(currentTenantId()),
         JSON.stringify({ warehouseId, alerts }),
       );
+      // P4.7: notification center — at most once a day per product and warehouse
+      const wh = await prisma.warehouse.findUnique({
+        where: { id: warehouseId },
+        select: { name: true, branchId: true, branch: { select: { name: true } } },
+      });
+      const day = vnDateKey(new Date());
+      for (const a of alerts) {
+        const qty = Number(a.quantity);
+        await notify({
+          type: "low_stock",
+          title: `${a.product.name} sắp hết (còn ${qty})`,
+          content: `${wh?.name ?? `Kho #${warehouseId}`} · SKU ${a.product.sku} · tối thiểu ${a.product.minStock}`,
+          link: "/warehouse",
+          branchId: wh?.branchId ?? null,
+          dedupeKey: `low_stock:${warehouseId}:${a.product.id}:${a.variantId ?? 0}:${day}`,
+          vars: {
+            product_name: a.product.name,
+            sku: a.product.sku,
+            warehouse_name: wh?.name ?? "",
+            quantity: qty,
+            min_stock: a.product.minStock ?? 0,
+            branch_name: wh?.branch?.name ?? "",
+          },
+        });
+      }
     }
   } catch {
     // non-critical — don't fail the main operation
@@ -750,7 +777,40 @@ export async function completeStockTake(stockTakeId: number, userId: number | nu
     });
   });
 
+  await notifyStockTakeDiff(stockTakeId);
   return getStockTake(stockTakeId);
+}
+
+/** P4.7: "Kiểm kê kho H1 chênh lệch 5 SP" for the manager (no-op when nothing differs) */
+async function notifyStockTakeDiff(stockTakeId: number) {
+  const note = await getPrisma().stockTakeNote.findUnique({
+    where: { id: stockTakeId },
+    include: {
+      stockTakeItems: { select: { difference: true } },
+      warehouse: { select: { name: true, branchId: true, branch: { select: { name: true } } } },
+    },
+  });
+  if (!note) return;
+  const diffs = note.stockTakeItems.map((i) => Number(i.difference)).filter((d) => d !== 0);
+  if (diffs.length === 0) return;
+  const surplus = diffs.filter((d) => d > 0).reduce((s, d) => s + d, 0);
+  const shortage = -diffs.filter((d) => d < 0).reduce((s, d) => s + d, 0);
+  await notify({
+    type: "stock_take_diff",
+    title: `Kiểm kê ${note.warehouse.name} chênh lệch ${diffs.length} SP`,
+    content: `Phiếu ${note.code}: thừa ${surplus}, thiếu ${shortage}`,
+    link: "/warehouse/stock-take",
+    branchId: note.warehouse.branchId,
+    dedupeKey: `stock_take:${note.id}`,
+    vars: {
+      stock_take_code: note.code,
+      warehouse_name: note.warehouse.name,
+      diff_count: diffs.length,
+      surplus,
+      shortage,
+      branch_name: note.warehouse.branch?.name ?? "",
+    },
+  });
 }
 
 export async function cancelStockTake(stockTakeId: number) {

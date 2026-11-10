@@ -7,6 +7,17 @@ import type {
   CancelOrderInput,
   CreateRefundInput,
 } from "@/lib/validators/order";
+import { notify } from "@/server/services/notification.service";
+import { fmtVnd } from "@/lib/notifications/template";
+
+const CHANNEL_NAMES: Record<string, string> = {
+  website: "Website",
+  shopee: "Shopee",
+  lazada: "Lazada",
+  tiktok: "TikTok Shop",
+  facebook: "Facebook",
+  zalo: "Zalo",
+};
 
 // Business errors → TRPCError with the right HTTP status (409 / 404), body keeps { code, message }
 const conflict = (msg: string) => bizoneError("CONFLICT", msg);
@@ -203,10 +214,43 @@ export async function createOrder(input: CreateOrderInput, userId: number | null
     include: {
       orderItems: true,
       orderTracking: true,
+      customer: { select: { fullName: true, phone: true } },
+      branch: { select: { name: true } },
     },
   });
 
+  // P4.7: online orders (every channel except the counter) notify the shop
+  if (order.channel && order.channel !== "pos") await notifyNewOrder(order);
+
   return order;
+}
+
+async function notifyNewOrder(order: {
+  id: number;
+  orderCode: string;
+  channel: string | null;
+  totalAmount: { toString(): string };
+  branchId: number | null;
+  customer: { fullName: string; phone: string } | null;
+  branch: { name: string } | null;
+}) {
+  const channel = CHANNEL_NAMES[order.channel ?? ""] ?? order.channel ?? "";
+  const total = fmtVnd(order.totalAmount.toString());
+  await notify({
+    type: "order_new",
+    title: `Đơn hàng ${order.orderCode} từ ${channel} - ${total}`,
+    content: order.customer ? `Khách ${order.customer.fullName} (${order.customer.phone})` : null,
+    link: `/orders/${order.id}`,
+    branchId: order.branchId,
+    dedupeKey: `order:${order.id}`,
+    vars: {
+      order_code: order.orderCode,
+      channel,
+      customer_name: order.customer?.fullName ?? "Khách lẻ",
+      total_amount: total,
+      branch_name: order.branch?.name ?? "",
+    },
+  });
 }
 
 // ─── Update Status ────────────────────────────────────────────────────────────

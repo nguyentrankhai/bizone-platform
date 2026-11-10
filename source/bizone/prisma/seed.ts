@@ -121,7 +121,7 @@ const notificationTemplates = [
     channel: "sms",
     subject: "",
     content:
-      "Khách hàng {{customer_name}} thân mến, bạn còn {{remaining_amount}}đ chưa thanh toán. Vui lòng thanh toán trước {{due_date}}.",
+      "Khách hàng {{customer_name}} thân mến, bạn còn {{remaining_amount}} chưa thanh toán. Vui lòng thanh toán trước {{due_date}}.",
     variables: "customer_name,remaining_amount,due_date",
   },
   {
@@ -212,9 +212,10 @@ async function main() {
   }
 
   for (const template of notificationTemplates) {
+    // Create only: templates are edited by the store from P4.7 on (re-seeding must not revert them)
     await prisma.notificationTemplate.upsert({
       where: { templateCode: template.templateCode },
-      update: template,
+      update: {},
       create: template,
     });
   }

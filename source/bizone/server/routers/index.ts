@@ -19,6 +19,8 @@ import { couponRouter } from "./coupon";
 import { flashSaleRouter } from "./flashSale";
 import { promotionRouter } from "./promotion";
 import { branchRouter } from "./branch";
+import { notificationRouter } from "./notification";
+import { campaignRouter } from "./campaign";
 
 export const appRouter = router({
   product: productRouter,
@@ -41,6 +43,8 @@ export const appRouter = router({
   flashSale: flashSaleRouter,
   promotion: promotionRouter,
   branch: branchRouter,
+  notification: notificationRouter,
+  campaign: campaignRouter,
 });
 
 export type AppRouter = typeof appRouter;

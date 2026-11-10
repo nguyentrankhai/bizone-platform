@@ -18,6 +18,7 @@ const TABS = [
   { href: "/marketing/vouchers", label: "Voucher" },
   { href: "/marketing/flash-sales", label: "Flash sale" },
   { href: "/marketing/promotions", label: "Mua X tặng Y & Combo" },
+  { href: "/marketing/campaigns", label: "Chiến dịch SMS/Email" },
   { href: "/marketing/report", label: "Hiệu quả" },
 ];
 

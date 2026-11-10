@@ -9,6 +9,9 @@ import {
 import { permissionProcedure, router } from "@/server/trpc";
 import * as reports from "@/server/services/report.service";
 import { enqueueReportExport, exportStatus } from "@/server/queue/reportExport";
+import { enqueueReportEmail } from "@/server/queue/notification";
+import { emailListSchema } from "@/lib/validators/notification";
+import { bizoneError } from "@/lib/errors";
 import { assertWarehouse, branchFilter, type BranchScope } from "@/server/middleware/branchScope";
 
 /** P4.6: an explicit branch must be allowed; otherwise the branch the user works on */
@@ -62,4 +65,20 @@ export const reportsRouter = router({
   exportStatus: report
     .input(z.object({ jobId: z.string().min(1).max(64) }))
     .query(({ ctx, input }) => exportStatus(input.jobId, ctx.user.username)),
+  /** P4.7 (#62): render the report in the worker and email it as an attachment */
+  emailReport: report
+    .input(z.object({ report: exportReportSchema, to: emailListSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const f = input.report.filter as { branchId?: number };
+      const scopedInput = {
+        ...input.report,
+        filter: { ...input.report.filter, branchId: branchFilter(ctx.branch, f.branchId) },
+      } as typeof input.report;
+      try {
+        const jobId = await enqueueReportEmail(scopedInput, input.to, ctx.user.username);
+        return { jobId, to: input.to };
+      } catch {
+        throw bizoneError("SERVICE_UNAVAILABLE", "Hàng đợi gửi email đang lỗi — thử lại sau");
+      }
+    }),
 });

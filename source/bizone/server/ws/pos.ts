@@ -50,6 +50,8 @@ import {
   loadCustomer,
 } from "@/server/services/pricing.service";
 import { ensureDbUserId } from "@/server/services/user.service";
+import { createNotificationHub } from "@/server/ws/notifications";
+import { NOTIFY_WS_PATH } from "@/lib/notifications/events";
 
 const port = Number(process.env.POS_WS_PORT ?? 3002);
 const MANAGER_ROLES = ["bizone-admin", "bizone-manager"];
@@ -84,7 +86,12 @@ const http = createServer((req, res) => {
     res.end(
       JSON.stringify({
         success: true,
-        data: { status: "ok", clients: clients.size, sessions: rooms.size },
+        data: {
+          status: "ok",
+          clients: clients.size,
+          sessions: rooms.size,
+          notificationClients: notificationHub.clientCount(),
+        },
       }),
     );
     return;
@@ -160,7 +167,11 @@ async function authorize(
   };
 }
 
+// P4.7: WS /ws/notifications lives in this process too
+const notificationHub = createNotificationHub(reject);
+
 http.on("upgrade", (req, socket, head) => {
+  if (notificationHub.matches(req)) return notificationHub.upgrade(req, socket, head);
   authorize(req)
     .then((result) => {
       if ("status" in result) return reject(socket, result.status, result.message);
@@ -550,10 +561,13 @@ const heartbeat = setInterval(() => {
   }
 }, 30_000);
 
-subscriber
-  .psubscribe(POS_CHANNEL_PATTERN)
+Promise.all([subscriber.psubscribe(POS_CHANNEL_PATTERN), notificationHub.start()])
   .then(() => {
-    http.listen(port, () => console.log(`[pos-ws] ws://0.0.0.0:${port}${POS_WS_PATH}/{sessionId}`));
+    http.listen(port, () =>
+      console.log(
+        `[pos-ws] ws://0.0.0.0:${port}${POS_WS_PATH}/{sessionId} + ${NOTIFY_WS_PATH} (notifications)`,
+      ),
+    );
   })
   .catch((err) => {
     console.error("[pos-ws] failed to subscribe to Redis:", err);
@@ -569,6 +583,7 @@ function shutdown(signal: string) {
   clearInterval(accessCheck);
   for (const ws of wss.clients) ws.close(1001, "server shutting down");
   wss.close();
+  notificationHub.close();
   http.close();
   subscriber.disconnect();
   getRedis().disconnect();

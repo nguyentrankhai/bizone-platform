@@ -1,9 +1,11 @@
-/** BizOne background worker process — BullMQ consumers (inventory + commission follow-ups, report exports). */
+/** BizOne background worker process — BullMQ consumers (inventory + commission follow-ups, report exports, notifications). */
 import { getRedis } from "@/lib/redis";
 import { INVENTORY_QUEUE, startInventoryWorker } from "@/server/queue/inventory";
 import { COMMISSION_QUEUE, startCommissionWorker } from "@/server/queue/commission";
 import { REPORT_EXPORT_QUEUE } from "@/server/queue/reportExport";
 import { startReportExportWorker } from "@/server/queue/reportExportWorker";
+import { NOTIFICATION_QUEUE } from "@/server/queue/notification";
+import { startNotificationWorker } from "@/server/queue/notificationWorker";
 
 const inventory = startInventoryWorker();
 console.log(`[worker] consuming "${INVENTORY_QUEUE}"`);
@@ -14,6 +16,13 @@ const commission = startCommissionWorker().then((w) => {
 commission.catch((err) => console.error("[worker] commission worker failed to start:", err));
 const reports = startReportExportWorker();
 console.log(`[worker] consuming "${REPORT_EXPORT_QUEUE}"`);
+const notifications = startNotificationWorker().then((w) => {
+  console.log(
+    `[worker] consuming "${NOTIFICATION_QUEUE}" (scan 5 min, daily 08:00, report 07:00 VN)`,
+  );
+  return w;
+});
+notifications.catch((err) => console.error("[worker] notification worker failed to start:", err));
 
 let shuttingDown = false;
 async function shutdown(signal: string) {
@@ -27,6 +36,7 @@ async function shutdown(signal: string) {
     inventory.close().catch(() => {}),
     reports.close().catch(() => {}),
     commission.then((w) => w.close()).catch(() => {}),
+    notifications.then((w) => w.close()).catch(() => {}),
   ]);
   getRedis().disconnect();
   process.exit(0);

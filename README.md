@@ -130,7 +130,7 @@ npm run dev
 ```
 
 **Default ports:**
-- BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; BullMQ worker — `npm run dev:worker`). One database per tenant: set `TENANT_DATABASES` (e.g. `tenant_demo=bizonedb`).
+- BizOne: http://localhost:3000 (POS + notification WebSocket `ws://localhost:3002/ws/pos/{sessionId}`, `/ws/notifications` — `npm run dev:realtime`; BullMQ worker incl. email/SMS/push and scheduled reminders — `npm run dev:worker`). Email (`SMTP_*`), SMS gateway (`SMS_*`) and Web Push (`VAPID_*`) default to log / off when not configured. One database per tenant: set `TENANT_DATABASES` (e.g. `tenant_demo=bizonedb`).
 - Checks (same as CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
 - Keycloak: http://localhost:8080
@@ -299,8 +299,8 @@ bizone/
 │   │   ├── components/ui/              # shadcn/ui components
 │   │   ├── prisma/                     # Prisma schema (70 models), migrations, seed
 │   │   ├── hooks/  lib/  server/  types/
-│   │   ├── server/ws/pos.ts            # POS 2-screen WebSocket (:3002/ws/pos/{sessionId})
-│   │   ├── server/worker.ts            # BullMQ worker (inventory follow-ups)
+│   │   ├── server/ws/pos.ts            # POS 2-screen + notifications WebSocket (:3002/ws/pos/{sessionId}, /ws/notifications)
+│   │   ├── server/worker.ts            # BullMQ worker (inventory, commissions, report exports, notifications)
 │   │   ├── Dockerfile                  # Standalone production image
 │   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7
 │   └── payment-hub/                    # Payment Hub — NextJS 16 (P1.2)
