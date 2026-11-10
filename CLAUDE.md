@@ -140,6 +140,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── reports/             # P4.2 — /reports (6 tab: doanh thu, lợi nhuận, SP, NV, KM, tồn kho)
     │   │   ├── suppliers/           # P4.3 — /suppliers (DS), /suppliers/[id] (chi tiết: đơn, công nợ, lịch sử, giá), /suppliers/prices
     │   │   ├── purchase-orders/     # P4.3 — /purchase-orders, /new?supplier=, /[id] (nhận hàng, huỷ, thanh toán), /[id]/edit
+    │   │   ├── settings/branches/   # P4.6 — quản lý chi nhánh + cấu hình riêng (/settings → redirect)
     │   │   ├── marketing/           # P4.4 — /marketing (mã giảm giá), /vouchers, /flash-sales, /promotions (mua X tặng Y, combo), /report
     │   │   ├── layout.tsx           # root layout, font Inter, lang="vi"
     │   │   ├── page.tsx
@@ -149,19 +150,22 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/pos/          # P2.6 — PosClient, ProductGrid, CartPanel, PaymentModal (dùng chung + Payment Hub), CustomerDisplay, Receipt, SessionClient; P4.5 — ReturnForm, SplitInvoiceModal, PreOrderForm, PairingScreen, PairDisplayModal, PrinterSettingsModal
     │   ├── components/staff/        # P4.1 — StaffTable, ShiftCalendar, AttendanceClient, CommissionClient, CommissionRuleForm, RoleMatrix
     │   ├── components/reports/      # P4.2 — ReportsClient, RevenueReport, ProfitReport, ProductPerformance, StaffPerformance, PromotionInventory
+    │   ├── components/branch/       # P4.6 — BranchSwitcher (thanh trên), BranchList, BranchForm
     │   ├── components/marketing/    # P4.4 — CouponList, CouponForm, VoucherList, FlashSaleList, FlashSaleForm, PromotionList, MarketingReport
     │   ├── components/suppliers/    # P4.3 — SupplierTable, SupplierForm, SupplierDetail, PurchaseOrderList, POForm, PurchaseOrderDetail, PaymentModal, PriceComparison
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   ├── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), promotions.ts (P4.4 — flash sale / combo / mua X tặng Y), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6), held.ts (P4.5 — tách/gộp dòng)
     │   │   └── printing/            # P4.5 — escpos.ts (mã hoá ESC/POS thuần), printer.ts (WebUSB / Web Bluetooth, cài đặt localStorage)
-    │   ├── prisma/                  # P1.3 — schema.prisma, migrations/0_init … 3_pos_advanced (P4.5), seed.ts
+    │   ├── prisma/                  # P1.3 — schema.prisma, migrations/0_init … 4_branch_config (P4.6), seed.ts (tạo chi nhánh + kho mặc định nếu chưa có)
     │   ├── prisma.config.ts         # Prisma 7 config (DATABASE_URL từ .env.local)
     │   ├── generated/prisma/        # Prisma client sinh ra (gitignored)
     │   ├── server/                  # tRPC routers, services, middleware (P1.6)
     │   │   ├── routers/pos.ts       # P2.5 — ca, hóa đơn, thanh toán, đổi/trả, quote, scan; P4.5 — exchange*, preorder*, payhub*, createPairingPin
     │   │   ├── routers/staff.ts     # P4.1 — nhân viên, role.*, shift.*, attendance.*, commission.*, sales
     │   │   ├── routers/reports.ts   # P4.2 — revenue/profit/products/staff/promotion/inventory, export + exportStatus
+    │   │   ├── routers/branch.ts    # P4.6 — mine, list/get/create/update/setStatus/setDefault/delete, config/setConfig
+    │   │   ├── middleware/branchScope.ts # P4.6 — phạm vi chi nhánh (X-Branch-ID + user_branches) + helper lọc/kiểm
     │   │   ├── routers/coupon.ts + flashSale.ts + promotion.ts # P4.4 — mã giảm giá + voucher; flash sale; mua X tặng Y, combo, báo cáo hiệu quả
     │   │   ├── routers/supplier.ts + purchaseOrder.ts # P4.3 — NCC, công nợ, thanh toán, lịch sử, so sánh giá; đơn nhập (create/update/receive/cancel)
     │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…; P4.5 — payhubPayment (intent thẻ/QR), preorder, posPairing, payment/paymentHubClient.ts (HMAC merchant API)
@@ -239,6 +243,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý khuyến mãi (P4.4)**: mọi giá POS đi qua `quoteCart` (`pricing.service.ts`): `loadCartLines` → `loadPromoContext` + `applyPromotions` (`lib/pos/promotions.ts`: flash sale → combo → mua X tặng Y, mỗi đơn vị 1 khuyến mãi, dòng quà `gift-{id}` sinh lại mỗi lần) → `computeCart` (CK tay sau khuyến mãi → hạng → mã/voucher). Tạo HĐ ghi `promotion_usage` + tăng suất flash/combo có điều kiện; **huỷ HĐ** gọi `releasePromotionUses` + mở lại voucher — luồng mới đổi/huỷ HĐ phải làm tương tự. Điều kiện mã trong `coupon_conditions`: `auto_apply`, `rankings`, `category_ids`. Voucher = mã riêng dẫn tới mã gốc (`coupon_usage.voucher_id`). Giờ nhập từ `datetime-local` là giờ VN (validator thêm `+07:00`). Flash sale bật/tắt theo `start_time`/`end_time`, cột `status` chỉ đồng bộ khi đọc.
 
 **Lưu ý POS nâng cao (P4.5)**: thẻ/QR qua Payment Hub = `pos_payment_intents` (`merchant_txn_id = BZ-{tenant}-{id}`; webhook `/api/webhooks/payhub` hoặc poll `pos.payhubStatus` → `success`); dòng thanh toán mang `intentId` được kiểm + gắn **một lần** trong transaction (`validateIntentPayments` / `consumeIntents`) — luồng mới nhận tiền POS phải đi qua `prepareSale` (`invoice.service`). Cấu hình `PAYHUB_API_KEY/SECRET/WEBHOOK_SECRET` (placeholder `dev-…` = tắt), route `PAYHUB_QR_METHOD`/`PAYHUB_CARD_METHOD`. Đổi hàng / giao đơn đặt trước = hoá đơn thường + dòng cấn trừ `exchange` / `deposit` (`CREDIT_METHODS`, không nhận từ client; tổng kết ca tách khỏi tiền thu); cọc nằm ở `preorders` (không doanh thu, không trừ tồn tới khi giao). Đơn chờ tách/gộp: Redis `pos:held:{tenant}:{session}`, chỉ qua WS. Màn hình khách khác máy: PIN (Redis `pos:pair:pin:*`, 5 phút) → token `pdt_…` (băm SHA-256, 16 giờ, chỉ đọc 1 ca) dùng làm subprotocol WS. WS kiểm `getStaffAccess` khi kết nối / mỗi lệnh ghi / mỗi 60 s. In ESC/POS bỏ dấu; mặc định in trình duyệt.
+
+**Lưu ý đa chi nhánh (P4.6)**: mọi procedure dùng `permissionProcedure`/`posPermissionProcedure` có `ctx.branch = { current, allowed, canAll }` (`server/middleware/branchScope.ts`, từ header `X-Branch-ID` — client gửi qua `apiContext` theo lựa chọn ở thanh trên, lưu `localStorage["bizone:branch"]`). Danh sách / báo cáo mới có dữ liệu theo chi nhánh: lọc bằng `branchFilter(ctx.branch, input.branchId)` (null = tất cả), thao tác theo id thì `assertBranch` / `assertWarehouse` / `assertInventoryTransaction`; dữ liệu theo kho dùng `scopeWarehouseIds` (kho `branch_id NULL` = kho chung). Cache có số liệu theo chi nhánh phải mang chi nhánh trong key (như `dashboard:{tenant}:{branch|all}:*`). Cấu hình đọc bằng `effectiveConfig(branchId, keys)` (`branch.service`, `branch_configs` → `store_config`). Đổi chi nhánh/phân công: `invalidateBranchCache()` + `invalidateStaffAccess()`. Sản phẩm, khách hàng, NCC, khuyến mãi dùng chung (#80).
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 

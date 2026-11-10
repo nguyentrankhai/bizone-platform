@@ -55,6 +55,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "marketing:coupon",
     "marketing:flash_sale",
     "marketing:promotion",
+    "config:read",
   ],
   "bizone-warehouse": [
     "product:read",

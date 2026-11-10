@@ -8,6 +8,7 @@ import { hasPermission, ForbiddenError } from "@/lib/rbac";
 import { rateLimitGeneral, rateLimitPos } from "@/lib/rate-limit";
 import { isKnownTenant, runWithTenant } from "@/lib/tenant";
 import { getStaffAccess } from "@/server/services/rbac.service";
+import { BRANCH_HEADER, resolveBranchScope } from "@/server/middleware/branchScope";
 import type { AuthUser, Permission } from "@/types/auth";
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -144,7 +145,9 @@ const enforcePermission = (permission: Permission) =>
       }
       throw e;
     }
-    return next({ ctx: { ...ctx, user: ctx.user } });
+    // P4.6: which branch(es) this request may see — from X-Branch-ID + the staff assignment
+    const branch = await resolveBranchScope(ctx.user, access, ctx.req.headers.get(BRANCH_HEADER));
+    return next({ ctx: { ...ctx, user: ctx.user, branch } });
   });
 
 /** Signed-in staff acting on their own record (check-in/out): only the active flag matters */

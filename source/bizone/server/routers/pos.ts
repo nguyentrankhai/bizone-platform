@@ -56,6 +56,8 @@ import {
 import { createPairingPin } from "@/server/services/posPairing.service";
 import { findProductByCode, loadCartLines, quoteCart } from "@/server/services/pricing.service";
 import { ensureDbUserId } from "@/server/services/user.service";
+import { assertBranch, branchFilter } from "@/server/middleware/branchScope";
+import { getPrisma } from "@/lib/prisma";
 import {
   activeBranches,
   findCustomers,
@@ -83,7 +85,10 @@ export const posRouter = router({
   /** POST mở ca */
   openSession: posPermissionProcedure("pos:write")
     .input(openSessionSchema)
-    .mutation(async ({ input, ctx }) => openSession(input, await actorOf(ctx))),
+    .mutation(async ({ input, ctx }) => {
+      assertBranch(ctx.branch, input.branchId); // P4.6: only branches of the user's scope
+      return openSession(input, await actorOf(ctx));
+    }),
 
   /** GET ca đang mở của người dùng hiện tại (null nếu chưa mở) */
   currentSession: posPermissionProcedure("pos:read").query(async ({ ctx }) =>
@@ -97,7 +102,9 @@ export const posRouter = router({
 
   sessions: posPermissionProcedure("pos:read")
     .input(listSessionsSchema)
-    .query(({ input }) => listSessions(input)),
+    .query(({ input, ctx }) =>
+      listSessions({ ...input, branchId: branchFilter(ctx.branch, input.branchId) }),
+    ),
 
   session: posPermissionProcedure("pos:read")
     .input(id)
@@ -111,10 +118,23 @@ export const posRouter = router({
   // ── Selling ────────────────────────────────────────────────────────────────
 
   /** Chi nhánh đang hoạt động (chọn khi mở ca) */
-  branches: posPermissionProcedure("pos:read").query(() => activeBranches()),
+  branches: posPermissionProcedure("pos:read").query(({ ctx }) =>
+    activeBranches(ctx.branch.allowed),
+  ),
 
   /** Thông tin cửa hàng + tài khoản ngân hàng cho VietQR */
-  storeInfo: posPermissionProcedure("pos:read").query(() => storeInfo()),
+  storeInfo: posPermissionProcedure("pos:read")
+    .input(z.object({ sessionId: z.number().int().positive() }).optional())
+    .query(async ({ input }) => {
+      // P4.6: per-branch name / bank account — the branch of the shift being sold on
+      const session = input?.sessionId
+        ? await getPrisma().cashSession.findUnique({
+            where: { id: input.sessionId },
+            select: { branchId: true },
+          })
+        : null;
+      return storeInfo(session?.branchId);
+    }),
 
   /** Lưới sản phẩm POS: giá bán + tồn tại kho bán của chi nhánh */
   catalog: posPermissionProcedure("pos:read")
@@ -127,7 +147,10 @@ export const posRouter = router({
         pageSize: z.number().int().min(1).max(100).default(48),
       }),
     )
-    .query(({ input }) => posCatalog(input)),
+    .query(({ input, ctx }) => {
+      assertBranch(ctx.branch, input.branchId);
+      return posCatalog(input);
+    }),
 
   /** Tìm khách theo SĐT / tên / mã */
   customers: posPermissionProcedure("pos:read")
@@ -159,16 +182,29 @@ export const posRouter = router({
 
   invoices: posPermissionProcedure("pos:read")
     .input(listInvoicesSchema)
-    .query(({ input }) => listInvoices(input)),
+    .query(({ input, ctx }) =>
+      listInvoices({ ...input, branchId: branchFilter(ctx.branch, input.branchId) }),
+    ),
 
   invoice: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => getInvoice(input.id)),
+    .query(async ({ input, ctx }) => {
+      const inv = await getInvoice(input.id);
+      assertBranch(ctx.branch, inv.branchId);
+      return inv;
+    }),
 
   /** GET dữ liệu in hóa đơn */
   print: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => printData(input.id)),
+    .query(async ({ input, ctx }) => {
+      const inv = await getPrisma().invoice.findUnique({
+        where: { id: input.id },
+        select: { branchId: true },
+      });
+      assertBranch(ctx.branch, inv?.branchId);
+      return printData(input.id);
+    }),
 
   /** DELETE hủy hóa đơn (trong ca đang mở) */
   cancelInvoice: posPermissionProcedure("pos:write")
@@ -196,7 +232,9 @@ export const posRouter = router({
 
   preorders: posPermissionProcedure("pos:read")
     .input(listPreordersSchema)
-    .query(({ input }) => listPreorders(input)),
+    .query(({ input, ctx }) =>
+      listPreorders({ ...input, branchId: branchFilter(ctx.branch, input.branchId) }),
+    ),
 
   preorder: posPermissionProcedure("pos:read")
     .input(id)

@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (P4.5 xong — thẻ/QR qua Payment Hub, đổi hàng tính chênh lệch, tách/gộp hoá đơn, đặt trước + cọc, ghép màn hình khách bằng PIN, in ESC/POS WebUSB/Bluetooth; đóng #58, cập nhật #30; mới #74–#79; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (P4.6 xong — đa chi nhánh: CRUD chi nhánh + cấu hình riêng, chọn chi nhánh trên thanh trên, dữ liệu POS/kho/đơn/báo cáo/dashboard theo chi nhánh, báo cáo tổng hợp; đóng #11, #14, #60; mới #80–#82; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
 
 ---
 
@@ -16,11 +16,11 @@
 | 1 — Nền tảng | 8 | 8 | 0 | 0 |
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
-| 4 — BizOne Mở rộng | 9 | 6 | 0 | 3 |
+| 4 — BizOne Mở rộng | 9 | 7 | 0 | 2 |
 | 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **29** | **3** | **21** |
+| **Tổng** | **53** | **30** | **3** | **20** |
 
 ---
 
@@ -39,10 +39,10 @@
 | ~~8~~ | ~~Router `product.ts` dùng `Number(ctx.user.id)`~~ | ~~P2.4~~ | ✅ P2.5 |
 | ~~9~~ | ~~29 file chưa đạt `npm run format:check`~~ | ~~P2.4~~ | ✅ QA-1 (CI chặn từ nay) |
 | ~~10~~ | ~~Lỗi nghiệp vụ ném dạng `Error` thường → tRPC 500~~ | ~~P2.1/P2.3~~ | ✅ P2.5 |
-| 11 | Seed chưa có chi nhánh/kho mặc định → POS cần tạo chi nhánh + kho (gắn `branch_id`) trước khi mở ca | P2.5 | P4.6 Multi-store (hoặc seed) |
+| ~~11~~ | ~~Seed chưa có chi nhánh/kho mặc định~~ | ~~P2.5~~ | ✅ P4.6 (seed tạo CN01 + KHO-CN01 khi DB chưa có chi nhánh; UI `/settings/branches` tạo chi nhánh kèm kho) |
 | 12 | Docker image/compose của BizOne chưa chạy process `pos.mjs` (WS :3002) và `worker.mjs` (từ P4.2: thiếu worker thì yêu cầu xuất báo cáo PDF/Excel nằm chờ mãi; worker cần `node_modules/pdfmake` — để external khi bundle) | P2.5 | P6.5 / khi triển khai |
 | 13 | Hàng đợi tuần tự cart theo ca nằm trong bộ nhớ process WS → chạy nhiều instance cần sticky theo `sessionId` (hoặc Redis lock) | P2.5 | P6.5 |
-| 14 | Chưa có UI cài đặt tài khoản ngân hàng cho VietQR (`store_config.bank_*`) và tên cửa hàng — đang sửa trực tiếp trong DB | P2.6 | Module Cài đặt (P4.x) |
+| ~~14~~ | ~~Chưa có UI cài đặt tài khoản ngân hàng VietQR và tên cửa hàng~~ | ~~P2.6~~ | ✅ P4.6 (cấu hình riêng theo chi nhánh: tên in hoá đơn, tài khoản VietQR, tiền tố HĐ, lời chào; giá trị chung `store_config` vẫn sửa trong DB — màn hình cài đặt chung làm sau) |
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
 | ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
@@ -88,7 +88,7 @@
 | 57 | Quyền chi tiết (`permissions`, 52 mã) được gán cho vai trò tuỳ chỉnh nhưng API mới kiểm ở mức module (`pos:write`, `product:write`…): gán "Hủy hóa đơn" = mở toàn bộ `pos:write`. Quyền của module chưa xây (kế toán, omni, cài đặt) chưa có tác dụng — NCC đã có từ P4.3 (`supplier:read` / `supplier:write` / `supplier:manage_po`), marketing từ P4.4 (`marketing:coupon` / `marketing:flash_sale` / `marketing:promotion`) | P4.1 | Khi xây module tương ứng (P4.3, P4.4, P4.8, P6.x) — tách capability theo thao tác |
 | ~~58~~ | ~~WebSocket POS chỉ xét role trong token; nhân viên nghỉ việc giữ kết nối WS tới khi token hết hạn~~ | ~~P4.1~~ | ✅ P4.5 (`getStaffAccess` khi kết nối + mỗi lần ghi + quét 60 s đóng socket 4403) |
 | 59 | Chấm công 1 lần/ngày (`attendance` unique `user_id, date`): nhiều ca trong ngày được gộp thành một khung (bắt đầu sớm nhất → kết thúc muộn nhất); chưa có sửa/duyệt chấm công thủ công, chưa có ngày nghỉ phép | P4.1 | Khi có yêu cầu nghiệp vụ (P4.x/P6.x) |
-| 60 | Phân quyền cần chi nhánh (`user_roles.branch_id` NOT NULL) mà chưa có màn hình tạo chi nhánh (#11). Nhân viên tạo trước P4.1 (vd. `admin@bizone.vn`, tự sinh khi đăng nhập) chưa có vai trò trong DB → danh sách hiện "Chưa phân quyền trong BizOne" (quyền vẫn theo Keycloak); gán vai trò trong UI sẽ đồng bộ lại role Keycloak | P4.1 | P4.6 Multi-store |
+| ~~60~~ | ~~Phân quyền cần chi nhánh mà chưa có màn hình tạo chi nhánh~~ | ~~P4.1~~ | ✅ P4.6 (`/settings/branches`). Nhân viên tạo trước P4.1 chưa có vai trò trong DB vẫn hiện "Chưa phân quyền" tới khi gán |
 | 61 | Báo cáo (và dashboard) chỉ tính hoá đơn POS; đơn hàng online (module Đơn hàng, P2.7) chưa cộng vào doanh thu/lợi nhuận/nhân viên — cần quy tắc ghi nhận doanh thu cho đơn online (khi giao/hoàn tất, phí ship, hoàn tiền) | P4.2 | P6.1 (Omni Channel) hoặc task đơn hàng ↔ thanh toán |
 | 62 | Chưa có "Gửi email" báo cáo và gửi báo cáo định kỳ tự động (mockup 07, SRS-RPT-08) | P4.2 | P4.7 Thông báo (email) |
 | ~~63~~ | ~~Báo cáo khuyến mãi chưa đo riêng flash sale / Buy X Get Y vì chưa có module Marketing~~ | ~~P4.2~~ | ✅ P4.4 (`promotion_usage` + báo cáo `/marketing/report` theo từng chương trình) |
@@ -108,6 +108,9 @@
 | 77 | Đơn chờ (tách / gộp / lưu tạm) lưu Redis theo ca, TTL 12 giờ, chỉ thao tác khi WebSocket trực tuyến; khoá ca không tự xoá đơn chờ còn lại (hết TTL mới mất) | P4.5 | P6.5 (nếu cần) |
 | 78 | Đơn đặt trước: giá **tính lại khi giao** (không khoá giá lúc đặt), mã giảm giá lúc đặt không áp lại khi giao; không giữ tồn cho đơn đặt; chưa nhắc lịch hẹn giao | P4.5 | P4.7 Thông báo / khi có yêu cầu nghiệp vụ |
 | 79 | Màn hình khách ghép bằng PIN: token thiết bị 16 giờ, hết hiệu lực khi ca khoá; chưa có màn hình xem / thu hồi thiết bị đã ghép | P4.5 | P4.6 Multi-store / Cài đặt |
+| 80 | Đa chi nhánh mới tách **dữ liệu giao dịch** (HĐ/ca POS, đơn hàng, đơn đặt trước, kho/phiếu kho/kiểm kê/chuyển kho, đơn nhập, dashboard, báo cáo, lịch ca). Dùng chung toàn cửa hàng: sản phẩm + giá bán, khách hàng + điểm, NCC + công nợ, khuyến mãi, nhân viên/hoa hồng, audit log; dashboard "khách hàng mới" và cảnh báo tồn thấp SSE (`/api/inventory/alerts`) chưa lọc theo chi nhánh | P4.6 | Khi có yêu cầu nghiệp vụ (giá / khuyến mãi theo chi nhánh) |
+| 81 | Phạm vi chi nhánh theo `user_branches` (gán qua vai trò ở module Nhân viên): quyền **cùng một bộ** ở mọi chi nhánh được gán (`user_roles.branch_id` chưa dùng để khác quyền theo chi nhánh); nhân viên chưa gán → chỉ chi nhánh mặc định; quản lý chưa gán → mọi chi nhánh. Đổi phân công có hiệu lực sau ≤ 60 s (cache `rbac:{tenant}`), đổi trạng thái chi nhánh ngay | P4.6 | P6.6 Security Hardening (nếu cần quyền theo chi nhánh) |
+| 82 | Đơn hàng online không gắn chi nhánh chỉ hiện khi chọn "Tất cả chi nhánh"; người chỉ có chi nhánh A không xem / đổi trả được hoá đơn của chi nhánh B (trả hàng khác chi nhánh); hàng trả luôn về kho chi nhánh của hoá đơn gốc | P4.6 | P6.1 Omni Channel / khi có yêu cầu nghiệp vụ |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -193,7 +196,7 @@
 | P4.3 | Supplier Module — API & UI | ✅ | `b784329` | Xem [kết quả P4.3](#p43--supplier-module--api--ui) |
 | P4.4 | Marketing Module — API & UI | ✅ | `524fb15` | Xem [kết quả P4.4](#p44--marketing-module--api--ui) |
 | P4.5 | POS Advanced Features | ✅ | `e0488e5` | Xem [kết quả P4.5](#p45--pos-advanced-features) |
-| P4.6 | Multi-Store Support | ⬜ | — | |
+| P4.6 | Multi-Store Support | ✅ | `COMMIT` | Xem [kết quả P4.6](#p46--multi-store-support) |
 | P4.7 | Thông báo — Hệ thống + Email + SMS | ⬜ | — | |
 | P4.8 | Kế toán & Tài chính — API & UI | ⬜ | — | |
 
@@ -1755,4 +1758,47 @@ Ngoài plan, theo yêu cầu người dùng.
   - In ESC/POS bỏ dấu để chạy được trên mọi máy in nhiệt; máy in trình duyệt vẫn là mặc định.
 
 - **Vấn đề / lưu ý:** đóng #58; cập nhật #30; mới #74–#79. Dev muốn dùng thẻ/QR Payment Hub trên POS: tạo API key (`npm run apikey:create -- BIZONE` ở Payment Hub) + endpoint webhook trỏ `http://localhost:3000/api/webhooks/payhub` (`/webhooks` Payment Hub), điền `PAYHUB_API_KEY` / `PAYHUB_API_SECRET` / `PAYHUB_WEBHOOK_SECRET` vào `.env.local` BizOne, chạy `npm run dev:worker` của Payment Hub (gửi webhook); không cấu hình thì POS ẩn lựa chọn Payment Hub. Tải lại `/pos/display` nhiều lần trong cùng tab có thể kẹt màn hình trống (cùng #56) — mở tab mới.
+
+### P4.6 — Multi-Store Support
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** `COMMIT` · **Vị trí:** `source/bizone/server/middleware/branchScope.ts` (mới), `server/trpc.ts`, `server/services/{branch,rbac,dashboard,report,inventory,invoice,posCatalog,preorder,purchaseOrder,posPairing}.service.ts`, `server/routers/{branch (mới),dashboard,reports,pos,warehouse,inventory,stockTake,transfer,order,purchaseOrder,staff}.ts`, `lib/validators/branch.ts`, `lib/branch-client.ts`, `components/branch/{BranchSwitcher,BranchList,BranchForm}.tsx`, `components/reports/BranchSummary.tsx`, `components/layout/{TopBar,AppShell,AppLayout,Sidebar}.tsx`, `components/inventory/{shared.ts,TransferForm.tsx}`, `app/settings/**`, `proxy.ts`, `prisma/migrations/4_branch_config`, `prisma/seed.ts`, `tests/branch.test.ts`; `database/schema.sql`
+- **Đã làm:**
+  - **Phạm vi chi nhánh** (`server/middleware/branchScope.ts`): mỗi request tRPC có quyền mang `ctx.branch = { current, allowed, canAll }` tính trong `enforcePermission` từ header `X-Branch-ID` (số / `all`) + phân công `user_branches` (thêm vào `StaffAccess`, cache `rbac:{tenant}`) + danh sách chi nhánh đang hoạt động (cache Redis 60 s). Quản trị (`admin:*`) và quản lý chưa được gán: mọi chi nhánh + "Tất cả"; nhân viên: các chi nhánh được gán (chưa gán → chi nhánh mặc định). Chi nhánh không được phép / "all" khi không đủ quyền → 403. Helper `branchFilter`, `assertBranch`, `scopeWarehouseIds`, `assertWarehouse`, `assertInventoryTransaction`, `assertStockTake`
+  - **Dữ liệu tách theo `branch_id`**: dashboard (mọi số liệu + cache theo chi nhánh `dashboard:{tenant}:{branch|all}:*`, xoá bằng SCAN), báo cáo (doanh thu/lợi nhuận/SP/nhân viên/khuyến mãi/tồn kho/xuất file — chi nhánh chỉ định phải được phép, mặc định chi nhánh đang chọn; danh sách lọc chỉ chi nhánh được phép), POS (chi nhánh mở ca, lưới SP, danh sách ca / hoá đơn / đơn đặt trước, xem / in hoá đơn), kho (danh sách kho, tồn, tổng hợp, biểu đồ theo kho, phiếu kho, lô, kiểm kê, chuyển kho — phiếu chuyển thấy được từ cả kho nguồn và kho đích), đơn hàng (danh sách, chi tiết, cập nhật/huỷ/hoàn, xuất Excel; tạo đơn mặc định chi nhánh đang chọn), đơn nhập NCC (theo kho nhận), lịch ca làm việc
+  - **Chuyển kho giữa chi nhánh**: kho nguồn phải thuộc phạm vi, kho đích chọn trong mọi kho đang hoạt động (`transfer.destinations`, hiện kèm tên chi nhánh)
+  - **Quản lý chi nhánh** (`branch.*`, quyền mới `config:read` / `config:write` ⇐ catalog `config.read` / `config.update`; admin đủ, manager xem): danh sách (số kho, nhân viên, hoá đơn, ca đang mở), thêm (mã viết hoa, tuỳ chọn tạo kho `KHO-{mã}`, đặt mặc định), sửa, đặt mặc định, ngừng / mở lại (không ngừng chi nhánh mặc định hoặc đang có ca POS mở), xoá (chỉ khi chưa phát sinh ca/HĐ/đơn/phiếu kho/tồn). 6 mutation vào `AUDIT_ROUTES`
+  - **Cấu hình riêng theo chi nhánh** (bảng `branch_configs`, migration `4_branch_config`; `effectiveConfig` = chi nhánh → `store_config`): tên in hoá đơn / màn hình khách, tiền tố mã hoá đơn, tài khoản VietQR (BIN, ngân hàng, số TK, chủ TK), lời chào cuối hoá đơn. Áp vào `pos.storeInfo` (theo chi nhánh của ca), mã hoá đơn, dữ liệu in (tên chi nhánh, địa chỉ/ĐT chi nhánh, lời chào — cả bản in ESC/POS), tên cửa hàng của màn hình khách ghép PIN
+  - **Báo cáo tổng hợp nhiều chi nhánh** (`reports.branches` + tab "Chi nhánh"): tổng doanh thu thuần / lợi nhuận / số HĐ + từng chi nhánh (DT thuần, tỷ trọng, số HĐ, TB/HĐ, trả hàng, lợi nhuận, biên LN, so với kỳ trước) trong các chi nhánh người dùng được xem
+  - **UI**: `BranchSwitcher` trên thanh trên (thay ô "Chi nhánh Hà Nội" giả của P1.7): chi nhánh được phép (+ "Tất cả chi nhánh" cho quản trị), lưu localStorage + cookie, đổi → tải lại trang; lựa chọn không còn hợp lệ → tự về mặc định. `apiContext` gửi `X-Branch-ID` cho mọi lệnh gọi tRPC. `proxy.ts` chuyển cookie thành header cho route handler thường (không áp cho tRPC). Trang `/settings/branches` (sidebar "Cài đặt" mở trang này; `/settings` chuyển hướng): bảng chi nhánh + form thông tin / cấu hình riêng (ô trống hiện giá trị dùng chung)
+  - **Seed**: tenant chưa có chi nhánh → tạo `CN01` "Chi nhánh chính" (mặc định) + `KHO-CN01` (#11)
+  - Test Vitest `tests/branch.test.ts` (7): phạm vi admin / nhân viên được gán / quản lý chưa gán / nhân viên chưa gán / chi nhánh ngừng, validator chi nhánh + khoá cấu hình; cập nhật `qa2.test.ts` (khoá cache dashboard theo chi nhánh)
+
+- **Kiểm thử** (build production `next start` hai danh tính dev: :3001 quản trị `admin@bizone.vn`, :3003 `demo.seller@bizone.vn` — bán hàng với vai trò seller, rồi quản lý `bizone-manager` chỉ được gán chi nhánh A; dữ liệu tạm `P46*`: chi nhánh A/B/C, 2 SP tồn 20/10, ca + 3 HĐ; script e2e tRPC + UI trình duyệt):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | User A thấy branch A | ✅ Quản lý gán chi nhánh A: `branch.mine` = [P46A], dashboard hôm nay 250.000 / 2 HĐ (chỉ A), hoá đơn chỉ `HNA…` của A, kho chỉ `KHO-P46A`, tồn chỉ kho A, đơn/ca/chi nhánh mở ca chỉ A, tuỳ chọn báo cáo chỉ A, báo cáo tổng hợp chỉ dòng A. `X-Branch-ID` = B → 403 "Không có quyền truy cập chi nhánh #18"; `all` → 403 "Chỉ quản trị viên…"; xem HĐ của B theo id → 403; tồn kho B / báo cáo branchId B / tạo phiếu chuyển từ kho B → 403. UI (:3003): ô chi nhánh chỉ "P46 Chi nhánh A", trang Kho chỉ kho A |
+  | Switch branch → dữ liệu thay đổi | ✅ Quản trị: dashboard A / B / tất cả = 250.000 / 150.000 / 2.960.950; hoá đơn A 2, B 1; kho A chỉ `KHO-P46A`, tất cả 4 kho; báo cáo doanh thu khi chọn A = 250.000. UI: "Tất cả chi nhánh" (3,0 tr, 17 HĐ) → chọn "P46 Chi nhánh A" → trang tải lại 250K, 2 HĐ, top SP X/Y |
+  | Báo cáo tổng hợp nhiều branch | ✅ `reports.branches`: CN-HN 2.560.950 (86,5 %), P46A 250.000 (8,4 %), P46B 150.000 (5,1 %), CN-HCM 0; tổng 2.960.950 khớp dashboard "tất cả". UI tab "Chi nhánh": KPI tổng + bảng so sánh, so với kỳ trước |
+  | Branches CRUD | ✅ tạo A/B/C kèm kho `KHO-P46x`, chi nhánh mặc định không đổi; trùng mã → 409; mã có khoảng trắng → 400; sửa địa chỉ; ngừng chi nhánh mặc định → 409; xoá C (trống) → xoá cả kho; xoá A (có HĐ) → 409 "chỉ có thể ngừng hoạt động"; đặt B mặc định rồi trả lại CN-HN; ngừng B → chọn B 403, POS không cho mở ca ở B; mở lại. Audit `create/update/delete/set_default/set_status/set_branch_config`. UI `/settings/branches` + form cấu hình riêng lưu được (kiểm DB) |
+  | Cấu hình riêng theo branch | ✅ A: tiền tố `HNA` → HĐ `HNA2611100001`; B (kế thừa) → `HD…`; `storeInfo` ca A: "Shop A", TK 0123456789 "CUA HANG A", lời chào riêng; ca B: tên chung, không có TK; dữ liệu in A có tên chi nhánh + lời chào; khoá cấu hình lạ → 400 |
+  | Chuyển kho giữa các branch | ✅ Quản lý A: kho đích có kho của B; chuyển 3 X từ A → B, xác nhận → tồn A 18 → 15, B 10 → 12 (sau bán); quản trị chọn B thấy phiếu chuyển đến |
+  | Inventory riêng theo warehouse (gắn branch) | ✅ như trên — tồn, phiếu, kiểm kê, lô lọc theo kho của chi nhánh |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 114/114); migration `4_branch_config` áp lên DB dev, `prisma migrate diff`: rỗng |
+  | Dọn dẹp | ✅ dừng server; xoá HĐ, ca, phiếu kho, tồn, SP, kho, chi nhánh `P46*`, phân công + user `demo.seller` tự tạo, audit test, cấu hình riêng (cascade); Redis: cache rbac/chi nhánh/dashboard, idempotency, 6 job BullMQ chưa chạy; gỡ cấu hình launch tạm. Chi nhánh mặc định CN-HN và ca mở sẵn #2 của `admin@bizone.vn` không bị đụng |
+
+  Sửa trong lúc test: cookie chi nhánh dùng chung theo host (khác cổng) bị proxy biến thành `X-Branch-ID` cho cả tRPC → lệch với lựa chọn trong localStorage, quản lý A nhận 403 "Chỉ quản trị viên…" → tRPC chỉ dùng header do client gửi, cookie chỉ cho route handler thường, và switcher đồng bộ lại cookie.
+
+- **Khác biệt so với plan:**
+  - Ô chọn chi nhánh đặt ở **thanh trên** (đúng vị trí ô giả của mockup / P1.7) thay vì sidebar; `middleware.ts` của plan là `proxy.ts` (Next 16) — chỉ chuyển cookie → header cho route handler, việc kiểm quyền nằm ở tRPC (`enforcePermission` + `branchScope.ts`).
+  - Thêm bảng `branch_configs` (cấu hình riêng), quyền `config:read` / `config:write`, trang `/settings/branches`, `reports.branches`, `transfer.destinations`.
+  - "User gán nhiều branch" dùng phân công có sẵn của P4.1 (vai trò theo chi nhánh → `user_branches`), không thêm màn hình riêng.
+
+- **Quyết định thiết kế:**
+  - Phạm vi tính ở server cho mọi request (không tin client): header chỉ là lựa chọn trong số chi nhánh được phép; thiếu header → "tất cả" cho quản trị, chi nhánh mặc định cho nhân viên (API cũ không gửi header vẫn chạy).
+  - Một chi nhánh đang chọn (hoặc "tất cả") cho mọi màn hình — các service giữ tham số `branchId?` đơn giản; riêng báo cáo tổng hợp nhận danh sách chi nhánh được phép.
+  - Kho không gắn chi nhánh = kho chung, mọi chi nhánh thấy; phiếu chuyển kho thuộc cả hai đầu.
+  - Cấu hình riêng chỉ ghi đè (trống = dùng chung) để thêm chi nhánh không phải nhập lại mọi thứ.
+
+- **Vấn đề / lưu ý:** đóng #11, #14, #60; mới #80–#82. Trang `/settings` (redirect) cũng in cảnh báo "Could not validate `instant`" khi build giống `/` (đã biết, không ảnh hưởng).
 

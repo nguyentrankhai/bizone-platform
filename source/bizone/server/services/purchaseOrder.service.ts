@@ -104,7 +104,7 @@ function itemRows(items: PoItemInput[]) {
 
 // ─── Queries ────────────────────────────────────────────────────────────────
 
-export async function listPurchaseOrders(input: ListPoInput) {
+export async function listPurchaseOrders(input: ListPoInput, scope?: number[] | null) {
   const prisma = getPrisma();
   const range =
     input.dateFrom || input.dateTo
@@ -112,7 +112,11 @@ export async function listPurchaseOrders(input: ListPoInput) {
       : null;
   const where: Prisma.PurchaseOrderWhereInput = {
     ...(input.supplierId ? { supplierId: input.supplierId } : {}),
-    ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+    ...(input.warehouseId
+      ? { warehouseId: input.warehouseId }
+      : scope
+        ? { warehouseId: { in: scope } }
+        : {}),
     ...(input.status ? { status: input.status } : {}),
     ...(range ? { createdAt: { gte: range.start, lt: range.end } } : {}),
     ...(input.search
@@ -364,9 +368,9 @@ export async function productLookup(input: ProductLookupInput) {
 }
 
 /** Active warehouses goods can be received into (PO form) */
-export async function warehouseOptions() {
+export async function warehouseOptions(scope?: number[] | null) {
   return getPrisma().warehouse.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(scope ? { id: { in: scope } } : {}) },
     orderBy: { name: "asc" },
     select: { id: true, code: true, name: true, branchId: true },
   });

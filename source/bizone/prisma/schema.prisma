@@ -70,6 +70,7 @@ model Branch {
   userRoles             UserRole[]
   warehouses            Warehouse[]
   preorders             Preorder[]
+  configs               BranchConfig[]
 
   @@map("branches")
 }
@@ -1759,4 +1760,17 @@ enum PreorderStatus {
   pending
   completed
   cancelled
+}
+
+/// P4.6: per-branch overrides of store_config (VietQR bank account, invoice prefix, receipt text…)
+model BranchConfig {
+  id          Int      @id @default(autoincrement())
+  branchId    Int      @map("branch_id")
+  configKey   String   @map("config_key") @db.VarChar(100)
+  configValue String?  @map("config_value") @db.Text
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_bc_branch")
+
+  @@unique([branchId, configKey], map: "uq_bc_branch_key")
+  @@map("branch_configs")
 }

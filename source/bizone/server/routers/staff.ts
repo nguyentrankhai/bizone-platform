@@ -1,3 +1,4 @@
+import { branchFilter } from "@/server/middleware/branchScope";
 import { z } from "zod";
 import { bizoneError } from "@/lib/errors";
 import { getPrisma } from "@/lib/prisma";
@@ -84,7 +85,10 @@ const shiftRouter = router({
     .mutation(({ input }) => shifts.unassignShift(input.id)),
   calendar: permissionProcedure("staff:read")
     .input(calendarSchema)
-    .query(({ input }) => shifts.shiftCalendar(input)),
+    .query(({ input, ctx }) =>
+      // P4.6: shifts of the branch the user works on unless one is picked
+      shifts.shiftCalendar({ ...input, branchId: branchFilter(ctx.branch, input.branchId) }),
+    ),
 });
 
 const attendanceRouter = router({

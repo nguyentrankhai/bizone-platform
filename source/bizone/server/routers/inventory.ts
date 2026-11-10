@@ -19,25 +19,32 @@ import {
   listTransactionsSchema,
   listBatchesSchema,
 } from "@/lib/validators/inventory";
+import {
+  assertWarehouse,
+  assertInventoryTransaction,
+  scopeWarehouseIds,
+} from "@/server/middleware/branchScope";
 
 export const inventoryRouter = router({
   /** GET tồn kho theo kho / sản phẩm */
   list: permissionProcedure("inventory:read")
     .input(listInventorySchema)
-    .query(async ({ input }) => {
-      return listInventory(input);
+    .query(async ({ input, ctx }) => {
+      if (input.warehouseId) await assertWarehouse(ctx.branch, input.warehouseId);
+      return listInventory(input, await scopeWarehouseIds(ctx.branch));
     }),
 
   /** GET tổng hợp tồn kho */
   summary: permissionProcedure("inventory:read")
     .input(z.object({ warehouseId: z.number().int().positive().optional() }))
-    .query(async ({ input }) => {
-      return getInventorySummary(input.warehouseId);
+    .query(async ({ input, ctx }) => {
+      if (input.warehouseId) await assertWarehouse(ctx.branch, input.warehouseId);
+      return getInventorySummary(input.warehouseId, await scopeWarehouseIds(ctx.branch));
     }),
 
   /** GET tổng tồn theo kho (biểu đồ) */
-  stockByWarehouse: permissionProcedure("inventory:read").query(async () => {
-    return getStockByWarehouse();
+  stockByWarehouse: permissionProcedure("inventory:read").query(async ({ ctx }) => {
+    return getStockByWarehouse(await scopeWarehouseIds(ctx.branch));
   }),
 
   // ── Transaction types ──────────────────────────────────────────────────────
@@ -52,14 +59,16 @@ export const inventoryRouter = router({
   /** GET danh sách phiếu kho */
   transactions: permissionProcedure("inventory:read")
     .input(listTransactionsSchema)
-    .query(async ({ input }) => {
-      return listTransactions(input);
+    .query(async ({ input, ctx }) => {
+      if (input.warehouseId) await assertWarehouse(ctx.branch, input.warehouseId);
+      return listTransactions(input, await scopeWarehouseIds(ctx.branch));
     }),
 
   /** GET chi tiết phiếu kho */
   transaction: permissionProcedure("inventory:read")
     .input(z.object({ id: z.number().int().positive() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return getTransaction(input.id);
     }),
 
@@ -67,6 +76,7 @@ export const inventoryRouter = router({
   createTransaction: permissionProcedure("inventory:write")
     .input(createTransactionSchema)
     .mutation(async ({ input, ctx }) => {
+      await assertWarehouse(ctx.branch, input.warehouseId);
       return createTransaction(input, await resolveDbUserId(ctx.user!));
     }),
 
@@ -74,13 +84,15 @@ export const inventoryRouter = router({
   confirmTransaction: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return confirmTransaction(input.id, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST huỷ phiếu kho */
   cancelTransaction: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return cancelTransaction(input.id);
     }),
 
@@ -89,7 +101,8 @@ export const inventoryRouter = router({
   /** GET danh sách lô hàng */
   batches: permissionProcedure("inventory:read")
     .input(listBatchesSchema)
-    .query(async ({ input }) => {
-      return listBatches(input);
+    .query(async ({ input, ctx }) => {
+      if (input.warehouseId) await assertWarehouse(ctx.branch, input.warehouseId);
+      return listBatches(input, await scopeWarehouseIds(ctx.branch));
     }),
 });

@@ -28,6 +28,8 @@ export interface ReceiptData {
   paid: number;
   change: number;
   status?: string;
+  /** Per-branch receipt footer (P4.6) */
+  footer?: string | null;
 }
 
 export type PaperWidth = 58 | 80;
@@ -178,7 +180,9 @@ export function encodeReceipt(
     .cmd(CMD.boldOff);
   for (const p of r.payments) b.line(row(METHOD[p.method] ?? p.method, money(p.amount), width));
   if (r.change > 0) b.line(row("Tien thua", money(r.change), width));
-  b.line(dash).cmd(CMD.alignCenter).line("Cam on quy khach!").line("Hen gap lai");
+  b.line(dash).cmd(CMD.alignCenter);
+  if (r.footer) for (const l of wrap(toAscii(r.footer), width)) b.line(l);
+  else b.line("Cam on quy khach!").line("Hen gap lai");
   return b.cmd(CMD.cut).build();
 }
 

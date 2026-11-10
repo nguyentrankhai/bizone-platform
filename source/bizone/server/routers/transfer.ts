@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
+import {
+  assertWarehouse,
+  assertInventoryTransaction,
+  scopeWarehouseIds,
+} from "@/server/middleware/branchScope";
 import { resolveDbUserId } from "@/server/services/user.service";
 import {
   listTransactions,
@@ -26,6 +31,18 @@ async function getTransferTypeId(): Promise<number> {
 }
 
 export const transferRouter = router({
+  /**
+   * Kho đích có thể chọn: mọi kho đang hoạt động của cửa hàng (chuyển sang chi nhánh khác — P4.6).
+   * Chỉ tên/mã/chi nhánh, không lộ tồn kho.
+   */
+  destinations: permissionProcedure("inventory:write").query(() =>
+    getPrisma().warehouse.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true, branch: { select: { id: true, name: true } } },
+      orderBy: { name: "asc" },
+    }),
+  ),
+
   /** GET danh sách phiếu chuyển kho */
   list: permissionProcedure("inventory:read")
     .input(
@@ -37,21 +54,26 @@ export const transferRouter = router({
         pageSize: z.number().int().min(1).max(100).default(20),
       }),
     )
-    .query(async ({ input }) => {
-      return listTransactions({
-        warehouseId: input.fromWarehouseId,
-        destinationWarehouseId: input.toWarehouseId,
-        transactionTypeId: await getTransferTypeId(),
-        status: input.status,
-        page: input.page,
-        pageSize: input.pageSize,
-      });
+    .query(async ({ input, ctx }) => {
+      if (input.fromWarehouseId) await assertWarehouse(ctx.branch, input.fromWarehouseId);
+      return listTransactions(
+        {
+          warehouseId: input.fromWarehouseId,
+          destinationWarehouseId: input.toWarehouseId,
+          transactionTypeId: await getTransferTypeId(),
+          status: input.status,
+          page: input.page,
+          pageSize: input.pageSize,
+        },
+        await scopeWarehouseIds(ctx.branch),
+      );
     }),
 
   /** GET chi tiết phiếu chuyển kho */
   get: permissionProcedure("inventory:read")
     .input(z.object({ id: z.number().int().positive() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return getTransaction(input.id);
     }),
 
@@ -69,6 +91,8 @@ export const transferRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Source must be in the user's scope; the destination may be another branch's warehouse
+      await assertWarehouse(ctx.branch, input.sourceWarehouseId);
       const typeId = await getTransferTypeId();
       return createTransaction(
         {
@@ -89,13 +113,15 @@ export const transferRouter = router({
   confirm: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return confirmTransaction(input.id, await resolveDbUserId(ctx.user!));
     }),
 
   /** POST Huỷ phiếu chuyển kho */
   cancel: permissionProcedure("inventory:write")
     .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertInventoryTransaction(ctx.branch, input.id);
       return cancelTransaction(input.id);
     }),
 });

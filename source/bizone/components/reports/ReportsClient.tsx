@@ -18,8 +18,9 @@ import { ProfitReport } from "./ProfitReport";
 import { ProductPerformance } from "./ProductPerformance";
 import { StaffPerformance } from "./StaffPerformance";
 import { InventoryReport, PromotionReport } from "./PromotionInventory";
+import { BranchSummary } from "./BranchSummary";
 
-type Tab = "revenue" | "profit" | "products" | "staff" | "promotion" | "inventory";
+type Tab = "revenue" | "profit" | "products" | "staff" | "branches" | "promotion" | "inventory";
 type Compare = "previous_period" | "previous_year" | "none";
 
 const TABS: { key: Tab; label: string }[] = [
@@ -27,6 +28,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "profit", label: "Lợi nhuận" },
   { key: "products", label: "Hàng bán chạy/chậm" },
   { key: "staff", label: "Nhân viên" },
+  { key: "branches", label: "Chi nhánh" },
   { key: "promotion", label: "Khuyến mãi" },
   { key: "inventory", label: "Tồn kho" },
 ];
@@ -190,12 +192,14 @@ export function ReportsClient({ auth }: { auth: ApiAuth }) {
             ? await trpc.reports.products.query(filter, ctx)
             : tab === "staff"
               ? await trpc.reports.staff.query(filter, ctx)
-              : tab === "promotion"
-                ? await trpc.reports.promotion.query({ ...promo, couponId, branchId }, ctx)
-                : await trpc.reports.inventory.query(
-                    { warehouseId, branchId, expiringDays: 30 },
-                    ctx,
-                  );
+              : tab === "branches"
+                ? await trpc.reports.branches.query({ ...filter, branchId: undefined }, ctx)
+                : tab === "promotion"
+                  ? await trpc.reports.promotion.query({ ...promo, couponId, branchId }, ctx)
+                  : await trpc.reports.inventory.query(
+                      { warehouseId, branchId, expiringDays: 30 },
+                      ctx,
+                    );
     return { tab, data, ms: Math.round(performance.now() - t0) };
   });
 
@@ -310,19 +314,22 @@ export function ReportsClient({ auth }: { auth: ApiAuth }) {
             </select>
           </>
         )}
-        <select
-          className={inputAutoCls}
-          aria-label="Chi nhánh"
-          value={branchId ?? ""}
-          onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : undefined)}
-        >
-          <option value="">Tất cả chi nhánh</option>
-          {opts?.branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
+        {tab !== "branches" && (
+          <select
+            className={inputAutoCls}
+            aria-label="Chi nhánh"
+            value={branchId ?? ""}
+            onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : undefined)}
+          >
+            {/* P4.6: empty = the branch picked in the top bar ("Tất cả" for admins) */}
+            <option value="">Chi nhánh đang làm việc</option>
+            {opts?.branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
         {tab === "inventory" && (
           <select
             className={inputAutoCls}
@@ -386,7 +393,7 @@ export function ReportsClient({ auth }: { auth: ApiAuth }) {
           </>
         )}
         <div className="flex-1" />
-        <ExportButtons auth={auth} request={request} />
+        {tab !== "branches" && <ExportButtons auth={auth} request={request} />}
       </div>
 
       <ErrorBox message={report.error || options.error} />
@@ -407,6 +414,9 @@ export function ReportsClient({ auth }: { auth: ApiAuth }) {
           {r.tab === "products" && <ProductPerformance data={r.data as never} />}
           {r.tab === "staff" && (
             <StaffPerformance data={r.data as never} compareLabel={compareLabel} />
+          )}
+          {r.tab === "branches" && (
+            <BranchSummary data={r.data as never} compareLabel={compareLabel} />
           )}
           {r.tab === "promotion" && <PromotionReport data={r.data as never} />}
           {r.tab === "inventory" && <InventoryReport data={r.data as never} />}

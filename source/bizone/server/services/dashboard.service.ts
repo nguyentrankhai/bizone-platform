@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { getRedis } from "@/lib/redis";
 import { currentTenantId } from "@/lib/tenant";
 import { vnDateKey, vnDayRange, vnDayStart } from "@/lib/vn-time";
@@ -6,24 +7,27 @@ import { vnDateKey, vnDayRange, vnDayStart } from "@/lib/vn-time";
 /** PLAN P2.9: dữ liệu dashboard cũ không quá 30 s — TTL ngắn + xoá ngay khi có HĐ/đơn mới */
 export const DASHBOARD_CACHE_TTL = 20;
 
-const CACHE_PARTS = [
-  "today",
-  "revenue7d",
-  "top_products",
-  "payment_breakdown",
-  "pending_orders",
-  "low_stock",
-] as const;
-type CachePart = (typeof CACHE_PARTS)[number];
+type CachePart =
+  "today" | "revenue7d" | "top_products" | "payment_breakdown" | "pending_orders" | "low_stock";
 
-/** Keys are per tenant — each tenant has its own database, so cached numbers must be too */
-export function dashboardCacheKey(tenantId: string, part: CachePart): string {
-  return `dashboard:${tenantId}:${part}`;
+/**
+ * Keys are per tenant (own database) and per branch scope (P4.6: `all` or the branch id), so
+ * cached numbers never leak across tenants or branches.
+ */
+export function dashboardCacheKey(tenantId: string, part: CachePart, branchId?: number): string {
+  return `dashboard:${tenantId}:${branchId ?? "all"}:${part}`;
 }
 
-async function cached<T>(part: CachePart, fn: () => Promise<T>): Promise<T> {
+/** Invoice / order filter of a branch scope (undefined = every branch) */
+const inBranch = (branchId?: number) => (branchId ? { branchId } : {});
+
+async function cached<T>(
+  part: CachePart,
+  branchId: number | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
   const redis = getRedis();
-  const key = dashboardCacheKey(currentTenantId(), part);
+  const key = dashboardCacheKey(currentTenantId(), part, branchId);
   const hit = await redis.get(key);
   if (hit) return JSON.parse(hit) as T;
   const result = await fn();
@@ -59,7 +63,11 @@ export function netPaymentsByMethod(
     .map(([method, amount]) => ({ method, label: PAYMENT_LABELS[method] ?? method, amount }));
 }
 
-async function paymentsFor(where: { createdAt: { gte: Date; lt: Date }; status: "active" }) {
+async function paymentsFor(where: {
+  createdAt: { gte: Date; lt: Date };
+  status: "active";
+  branchId?: number;
+}) {
   const prisma = getPrisma();
   const [groups, change] = await Promise.all([
     prisma.invoicePayment.groupBy({
@@ -77,21 +85,21 @@ async function paymentsFor(where: { createdAt: { gte: Date; lt: Date }; status: 
 
 // ─── Today stats ─────────────────────────────────────────────────────────────
 
-export async function getTodayStats() {
-  return cached("today", async () => {
+export async function getTodayStats(branchId?: number) {
+  return cached("today", branchId, async () => {
     const prisma = getPrisma();
     const { start, end } = todayRange();
 
     const [invoiceResult, orderResult, newCustomers, lowStockCount] = await Promise.all([
       // Doanh thu hôm nay (hóa đơn POS active)
       prisma.invoice.aggregate({
-        where: { createdAt: { gte: start, lt: end }, status: "active" },
+        where: { createdAt: { gte: start, lt: end }, status: "active", ...inBranch(branchId) },
         _sum: { totalAmount: true },
         _count: { id: true },
       }),
       // Đơn hàng online hôm nay (pending + confirmed)
       prisma.order.count({
-        where: { createdAt: { gte: start, lt: end } },
+        where: { createdAt: { gte: start, lt: end }, ...inBranch(branchId) },
       }),
       // Khách hàng mới hôm nay
       prisma.customer.count({
@@ -99,8 +107,9 @@ export async function getTodayStats() {
       }),
       // SP tồn kho cảnh báo (raw query vì so sánh 2 cột)
       prisma.$queryRaw<[{ cnt: bigint }]>`
-        SELECT COUNT(*) AS cnt FROM inventory
-        WHERE quantity <= min_quantity AND min_quantity > 0
+        SELECT COUNT(*) AS cnt FROM inventory iv
+        ${branchId ? Prisma.sql`JOIN warehouses w ON w.id = iv.warehouse_id AND w.branch_id = ${branchId}` : Prisma.empty}
+        WHERE iv.quantity <= iv.min_quantity AND iv.min_quantity > 0
       `.then((r) => Number(r[0]?.cnt ?? 0)),
     ]);
 
@@ -111,6 +120,7 @@ export async function getTodayStats() {
       where: {
         createdAt: { gte: yesterday, lt: yesterdayEnd },
         status: "active",
+        ...inBranch(branchId),
       },
       _sum: { totalAmount: true },
     });
@@ -132,13 +142,13 @@ export async function getTodayStats() {
 
 // ─── Revenue 7 days ───────────────────────────────────────────────────────────
 
-export async function getRevenue7Days() {
-  return cached("revenue7d", async () => {
+export async function getRevenue7Days(branchId?: number) {
+  return cached("revenue7d", branchId, async () => {
     const prisma = getPrisma();
     const { start } = last7Days();
 
     const invoices = await prisma.invoice.findMany({
-      where: { createdAt: { gte: start }, status: "active" },
+      where: { createdAt: { gte: start }, status: "active", ...inBranch(branchId) },
       select: { totalAmount: true, createdAt: true },
     });
 
@@ -156,15 +166,15 @@ export async function getRevenue7Days() {
 
 // ─── Top 5 products ───────────────────────────────────────────────────────────
 
-export async function getTopProducts() {
-  return cached("top_products", async () => {
+export async function getTopProducts(branchId?: number) {
+  return cached("top_products", branchId, async () => {
     const prisma = getPrisma();
     const { start } = last7Days();
 
     const items = await prisma.invoiceItem.groupBy({
       by: ["productId"],
       where: {
-        invoice: { createdAt: { gte: start }, status: "active" },
+        invoice: { createdAt: { gte: start }, status: "active", ...inBranch(branchId) },
       },
       _sum: { quantity: true, totalAmount: true },
       orderBy: { _sum: { quantity: "desc" } },
@@ -191,20 +201,24 @@ export async function getTopProducts() {
 
 // ─── Payment method breakdown ─────────────────────────────────────────────────
 
-export async function getPaymentBreakdown() {
-  return cached("payment_breakdown", async () => {
+export async function getPaymentBreakdown(branchId?: number) {
+  return cached("payment_breakdown", branchId, async () => {
     const { start, end } = todayRange();
-    return paymentsFor({ createdAt: { gte: start, lt: end }, status: "active" });
+    return paymentsFor({
+      createdAt: { gte: start, lt: end },
+      status: "active",
+      ...inBranch(branchId),
+    });
   });
 }
 
 // ─── Pending orders (cần xử lý) ──────────────────────────────────────────────
 
-export async function getPendingOrders() {
-  return cached("pending_orders", async () => {
+export async function getPendingOrders(branchId?: number) {
+  return cached("pending_orders", branchId, async () => {
     const prisma = getPrisma();
     return prisma.order.findMany({
-      where: { status: { in: ["pending", "confirmed"] } },
+      where: { status: { in: ["pending", "confirmed"] }, ...inBranch(branchId) },
       orderBy: { createdAt: "asc" },
       take: 5,
       select: {
@@ -221,8 +235,8 @@ export async function getPendingOrders() {
 
 // ─── Low stock warnings ───────────────────────────────────────────────────────
 
-export async function getLowStockItems() {
-  return cached("low_stock", async () => {
+export async function getLowStockItems(branchId?: number) {
+  return cached("low_stock", branchId, async () => {
     const prisma = getPrisma();
     const items = await prisma.$queryRaw<
       Array<{
@@ -235,6 +249,7 @@ export async function getLowStockItems() {
       SELECT i.product_id, p.name, i.quantity, i.min_quantity
       FROM inventory i
       JOIN products p ON p.id = i.product_id
+      ${branchId ? Prisma.sql`JOIN warehouses w ON w.id = i.warehouse_id AND w.branch_id = ${branchId}` : Prisma.empty}
       WHERE i.quantity <= i.min_quantity
         AND i.min_quantity > 0
       ORDER BY i.quantity ASC
@@ -251,15 +266,15 @@ export async function getLowStockItems() {
 
 // ─── Full dashboard (single call) ────────────────────────────────────────────
 
-export async function getDashboardSummary() {
+export async function getDashboardSummary(branchId?: number) {
   const [todayStats, revenue7d, topProducts, paymentBreakdown, pendingOrders, lowStock] =
     await Promise.all([
-      getTodayStats(),
-      getRevenue7Days(),
-      getTopProducts(),
-      getPaymentBreakdown(),
-      getPendingOrders(),
-      getLowStockItems(),
+      getTodayStats(branchId),
+      getRevenue7Days(branchId),
+      getTopProducts(branchId),
+      getPaymentBreakdown(branchId),
+      getPendingOrders(branchId),
+      getLowStockItems(branchId),
     ]);
 
   return { todayStats, revenue7d, topProducts, paymentBreakdown, pendingOrders, lowStock };
@@ -267,8 +282,23 @@ export async function getDashboardSummary() {
 
 // ─── Invalidate cache (gọi sau khi có giao dịch mới) ─────────────────────────
 
+/** Drop every branch scope of the tenant (a sale changes its branch and "all") */
 export async function invalidateDashboardCache(tenantId: string = currentTenantId()) {
-  await getRedis().del(...CACHE_PARTS.map((p) => dashboardCacheKey(tenantId, p)));
+  const redis = getRedis();
+  const keys: string[] = [];
+  let cursor = "0";
+  do {
+    const [next, batch] = await redis.scan(
+      cursor,
+      "MATCH",
+      `dashboard:${tenantId}:*`,
+      "COUNT",
+      200,
+    );
+    cursor = next;
+    keys.push(...batch);
+  } while (cursor !== "0");
+  if (keys.length) await redis.del(...keys);
 }
 
 // ─── Drill-down: một ngày trên biểu đồ doanh thu ─────────────────────────────
@@ -283,11 +313,15 @@ export const PAYMENT_LABELS: Record<string, string> = {
 };
 
 /** Chi tiết doanh thu một ngày (giờ VN) khi bấm vào cột biểu đồ — không cache, phạm vi 1 ngày */
-export async function getDayDetail(date: string) {
+export async function getDayDetail(date: string, branchId?: number) {
   const prisma = getPrisma();
   const start = new Date(`${date}T00:00:00+07:00`);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  const where = { createdAt: { gte: start, lt: end }, status: "active" } as const;
+  const where = {
+    createdAt: { gte: start, lt: end },
+    status: "active" as const,
+    ...inBranch(branchId),
+  };
 
   const [totals, payments, items, invoices] = await Promise.all([
     prisma.invoice.aggregate({ where, _sum: { totalAmount: true }, _count: { id: true } }),

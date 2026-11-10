@@ -70,6 +70,8 @@ export const quoteSchema = z.object({
 });
 
 export const listInvoicesSchema = z.object({
+  /** P4.6: defaults to the branch the user works on */
+  branchId: z.number().int().positive().optional(),
   cashSessionId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
   status: z.enum(["active", "refunded", "cancelled"]).optional(),
@@ -150,6 +152,7 @@ export const createPreorderSchema = z.object({
 });
 
 export const listPreordersSchema = z.object({
+  branchId: z.number().int().positive().optional(),
   status: z.enum(["pending", "completed", "cancelled"]).optional(),
   search: z.string().trim().max(100).optional(),
   page: z.number().int().positive().default(1),

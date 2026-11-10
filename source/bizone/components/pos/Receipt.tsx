@@ -18,6 +18,7 @@ export function Receipt({ data }: { data: PrintData | null }) {
       <style>{"@page { size: 80mm auto; margin: 4mm; }"}</style>
       <div className="text-center">
         <p className="text-sm font-bold">{data.store.name}</p>
+        {data.store.branchName && <p>{data.store.branchName}</p>}
         {data.store.address && <p>{data.store.address}</p>}
         {data.store.phone && <p>ĐT: {data.store.phone}</p>}
         <p className="mt-2 font-bold">HÓA ĐƠN BÁN HÀNG</p>
@@ -64,7 +65,7 @@ export function Receipt({ data }: { data: PrintData | null }) {
           *** {data.status === "cancelled" ? "ĐÃ HỦY" : "ĐÃ ĐỔI/TRẢ"} ***
         </p>
       )}
-      <p className="mt-2 text-center">Cảm ơn quý khách!</p>
+      <p className="mt-2 text-center whitespace-pre-line">{data.footer || "Cảm ơn quý khách!"}</p>
     </div>
   );
 }

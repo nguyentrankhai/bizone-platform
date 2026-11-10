@@ -89,13 +89,12 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      trpc.pos.currentSession.query(undefined, apiContext(auth)),
-      trpc.pos.storeInfo.query(undefined, apiContext(auth)),
-    ])
-      .then(([s, st]) => {
+    trpc.pos.currentSession
+      .query(undefined, apiContext(auth))
+      .then(async (s) => {
+        // P4.6: name / VietQR account of the shift's branch
+        setStore(s ? await trpc.pos.storeInfo.query({ sessionId: s.id }, apiContext(auth)) : null);
         setSession(s);
-        setStore(st);
       })
       .catch((e) => {
         toast.error(errorMessage(e));

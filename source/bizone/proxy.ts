@@ -69,6 +69,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // Forward user info to route handlers via request headers
   const requestHeaders = strippedHeaders(request);
+  // P4.6: branch picked in the top bar — tRPC calls send X-Branch-ID, plain route handlers / SSE
+  // get it from the cookie. The tRPC branch scope validates it against the user's branches.
+  // tRPC always sends the header itself (from localStorage) — never fill it from the cookie there.
+  const branchCookie = request.cookies.get("bizone_branch")?.value;
+  if (!pathname.startsWith("/api/trpc") && !requestHeaders.get("x-branch-id") && branchCookie) {
+    requestHeaders.set("x-branch-id", branchCookie);
+  }
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-username", user.username);
   requestHeaders.set("x-user-roles", user.roles.join(","));

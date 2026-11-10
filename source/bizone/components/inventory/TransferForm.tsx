@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { BarcodeScanInput, type ScannedProduct } from "./BarcodeScanInput";
 import { apiContext, errorMessage, fmtNumber, type ApiAuth, type RouterOutputs } from "./shared";
 
 type Warehouse = RouterOutputs["warehouse"]["list"][number];
+type Destination = RouterOutputs["transfer"]["destinations"][number];
 
 interface Line extends ScannedProduct {
   key: string;
@@ -31,12 +32,20 @@ export function TransferForm({ auth, warehouses, onDone, onCancel }: TransferFor
   const [step, setStep] = useState(0);
   const [sourceId, setSourceId] = useState(String(warehouses[0]?.id ?? ""));
   const [destId, setDestId] = useState(String(warehouses[1]?.id ?? ""));
+  // P4.6: destination may be a warehouse of another branch (the source list is the user's scope)
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  useEffect(() => {
+    trpc.transfer.destinations
+      .query(undefined, apiContext(auth))
+      .then(setDestinations)
+      .catch(() => setDestinations([]));
+  }, [auth]);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [saving, setSaving] = useState(false);
 
   const source = warehouses.find((w) => String(w.id) === sourceId);
-  const dest = warehouses.find((w) => String(w.id) === destId);
+  const dest = destinations.find((w) => String(w.id) === destId);
   const step1Error =
     !sourceId || !destId
       ? "Chọn kho nguồn và kho đích"
@@ -178,9 +187,10 @@ export function TransferForm({ auth, warehouses, onDone, onCancel }: TransferFor
                 className={selectCls}
               >
                 <option value="">— Chọn kho —</option>
-                {warehouses.map((w) => (
+                {destinations.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
+                    {w.branch ? ` — ${w.branch.name}` : ""}
                   </option>
                 ))}
               </select>

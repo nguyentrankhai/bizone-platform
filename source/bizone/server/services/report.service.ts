@@ -69,6 +69,8 @@ interface Scope {
   from: string;
   to: string;
   branchId?: number;
+  /** P4.6: several branches (aggregate report of a multi-branch user) */
+  branchIds?: number[];
   userId?: number;
   categoryIds?: number[];
 }
@@ -88,6 +90,12 @@ function linesSql(s: Scope): Prisma.Sql {
     Prisma.sql`i.status IN ('active', 'refunded')`,
   ];
   if (s.branchId) filters.push(Prisma.sql`i.branch_id = ${s.branchId}`);
+  if (s.branchIds)
+    filters.push(
+      s.branchIds.length
+        ? Prisma.sql`i.branch_id IN (${Prisma.join(s.branchIds)})`
+        : Prisma.sql`FALSE`,
+    );
   if (s.userId) filters.push(Prisma.sql`i.user_id = ${s.userId}`);
   if (s.categoryIds) {
     filters.push(
@@ -180,7 +188,10 @@ async function totals(s: Scope): Promise<Totals> {
   return toTotals(rows[0]);
 }
 
-async function grouped(s: Scope, by: "d" | "month" | "category_id" | "product_id" | "user_id") {
+async function grouped(
+  s: Scope,
+  by: "d" | "month" | "category_id" | "product_id" | "user_id" | "branch_id",
+) {
   const key =
     by === "month"
       ? Prisma.sql`DATE_FORMAT(l.d, '%Y-%m')`
@@ -310,6 +321,52 @@ export async function revenueReport(f: ReportFilter) {
         ...t,
       }))
       .sort((a, b) => b.net - a.net),
+  };
+}
+
+/**
+ * Báo cáo tổng hợp theo chi nhánh (P4.6): doanh thu thuần, lợi nhuận, số HĐ… của từng chi nhánh
+ * và toàn bộ, so với kỳ trước. `branchIds` = chi nhánh người dùng được xem (null = tất cả).
+ */
+export async function branchReport(f: ReportFilter, branchIds: number[] | null) {
+  const { current, compare, compareRange } = await scopes({ ...f, branchId: undefined });
+  const only = branchIds ?? undefined;
+  const cur = { ...current, branchIds: only };
+  const cmp = compare ? { ...compare, branchIds: only } : null;
+  const [byBranch, prevByBranch, total, prevTotal] = await Promise.all([
+    grouped(cur, "branch_id"),
+    cmp ? grouped(cmp, "branch_id") : Promise.resolve(null),
+    totals(cur),
+    cmp ? totals(cmp) : Promise.resolve(null),
+  ]);
+  const branches = await getPrisma().branch.findMany({
+    where: only ? { id: { in: only } } : {},
+    select: { id: true, code: true, name: true, status: true },
+    orderBy: { name: "asc" },
+  });
+  const rows = branches
+    .map((b) => {
+      const t = byBranch.get(String(b.id)) ?? toTotals(undefined);
+      const p = prevByBranch?.get(String(b.id)) ?? null;
+      return {
+        branchId: b.id,
+        code: b.code,
+        name: b.name,
+        status: b.status,
+        ...t,
+        share: total.net ? Math.round((t.net / total.net) * 1000) / 10 : 0,
+        previousNet: p ? p.net : null,
+        netChange: p ? changePct(t.net, p.net) : null,
+      };
+    })
+    // inactive branches only when they sold something in the period
+    .filter((r) => r.status === "active" || r.invoices > 0)
+    .sort((a, b) => b.net - a.net);
+  return {
+    range: { from: f.from, to: f.to },
+    compareRange,
+    summary: withChange(total, prevTotal),
+    branches: rows,
   };
 }
 
@@ -603,11 +660,11 @@ export async function inventoryReport(input: InventoryReportInput) {
 }
 
 /** Filter options for the report UI */
-export async function reportOptions() {
+export async function reportOptions(allowedBranchIds?: number[]) {
   const prisma = getPrisma();
   const [branches, staff, categories, coupons, warehouses] = await Promise.all([
     prisma.branch.findMany({
-      where: { status: "active" },
+      where: { status: "active", ...(allowedBranchIds ? { id: { in: allowedBranchIds } } : {}) },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -625,7 +682,12 @@ export async function reportOptions() {
       take: 100,
     }),
     prisma.warehouse.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(allowedBranchIds
+          ? { OR: [{ branchId: { in: allowedBranchIds } }, { branchId: null }] }
+          : {}),
+      },
       select: { id: true, name: true, branchId: true },
     }),
   ]);

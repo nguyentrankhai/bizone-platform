@@ -39,10 +39,10 @@ export function CustomerDisplay({
   useEffect(() => {
     if (givenName) return;
     trpc.pos.storeInfo
-      .query(undefined, apiContext(auth))
+      .query({ sessionId }, apiContext(auth))
       .then((s) => setStoreName(s.name))
       .catch(() => {});
-  }, [auth, givenName]);
+  }, [auth, givenName, sessionId]);
 
   useEffect(() => {
     if (rejected) onRejected?.();

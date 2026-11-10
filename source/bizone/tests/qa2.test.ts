@@ -22,7 +22,9 @@ describe("VN business day (#39)", () => {
 
   it("scopes dashboard cache keys by tenant", () => {
     expect(dashboardCacheKey("tenant_a", "today")).not.toBe(dashboardCacheKey("tenant_b", "today"));
-    expect(dashboardCacheKey("tenant_a", "today")).toBe("dashboard:tenant_a:today");
+    expect(dashboardCacheKey("tenant_a", "today")).toBe("dashboard:tenant_a:all:today");
+    // P4.6: each branch scope has its own cache
+    expect(dashboardCacheKey("tenant_a", "today", 2)).toBe("dashboard:tenant_a:2:today");
   });
 });
 

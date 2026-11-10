@@ -56,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Marketing", href: "/marketing", icon: Megaphone },
   { label: "Kế toán", href: "/accounting", icon: Calculator, soon: "P4.8" },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },
-  { label: "Cài đặt", href: "/settings", icon: Settings, soon: "P4.x" },
+  { label: "Cài đặt", href: "/settings/branches", icon: Settings, also: ["/settings"] },
 ];
 
 const NARROW_QUERY = "(max-width: 1023px)";

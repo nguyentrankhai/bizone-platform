@@ -23,16 +23,12 @@ import { consumeIntents, validateIntentPayments } from "./payhubPayment.service"
 import { clearCart } from "./posCart";
 import { publishPosEvent } from "./posEvents";
 import { quoteCart } from "./pricing.service";
+import { effectiveConfig } from "./branch.service";
 import type { PromotionUse } from "@/lib/pos/promotions";
 
 export type Tx = Prisma.TransactionClient;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-export async function storeConfig(keys: string[]) {
-  const rows = await getPrisma().storeConfig.findMany({ where: { configKey: { in: keys } } });
-  return Object.fromEntries(rows.map((r) => [r.configKey, r.configValue ?? ""]));
-}
 
 export function ymd(d = new Date()) {
   return `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -259,7 +255,8 @@ export async function prepareSale(
   const settlement = settlePayments(t.total, payments);
 
   const warehouseId = await branchWarehouseId(session.branchId);
-  const cfg = await storeConfig(["invoice_prefix", "loyalty_rate"]);
+  // P4.6: invoice prefix may differ per branch (branch_configs → store_config)
+  const cfg = await effectiveConfig(session.branchId, ["invoice_prefix", "loyalty_rate"]);
   const loyaltyRate = Number(cfg.loyalty_rate || 1);
   return {
     session: { id: session.id, branchId: session.branchId },
@@ -520,6 +517,7 @@ export async function listInvoices(input: ListInvoicesInput) {
   const prisma = getPrisma();
   const q = input.search?.trim();
   const where: Prisma.InvoiceWhereInput = {
+    ...(input.branchId ? { branchId: input.branchId } : {}),
     ...(input.cashSessionId ? { cashSessionId: input.cashSessionId } : {}),
     ...(input.customerId ? { customerId: input.customerId } : {}),
     ...(input.status ? { status: input.status } : {}),
@@ -583,13 +581,20 @@ export async function getInvoice(id: number) {
 /** Dữ liệu in hóa đơn nhiệt: thông tin cửa hàng + hóa đơn đã làm phẳng */
 export async function printData(id: number) {
   const inv = await getInvoice(id);
-  const cfg = await storeConfig(["store_name", "store_address", "store_phone"]);
+  const cfg = await effectiveConfig(inv.branchId, [
+    "store_name",
+    "store_address",
+    "store_phone",
+    "receipt_footer",
+  ]);
   return {
     store: {
       name: cfg.store_name,
-      address: inv.branch.address ?? cfg.store_address,
-      phone: inv.branch.phone ?? cfg.store_phone,
+      address: inv.branch.address || cfg.store_address,
+      phone: inv.branch.phone || cfg.store_phone,
+      branchName: inv.branch.name,
     },
+    footer: cfg.receipt_footer || null,
     invoiceCode: inv.invoiceCode,
     createdAt: inv.createdAt,
     cashier: inv.user.fullName,

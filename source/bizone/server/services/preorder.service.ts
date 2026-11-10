@@ -73,6 +73,7 @@ export async function listPreorders(input: ListPreordersInput) {
   const prisma = getPrisma();
   const q = input.search?.trim();
   const where: Prisma.PreorderWhereInput = {
+    ...(input.branchId ? { branchId: input.branchId } : {}),
     ...(input.status ? { status: input.status } : {}),
     ...(q
       ? {

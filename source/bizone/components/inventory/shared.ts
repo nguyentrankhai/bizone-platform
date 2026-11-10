@@ -1,4 +1,5 @@
 import { TRPCClientError } from "@trpc/client";
+import { getSelectedBranch } from "@/lib/branch-client";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 
@@ -11,9 +12,14 @@ export interface ApiAuth {
 }
 
 export function apiContext(auth: ApiAuth) {
+  const branch = getSelectedBranch(); // P4.6: branch picked in the top bar
   return {
     context: {
-      headers: { Authorization: `Bearer ${auth.authToken}`, "X-Tenant-ID": auth.tenantId },
+      headers: {
+        Authorization: `Bearer ${auth.authToken}`,
+        "X-Tenant-ID": auth.tenantId,
+        ...(branch ? { "X-Branch-ID": branch } : {}),
+      },
     },
   };
 }

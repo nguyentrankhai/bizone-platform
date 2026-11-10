@@ -1,14 +1,18 @@
 "use client";
 
-import { Bell, Search, ChevronDown, Store } from "lucide-react";
+import { Bell, Search } from "lucide-react";
+import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
+import type { ApiAuth } from "@/components/inventory/shared";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface TopBarProps {
   className?: string;
+  /** Needed by the branch switcher; pages pass it through AppLayout */
+  auth?: ApiAuth;
 }
 
-export function TopBar({ className }: TopBarProps) {
+export function TopBar({ className, auth }: TopBarProps) {
   const [search, setSearch] = useState("");
 
   return (
@@ -31,12 +35,8 @@ export function TopBar({ className }: TopBarProps) {
       </div>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* Branch selector */}
-        <button className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
-          <Store className="h-4 w-4 text-gray-400" />
-          <span>Chi nhánh Hà Nội</span>
-          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-        </button>
+        {/* Branch selector (P4.6) */}
+        {auth && <BranchSwitcher auth={auth} />}
 
         {/* Notifications */}
         <button className="relative rounded-full p-2 text-gray-500 hover:bg-gray-100">

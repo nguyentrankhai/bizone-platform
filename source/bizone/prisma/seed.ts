@@ -219,11 +219,26 @@ async function main() {
     });
   }
 
+  // P4.6 (#11): a fresh tenant gets one default branch with its sales warehouse so the POS can
+  // open a shift right away. Existing branches are never touched.
+  let seededBranch = "";
+  if ((await prisma.branch.count()) === 0) {
+    const branch = await prisma.branch.create({
+      data: { code: "CN01", name: "Chi nhánh chính", isDefault: true },
+    });
+    await prisma.warehouse.upsert({
+      where: { code: "KHO-CN01" },
+      update: {},
+      create: { code: "KHO-CN01", name: "Kho Chi nhánh chính", branchId: branch.id },
+    });
+    seededBranch = ", default branch CN01 + warehouse KHO-CN01";
+  }
+
   console.log(
     `Seeded ${roles.length} roles, ${permissions.length} permissions (admin: ${allPermissions.length}), ` +
       `${customerGroups.length} customer groups, ${transactionTypes.length} transaction types, ` +
       `${storeConfig.length} config keys, ${revenueExpenseCategories.length} revenue/expense categories, ` +
-      `${productCategories.length} product categories, ${notificationTemplates.length} notification templates`,
+      `${productCategories.length} product categories, ${notificationTemplates.length} notification templates${seededBranch}`,
   );
 }
 

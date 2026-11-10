@@ -61,6 +61,13 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "pos.openSession": { module: "pos", action: "open_session", entityType: "cash_session" },
   "pos.closeSession": { module: "pos", action: "close_session", entityType: "cash_session" },
   // P4.5 — exchange / pre-order / invoices audit themselves in the services (also reached via WS)
+  // P4.6 — branches
+  "branch.create": { module: "config", action: "create_branch", entityType: "branch" },
+  "branch.update": { module: "config", action: "update_branch", entityType: "branch" },
+  "branch.setStatus": { module: "config", action: "set_branch_status", entityType: "branch" },
+  "branch.setDefault": { module: "config", action: "set_default_branch", entityType: "branch" },
+  "branch.delete": { module: "config", action: "delete_branch", entityType: "branch" },
+  "branch.setConfig": { module: "config", action: "set_branch_config", entityType: "branch" },
   "pos.payhubCreate": { module: "pos", action: "payhub_create", entityType: "pos_payment_intent" },
   "pos.payhubCancel": { module: "pos", action: "payhub_cancel", entityType: "pos_payment_intent" },
   "pos.createPairingPin": { module: "pos", action: "pairing_pin", entityType: "cash_session" },

@@ -50,9 +50,18 @@ const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
 
 // ─── Warehouse ───────────────────────────────────────────────────────────────
 
-export async function listWarehouses(_tenantId: string) {
+/**
+ * P4.6: `scope` = warehouse ids visible in the user's branch scope (null = every warehouse) —
+ * computed by `scopeWarehouseIds` in the router. A specific warehouse is checked there too.
+ */
+type WarehouseScope = number[] | null | undefined;
+const whIn = (scope: WarehouseScope) => (scope ? { warehouseId: { in: scope } } : {});
+
+export async function listWarehouses(_tenantId: string, scope?: WarehouseScope) {
   const prisma = getPrisma();
   return prisma.warehouse.findMany({
+    where: scope ? { id: { in: scope } } : {},
+    include: { branch: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   });
 }
@@ -99,11 +108,11 @@ export async function deleteWarehouse(id: number) {
 
 // ─── Inventory (tồn kho hiện tại) ─────────────────────────────────────────
 
-export async function listInventory(input: ListInventoryInput) {
+export async function listInventory(input: ListInventoryInput, scope?: WarehouseScope) {
   const prisma = getPrisma();
   const q = input.search?.trim();
   const where: Prisma.InventoryWhereInput = {
-    ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+    ...(input.warehouseId ? { warehouseId: input.warehouseId } : whIn(scope)),
     ...(input.productId ? { productId: input.productId } : {}),
     ...(q
       ? {
@@ -163,16 +172,18 @@ export async function listInventory(input: ListInventoryInput) {
 }
 
 /** Tổng số lượng tồn theo từng kho — dữ liệu cho biểu đồ tồn kho */
-export async function getStockByWarehouse() {
+export async function getStockByWarehouse(scope?: WarehouseScope) {
   const prisma = getPrisma();
   const [groups, warehouses] = await prisma.$transaction([
     prisma.inventory.groupBy({
       by: ["warehouseId"],
+      where: whIn(scope),
       _sum: { quantity: true },
       _count: { _all: true },
       orderBy: { warehouseId: "asc" },
     }),
     prisma.warehouse.findMany({
+      where: scope ? { id: { in: scope } } : {},
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     }),
@@ -187,9 +198,9 @@ export async function getStockByWarehouse() {
   });
 }
 
-export async function getInventorySummary(warehouseId?: number) {
+export async function getInventorySummary(warehouseId?: number, scope?: WarehouseScope) {
   const prisma = getPrisma();
-  const where = warehouseId ? { warehouseId } : {};
+  const where = warehouseId ? { warehouseId } : whIn(scope);
 
   // Count products with low stock using Prisma relation filter
   // quantity <= product.minStock is approximated by fetching low-stock items
@@ -226,9 +237,13 @@ function generateTxCode(): string {
   return `TX-${ymd}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 }
 
-export async function listTransactions(input: ListTransactionsInput) {
+export async function listTransactions(input: ListTransactionsInput, scope?: WarehouseScope) {
   const prisma = getPrisma();
   const where = {
+    // A transfer is visible to both the source and the destination branch
+    ...(scope
+      ? { OR: [{ warehouseId: { in: scope } }, { destinationWarehouseId: { in: scope } }] }
+      : {}),
     ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
     ...(input.destinationWarehouseId
       ? { destinationWarehouseId: input.destinationWarehouseId }
@@ -511,13 +526,13 @@ export async function publishLowStockAlerts(warehouseId: number, productIds: num
 
 // ─── Inventory Batches ────────────────────────────────────────────────────────
 
-export async function listBatches(input: ListBatchesInput) {
+export async function listBatches(input: ListBatchesInput, scope?: WarehouseScope) {
   const prisma = getPrisma();
   const now = new Date();
   const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
   const where = {
-    ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+    ...(input.warehouseId ? { warehouseId: input.warehouseId } : whIn(scope)),
     ...(input.productId ? { productId: input.productId } : {}),
     ...(input.expired ? { expiryDate: { lt: now } } : {}),
     ...(input.expiringSoon && !input.expired ? { expiryDate: { gte: now, lte: soon } } : {}),
@@ -615,10 +630,11 @@ export async function listStockTakes(
   status?: string,
   page = 1,
   pageSize = 20,
+  scope?: WarehouseScope,
 ) {
   const prisma = getPrisma();
   const where = {
-    ...(warehouseId ? { warehouseId } : {}),
+    ...(warehouseId ? { warehouseId } : whIn(scope)),
     ...(status ? { status: status as "draft" | "in_progress" | "completed" | "cancelled" } : {}),
   };
   const [items, total] = await prisma.$transaction([

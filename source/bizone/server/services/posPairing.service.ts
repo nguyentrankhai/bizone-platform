@@ -6,6 +6,7 @@ import { currentTenantId, isKnownTenant, runWithTenant } from "@/lib/tenant";
 import type { PosActor } from "./cashSession.service";
 import { publishPosEvent } from "./posEvents";
 import { recordAudit } from "./auditLog.service";
+import { effectiveConfig } from "./branch.service";
 
 /**
  * Ghép cặp màn hình khách bằng PIN (P4.5).
@@ -72,10 +73,10 @@ export async function redeemPairingPin(pin: string) {
     const prisma = getPrisma();
     const session = await prisma.cashSession.findUnique({
       where: { id: rec.sessionId },
-      select: { status: true, branch: { select: { name: true } } },
+      select: { status: true, branchId: true, branch: { select: { name: true } } },
     });
     if (!session || session.status !== "open") return null;
-    const store = await prisma.storeConfig.findUnique({ where: { configKey: "store_name" } });
+    const store = await effectiveConfig(session.branchId, ["store_name"]);
 
     const token = DISPLAY_TOKEN_PREFIX + randomBytes(32).toString("base64url");
     const grant: DisplayGrant = { tenantId: rec.tenantId, sessionId: rec.sessionId };
@@ -95,7 +96,7 @@ export async function redeemPairingPin(pin: string) {
       token,
       tenantId: rec.tenantId,
       sessionId: rec.sessionId,
-      storeName: store?.configValue || "BizOne",
+      storeName: store.store_name || "BizOne",
       branchName: session.branch.name,
     };
   });

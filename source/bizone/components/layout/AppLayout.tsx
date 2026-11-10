@@ -2,7 +2,7 @@ import "server-only";
 import { AppShell } from "./AppShell";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { devAuthProblem, devBypassNotice } from "@/lib/dev-auth";
+import { devAuthProblem, devBypassNotice, getDevAuth } from "@/lib/dev-auth";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,6 +12,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <AppShell
+      auth={getDevAuth()}
       banner={
         <Suspense fallback={null}>
           <AuthNotice />

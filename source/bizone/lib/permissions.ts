@@ -147,8 +147,8 @@ export const PERMISSION_CATALOG: CatalogPermission[] = [
     grants: null,
   },
   { module: "accounting", action: "manage_debt", name: "Quản lý công nợ", grants: null },
-  { module: "config", action: "read", name: "Xem cấu hình", grants: null },
-  { module: "config", action: "update", name: "Cập nhật cấu hình", grants: null },
+  { module: "config", action: "read", name: "Xem cấu hình", grants: "config:read" },
+  { module: "config", action: "update", name: "Cập nhật cấu hình", grants: "config:write" },
   { module: "config", action: "manage_role", name: "Quản lý vai trò", grants: "staff:write" },
 ];
 

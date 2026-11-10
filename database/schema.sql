@@ -1283,6 +1283,18 @@ CREATE TABLE IF NOT EXISTS preorder_items (
 -- 12. SYSTEM CONFIGURATION
 -- ============================================================
 
+-- 12.0 Branch configuration (P4.6) — per-branch overrides of store_config
+-- keys: store_name, invoice_prefix, bank_bin, bank_name, bank_account_no, bank_account_name, receipt_footer
+CREATE TABLE IF NOT EXISTS branch_configs (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  branch_id    INT          NOT NULL,
+  config_key   VARCHAR(100) NOT NULL,
+  config_value TEXT,
+  updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_bc_branch_key UNIQUE (branch_id, config_key),
+  CONSTRAINT fk_bc_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- 12.1 Store Configuration
 CREATE TABLE IF NOT EXISTS store_config (
   id          INT AUTO_INCREMENT PRIMARY KEY,

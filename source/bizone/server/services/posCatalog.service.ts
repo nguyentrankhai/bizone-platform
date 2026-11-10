@@ -1,4 +1,5 @@
 import { isPayhubEnabled } from "./payhubPayment.service";
+import { effectiveConfig } from "./branch.service";
 import { getPrisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -95,9 +96,10 @@ export async function posCatalog(input: {
   };
 }
 
-export async function activeBranches() {
+/** Branches a shift can be opened on (P4.6: only those in the user's scope) */
+export async function activeBranches(allowed?: number[]) {
   return getPrisma().branch.findMany({
-    where: { status: "active" },
+    where: { status: "active", ...(allowed ? { id: { in: allowed } } : {}) },
     select: {
       id: true,
       name: true,
@@ -122,28 +124,33 @@ export async function findCustomers(q: string) {
   });
 }
 
-/** Store name and the bank account shown as VietQR on the customer display */
-export async function storeInfo() {
-  const rows = await getPrisma().storeConfig.findMany({
-    where: {
-      configKey: {
-        in: [
-          "store_name",
-          "store_address",
-          "store_phone",
-          "bank_bin",
-          "bank_name",
-          "bank_account_no",
-          "bank_account_name",
-        ],
-      },
-    },
-  });
-  const cfg = Object.fromEntries(rows.map((r) => [r.configKey, r.configValue ?? ""]));
+/**
+ * Store name and the bank account shown as VietQR on the customer display. P4.6: per-branch
+ * overrides (`branch_configs`) win over the store-wide values; address / phone come from the branch.
+ */
+export async function storeInfo(branchId?: number | null) {
+  const cfg = await effectiveConfig(branchId, [
+    "store_name",
+    "store_address",
+    "store_phone",
+    "bank_bin",
+    "bank_name",
+    "bank_account_no",
+    "bank_account_name",
+    "receipt_footer",
+  ]);
+  const branch = branchId
+    ? await getPrisma().branch.findUnique({
+        where: { id: branchId },
+        select: { name: true, address: true, phone: true },
+      })
+    : null;
   return {
     name: cfg.store_name || "BizOne",
-    address: cfg.store_address || "",
-    phone: cfg.store_phone || "",
+    branchName: branch?.name ?? null,
+    address: branch?.address || cfg.store_address || "",
+    phone: branch?.phone || cfg.store_phone || "",
+    receiptFooter: cfg.receipt_footer || "",
     bank:
       cfg.bank_bin && cfg.bank_account_no
         ? {
