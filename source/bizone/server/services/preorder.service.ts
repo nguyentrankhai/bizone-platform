@@ -7,7 +7,7 @@ import type {
   CreatePreorderInput,
   ListPreordersInput,
 } from "@/lib/validators/pos";
-import type { PosActor } from "./cashSession.service";
+import { assertActorBranch, type PosActor } from "./cashSession.service";
 import { recordAudit } from "./auditLog.service";
 import {
   finishSale,
@@ -227,6 +227,7 @@ export async function completePreorder(input: CompletePreorderInput, actor: PosA
     `pos:preorder-done:${actor.tenantId}:${actor.userId}:${input.idempotencyKey}`,
     async () => {
       const p = await getPreorder(input.id);
+      assertActorBranch(actor, p.branchId, `Đơn đặt ${p.preorderCode}`);
       if (p.status !== "pending")
         throw bizoneError(
           "CONFLICT",
@@ -291,6 +292,7 @@ export async function completePreorder(input: CompletePreorderInput, actor: PosA
 export async function cancelPreorder(input: CancelPreorderInput, actor: PosActor) {
   const prisma = getPrisma();
   const p = await getPreorder(input.id);
+  assertActorBranch(actor, p.branchId, `Đơn đặt ${p.preorderCode}`);
   if (p.status !== "pending")
     throw bizoneError(
       "CONFLICT",

@@ -56,7 +56,8 @@ import {
 import { createPairingPin } from "@/server/services/posPairing.service";
 import { findProductByCode, loadCartLines, quoteCart } from "@/server/services/pricing.service";
 import { ensureDbUserId } from "@/server/services/user.service";
-import { assertBranch, branchFilter } from "@/server/middleware/branchScope";
+import { assertBranch, branchFilter, type BranchScope } from "@/server/middleware/branchScope";
+import { isPosManager } from "@/lib/pos/access";
 import { getPrisma } from "@/lib/prisma";
 import {
   activeBranches,
@@ -65,16 +66,47 @@ import {
   storeInfo,
 } from "@/server/services/posCatalog.service";
 
-/** Managers may act on other cashiers' shifts and invoices */
-const MANAGER_ROLES = ["bizone-admin", "bizone-manager"];
-
-async function actorOf(ctx: { user: AuthUser | null; tenantId: string | null }): Promise<PosActor> {
+/** Managers may act on other cashiers' shifts and invoices — of the branches in their scope */
+async function actorOf(ctx: {
+  user: AuthUser | null;
+  tenantId: string | null;
+  branch: BranchScope;
+}): Promise<PosActor> {
   const user = ctx.user!;
   return {
     userId: await ensureDbUserId(user),
     tenantId: ctx.tenantId!,
-    canManage: hasPermission(user, "admin:*") || user.roles.some((r) => MANAGER_ROLES.includes(r)),
+    canManage: hasPermission(user, "admin:*") || isPosManager(user.roles),
+    branchIds: ctx.branch.allowed,
   };
+}
+
+/** QA-3 (#94): single-record reads check the record's branch against the caller's scope */
+async function assertSessionBranch(scope: BranchScope, sessionId: number) {
+  const s = await getPrisma().cashSession.findUnique({
+    where: { id: sessionId },
+    select: { branchId: true },
+  });
+  if (!s) throw bizoneError("NOT_FOUND", `Ca #${sessionId} không tồn tại`);
+  assertBranch(scope, s.branchId);
+}
+
+async function assertInvoiceBranch(scope: BranchScope, invoiceId: number) {
+  const inv = await getPrisma().invoice.findUnique({
+    where: { id: invoiceId },
+    select: { branchId: true },
+  });
+  if (!inv) throw bizoneError("NOT_FOUND", `Hóa đơn #${invoiceId} không tồn tại`);
+  assertBranch(scope, inv.branchId);
+}
+
+async function assertPreorderBranch(scope: BranchScope, preorderId: number) {
+  const p = await getPrisma().preorder.findUnique({
+    where: { id: preorderId },
+    select: { branchId: true },
+  });
+  if (!p) throw bizoneError("NOT_FOUND", `Đơn đặt trước #${preorderId} không tồn tại`);
+  assertBranch(scope, p.branchId);
 }
 
 const id = z.object({ id: z.number().int().positive() });
@@ -108,12 +140,18 @@ export const posRouter = router({
 
   session: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => getSession(input.id)),
+    .query(async ({ input, ctx }) => {
+      await assertSessionBranch(ctx.branch, input.id);
+      return getSession(input.id);
+    }),
 
   /** GET tổng kết ca */
   sessionSummary: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => sessionSummary(input.id)),
+    .query(async ({ input, ctx }) => {
+      await assertSessionBranch(ctx.branch, input.id);
+      return sessionSummary(input.id);
+    }),
 
   // ── Selling ────────────────────────────────────────────────────────────────
 
@@ -125,7 +163,7 @@ export const posRouter = router({
   /** Thông tin cửa hàng + tài khoản ngân hàng cho VietQR */
   storeInfo: posPermissionProcedure("pos:read")
     .input(z.object({ sessionId: z.number().int().positive() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       // P4.6: per-branch name / bank account — the branch of the shift being sold on
       const session = input?.sessionId
         ? await getPrisma().cashSession.findUnique({
@@ -133,6 +171,7 @@ export const posRouter = router({
             select: { branchId: true },
           })
         : null;
+      if (session) assertBranch(ctx.branch, session.branchId); // QA-3 (#94)
       return storeInfo(session?.branchId);
     }),
 
@@ -221,7 +260,10 @@ export const posRouter = router({
   /** Xem trước đổi hàng: tiền hàng trả, hoá đơn mới, chênh lệch */
   exchangeQuote: posPermissionProcedure("pos:read")
     .input(exchangeQuoteSchema)
-    .query(({ input }) => exchangeQuote(input)),
+    .query(async ({ input, ctx }) => {
+      await assertInvoiceBranch(ctx.branch, input.invoiceId);
+      return exchangeQuote(input);
+    }),
 
   /** Đổi hàng: phiếu trả + hoá đơn mới trong một transaction (idempotent) */
   exchange: posPermissionProcedure("pos:write")
@@ -238,12 +280,18 @@ export const posRouter = router({
 
   preorder: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => getPreorder(input.id)),
+    .query(async ({ input, ctx }) => {
+      await assertPreorderBranch(ctx.branch, input.id);
+      return getPreorder(input.id);
+    }),
 
   /** Giá lúc giao (tính lại), cọc cấn trừ, còn phải trả */
   preorderQuote: posPermissionProcedure("pos:read")
     .input(id)
-    .query(({ input }) => preorderQuote(input.id)),
+    .query(async ({ input, ctx }) => {
+      await assertPreorderBranch(ctx.branch, input.id);
+      return preorderQuote(input.id);
+    }),
 
   createPreorder: posPermissionProcedure("pos:write")
     .input(createPreorderSchema)
@@ -276,7 +324,10 @@ export const posRouter = router({
   /** Thanh toán Payment Hub đang chờ / đã trả mà chưa gắn hoá đơn của ca */
   payhubOpen: posPermissionProcedure("pos:read")
     .input(z.object({ cashSessionId: z.number().int().positive() }))
-    .query(({ input }) => openIntents(input.cashSessionId)),
+    .query(async ({ input, ctx }) => {
+      await assertSessionBranch(ctx.branch, input.cashSessionId);
+      return openIntents(input.cashSessionId);
+    }),
 
   // ── P4.5: ghép cặp màn hình khách ──────────────────────────────────────────
 

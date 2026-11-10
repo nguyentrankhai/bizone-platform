@@ -1,3 +1,4 @@
+import { keycloakRoleOf } from "@/lib/permissions";
 import type { Prisma } from "@/generated/prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/rbac";
@@ -246,16 +247,37 @@ export async function deliverNotification(notificationId: bigint) {
 
 // ─── Web Push ────────────────────────────────────────────────────────────────
 
-/** Subscription owner as an AuthUser (roles saved when subscribing) for permission checks */
-function subscriber(sub: { username: string; roles: string }): AuthUser {
+/**
+ * Subscription owner as an AuthUser for permission checks. QA-3 (#99): system roles come from
+ * the staff profile when the Staff module manages the user (`user_roles` ⇔ Keycloak realm roles,
+ * so a demotion applies at once); the roles saved at subscribe time are only the fallback for
+ * accounts without a staff role row.
+ */
+function subscriber(sub: { username: string; roles: string }, dbRoles?: string[]): AuthUser {
   return {
     id: sub.username,
     username: sub.username,
     tenantId: "",
-    roles: sub.roles ? sub.roles.split(",") : [],
+    roles: dbRoles ?? (sub.roles ? sub.roles.split(",") : []),
     resourceRoles: {},
     expiresAt: 0,
   };
+}
+
+/** userId → realm roles of their system roles (only users that have role rows) */
+async function systemRolesByUser(userIds: number[]): Promise<Map<number, string[]>> {
+  const rows = await getPrisma().userRole.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, role: { select: { code: true } } },
+  });
+  const out = new Map<number, string[]>();
+  for (const r of rows) {
+    const list = out.get(r.userId) ?? [];
+    const kc = keycloakRoleOf(r.role.code);
+    if (kc && !list.includes(kc)) list.push(kc);
+    out.set(r.userId, list);
+  }
+  return out;
 }
 
 export async function pushNotification(notificationId: bigint): Promise<number> {
@@ -282,12 +304,13 @@ export async function pushNotification(notificationId: bigint): Promise<number> 
     ).map((p) => p.userId),
   );
   const branches = await activeBranchRows();
+  const dbRoles = await systemRolesByUser([...new Set(subs.map((s) => s.userId))]);
   let sent = 0;
   for (const sub of subs) {
     const recipient = `push:${sub.id}`;
     if (done.has(recipient) || !sub.user.isActive || muted.has(sub.userId)) continue;
     if (n.userId === null) {
-      const user = subscriber(sub);
+      const user = subscriber(sub, dbRoles.get(sub.userId));
       const access = await getStaffAccess(user);
       if (!access.active || !n.audience) continue;
       if (!hasPermission(user, n.audience as never, access.capabilities)) continue;

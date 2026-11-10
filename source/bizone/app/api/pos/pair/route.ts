@@ -1,6 +1,7 @@
 import { connection, type NextRequest } from "next/server";
 import { errorResponse, okResponse } from "@/lib/response";
-import { rateLimit } from "@/lib/rate-limit";
+import { countInWindow, rateLimit, recordHit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 import { pairDisplaySchema } from "@/lib/validators/pos";
 import { getPrisma } from "@/lib/prisma";
 import { isKnownTenant, runWithTenant } from "@/lib/tenant";
@@ -8,24 +9,27 @@ import { redeemPairingPin, resolveDisplayToken } from "@/server/services/posPair
 
 /**
  * POST /api/pos/pair — màn hình khách đổi mã PIN (do thu ngân tạo) lấy token màn hình.
- * Public (the display has no login); the PIN is single use, valid 5 minutes, and attempts are
- * limited per IP so the 6-digit space can't be brute-forced.
+ * Public (the display has no login); the PIN is single use and valid 5 minutes. QA-3 (#97):
+ * attempts are limited per client IP (trusted only behind a proxy — `lib/client-ip.ts`) AND
+ * wrong PINs are capped for the whole deployment, so rotating IPs / headers can't sweep the
+ * 6-digit space (100 misses per 10 min ≈ 1 in 2.000 chance per window to hit one live PIN).
  */
 const ATTEMPTS_PER_MINUTE = 10;
-
-function clientIp(req: NextRequest) {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
-}
+const GLOBAL_FAILURES = 100;
+const GLOBAL_WINDOW_SECONDS = 600;
+const FAILURE_KEY = "rl:pos-pair:fail";
 
 export async function POST(req: NextRequest) {
   await connection();
-  const limit = await rateLimit(`rl:pos-pair:${clientIp(req)}`, ATTEMPTS_PER_MINUTE, 60);
+  const limit = await rateLimit(`rl:pos-pair:${clientIp(req.headers)}`, ATTEMPTS_PER_MINUTE, 60);
   if (!limit.allowed)
     return errorResponse(429, "RATE_LIMITED", "Nhập sai quá nhiều lần, thử lại sau 1 phút");
+  if ((await countInWindow(FAILURE_KEY, GLOBAL_WINDOW_SECONDS)) >= GLOBAL_FAILURES)
+    return errorResponse(
+      429,
+      "RATE_LIMITED",
+      "Tạm khoá ghép màn hình do nhập sai nhiều, thử lại sau",
+    );
 
   let body: unknown;
   try {
@@ -38,7 +42,10 @@ export async function POST(req: NextRequest) {
     return errorResponse(400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Mã PIN sai");
 
   const grant = await redeemPairingPin(parsed.data.pin);
-  if (!grant) return errorResponse(404, "NOT_FOUND", "Mã PIN không đúng, đã dùng hoặc đã hết hạn");
+  if (!grant) {
+    await recordHit(FAILURE_KEY, GLOBAL_WINDOW_SECONDS);
+    return errorResponse(404, "NOT_FOUND", "Mã PIN không đúng, đã dùng hoặc đã hết hạn");
+  }
   return okResponse(grant);
 }
 

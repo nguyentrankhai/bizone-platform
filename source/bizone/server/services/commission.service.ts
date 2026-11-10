@@ -371,6 +371,8 @@ export async function updateRule(input: Partial<CommissionRuleInput> & { id: num
 export async function listCommissions(input: {
   month: string;
   userId?: number;
+  /** QA-3 (#96): staff of the caller's branches */
+  userIds?: number[];
   status?: "pending" | "paid" | "cancelled";
   page: number;
   pageSize: number;
@@ -380,6 +382,7 @@ export async function listCommissions(input: {
   const where: Prisma.CommissionWhereInput = {
     invoice: { createdAt: { gte: start, lt: end } },
     ...(input.userId ? { userId: input.userId } : {}),
+    ...(input.userIds ? { AND: [{ userId: { in: input.userIds } }] } : {}),
     ...(input.status ? { status: input.status } : {}),
   };
   const [items, total, byUser] = await Promise.all([
@@ -449,23 +452,38 @@ export async function payCommissions(input: { ids?: number[]; userId?: number; m
       invoice: { createdAt: { gte: start, lt: end } },
     };
   }
-  const rows = await prisma.commission.findMany({ where, select: { id: true, amount: true } });
-  if (rows.length === 0) throw bizoneError("CONFLICT", "Không có hoa hồng chờ thanh toán");
-  const result = await prisma.commission.updateMany({
-    where: { id: { in: rows.map((r) => r.id) }, status: "pending" },
-    data: { status: "paid", paidAt: new Date() },
+  const candidates = await prisma.commission.findMany({ where, select: { id: true } });
+  if (candidates.length === 0) throw bizoneError("CONFLICT", "Không có hoa hồng chờ thanh toán");
+  // QA-3 (#99): lock the rows still pending so the reported total is exactly what this call paid
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ id: number; amount: unknown }[]>`
+      SELECT id, amount FROM commissions
+      WHERE id IN (${Prisma.join(candidates.map((c) => c.id))}) AND status = 'pending'
+      FOR UPDATE`;
+    if (rows.length === 0) throw bizoneError("CONFLICT", "Hoa hồng vừa được thanh toán");
+    const ids = rows.map((r) => Number(r.id));
+    const result = await tx.commission.updateMany({
+      where: { id: { in: ids }, status: "pending" },
+      data: { status: "paid", paidAt: new Date() },
+    });
+    return {
+      count: result.count,
+      amount: rows.reduce((s, r) => s + num(r.amount as number), 0),
+      ids,
+    };
   });
-  return {
-    count: result.count,
-    amount: rows.reduce((s, r) => s + num(r.amount), 0),
-    ids: rows.map((r) => r.id),
-  };
 }
 
 // ─── Sales performance ────────────────────────────────────────────────────────
 
 /** Revenue / invoice count / average per seller for VN dates from..to (POS invoices, net of refunds) */
-export async function staffSales(input: { from: string; to: string; userId?: number }) {
+export async function staffSales(input: {
+  from: string;
+  to: string;
+  userId?: number;
+  /** QA-3 (#96): staff of the caller's branches */
+  userIds?: number[];
+}) {
   const prisma = getPrisma();
   const { start, end } = vnDateKeyRange(input.from, input.to);
   if (start >= end) throw bizoneError("VALIDATION_ERROR", "Khoảng ngày không hợp lệ");
@@ -473,6 +491,7 @@ export async function staffSales(input: { from: string; to: string; userId?: num
     createdAt: { gte: start, lt: end },
     status: { in: ["active", "refunded"] },
     ...(input.userId ? { userId: input.userId } : {}),
+    ...(input.userIds ? { AND: [{ userId: { in: input.userIds } }] } : {}),
   };
   const [grouped, refunds] = await Promise.all([
     prisma.invoice.groupBy({

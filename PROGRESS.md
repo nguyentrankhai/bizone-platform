@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (QA-3 — rà soát cuối Giai đoạn 4: tiêu chí P4.0–P4.8 chạy lại đạt; phát hiện #93–#99, mức cao #93 WebSocket POS không kiểm chủ ca / chi nhánh — chờ người dùng quyết định sửa. P4.8 xong; P3.3/P3.4/P3.5 vẫn 🟡 chờ credential VNPay / quét QR)
+**Cập nhật lần cuối:** 2026-11-10 (QA-3 fix — đóng #93–#97, #99: WebSocket POS kiểm chủ ca + chi nhánh, đọc / thao tác POS và ca làm việc / chấm công / doanh số theo phạm vi chi nhánh, giới hạn ghép PIN không lách bằng header, khoá ca an toàn khi đang bán; #98 chờ người dùng quyết định. Kế tiếp: P5.1)
 
 ---
 
@@ -121,13 +121,13 @@
 | 90 | Thanh toán NCC / thu nợ khách **trước P4.8** không có phiếu thu chi (không bổ sung ngược) → dòng tiền các kỳ trước thiếu khoản này. Công nợ khách không có bảng lịch sử thanh toán (P2.8: chỉ cộng dồn `paid_amount`) — phiếu thu lấy ngày hiện tại, không lùi ngày được; huỷ thanh toán NCC / nợ khách chưa có (phiếu tự động không huỷ được) | P4.8 | Khi có yêu cầu nghiệp vụ (bảng `customer_debt_payments`, huỷ thanh toán) |
 | 91 | Đối soát thanh toán chỉ tự xác nhận thẻ / QR qua Payment Hub (`pos_payment_intents`) và tiền mặt qua kiểm ca; chuyển khoản / ví và thẻ / QR nhập tay luôn "chưa xác nhận" (dữ liệu dev: 25 HĐ thẻ/QR nhập tay). Chưa đánh dấu "đã đối soát" thủ công, chưa có đơn hàng online (#61) | P4.8 | P5.4 Đối soát (sao kê / báo có ngân hàng) |
 | 92 | Báo cáo lời lỗ / dòng tiền chưa xuất PDF / Excel (sổ thu chi + sổ quỹ xuất CSV); dòng tiền: hoàn cọc đơn đặt trước tính theo `preorders.updated_at` (không có cột thời điểm hoàn), hoàn tiền trả hàng theo ngày trả | P4.8 | P6.x (xuất báo cáo tài chính) / khi có yêu cầu |
-| 93 | **[Cao]** WebSocket POS (`server/ws/pos.ts` `authorize`) chỉ kiểm quyền `pos:read`/`pos:write`, **không kiểm ca thuộc ai / chi nhánh nào**: nhân viên chi nhánh A kết nối `/ws/pos/{id}` (id tăng dần) của ca chi nhánh B → thêm hàng, giảm giá 100 %, tách/gộp/bỏ đơn chờ, và `display:qr` đẩy **QR ngân hàng tuỳ ý** lên màn hình khách của ca đó (QA-3 đã chạy thật: nhân viên CN-HN chèn hàng + QR giả vào ca CN-HCM, màn hình manager nhận `display:qr`) | QA-3 | QA-3 fix (chờ người dùng) |
-| 94 | POS đọc theo id không kiểm chi nhánh: `pos.session`, `sessionSummary` (QA-3 chạy thật: nhân viên CN-HN đọc được ca + tổng kết tiền ca CN-HCM), `preorder`, `preorderQuote`, `exchangeQuote` (dòng HĐ), `payhubOpen`, `storeInfo` (tài khoản ngân hàng chi nhánh khác) | QA-3 | QA-3 fix |
-| 95 | Thao tác POS bỏ qua phạm vi chi nhánh: `closeSession` / `cancelInvoice` / `cancelPreorder` / `createPairingPin` chỉ xét vai trò (quản lý chi nhánh A thao tác được ca / HĐ chi nhánh B); `refundInvoice` / `exchange` / `completePreorder` không kiểm chi nhánh của HĐ / đơn đặt (đọc code, chưa chạy thật — dev chỉ có HĐ CN-HN) | QA-3 | QA-3 fix |
-| 96 | Ca làm việc / chấm công / doanh số nhân viên không theo chi nhánh: `staff.shift.create/update/delete/assign/unassign` không `assertBranch` dù ca có `branch_id`; `attendance.timesheet` (quyền quản lý), `staff.sales`, `commission.list` trả mọi chi nhánh | QA-3 | QA-3 fix |
-| 97 | Ghép màn hình bằng PIN: giới hạn 10 lần/phút theo IP lấy từ `X-Forwarded-For` do client gửi → đổi header để dò PIN 6 số; không gian PIN chung mọi tenant. Cần IP tin cậy (proxy) + giới hạn tổng / PIN dài hơn | QA-3 | QA-3 fix / P6.6 |
+| ~~93~~ | ~~[Cao] WebSocket POS (`server/ws/pos.ts` `authorize`) chỉ kiểm quyền `pos:read`/`pos:write`, không kiểm ca thuộc ai / chi nhánh nào~~ | ~~QA-3~~ | ✅ QA-3 fix (WS: chi nhánh của ca phải trong phạm vi; chỉ chủ ca / quản lý chi nhánh được ghi, người khác chỉ xem; kiểm lại mỗi lệnh ghi + mỗi 60 s) |
+| ~~94~~ | ~~POS đọc theo id không kiểm chi nhánh~~ | ~~QA-3~~ | ✅ QA-3 fix (`assertBranch` sau khi tải ca / HĐ / đơn đặt) |
+| ~~95~~ | ~~Thao tác POS bỏ qua phạm vi chi nhánh~~ | ~~QA-3~~ | ✅ QA-3 fix (`PosActor.branchIds` + `assertActorBranch` trong service) |
+| ~~96~~ | ~~Ca làm việc / chấm công / doanh số nhân viên không theo chi nhánh~~ | ~~QA-3~~ | ✅ QA-3 fix (`assertBranchOrAll` cho ca, `scopedStaffIds` cho chấm công / doanh số / hoa hồng) |
+| ~~97~~ | ~~Ghép màn hình bằng PIN~~ | ~~QA-3~~ | ✅ QA-3 fix (`lib/client-ip.ts` + `TRUST_PROXY`, trần 100 lần sai / 10 phút toàn hệ thống) |
 | 98 | `staff:write` (gán được cho vai trò tuỳ chỉnh qua catalog) = quyền quản trị: người có quyền này gán được vai trò hệ thống `admin` (kể cả cho mình) và đặt lại mật khẩu admin. Cần `admin:*` để cấp vai trò admin/manager, đặt lại mật khẩu admin, và không cho cấp quyền mình không có | QA-3 | QA-3 fix (quyết định: theo thiết kế hay chặn) |
-| 99 | Thấp (đọc code): `branch.get` / `branch.config` đọc cấu hình (tài khoản ngân hàng) chi nhánh khác với `config:read`; Web Push dùng vai trò lưu lúc đăng ký (giáng chức vẫn nhận push của vai trò cũ tới khi đăng ký lại); khoá ca đua với HĐ đang ghi (HĐ có thể vào ca đã khoá, thiếu trong tổng kết); `reports.emailReport` chỉ cần `report:read` (vai trò viewer gửi báo cáo tới 5 email ngoài bất kỳ); `payCommissions` trả tổng tiền sai khi chạy đồng thời | QA-3 | QA-3 fix / P6.6 |
+| ~~99~~ | ~~Thấp (đọc code)~~ | ~~QA-3~~ | ✅ QA-3 fix (5 mục) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -262,7 +262,7 @@
 | 2026-11-03 | Nâng MariaDB local 10.3 → **10.11** và Keycloak 23.0.7 → **26.8.1** — xem [chi tiết](#nâng-cấp-mariadb-1011--keycloak-26-2026-11-03) | `35ed560` |
 | 2026-11-04 | **QA-1** — Rà soát chất lượng & sửa toàn bộ lỗi phát hiện (bảo mật Payment Hub, cô lập tenant BizOne, test + CI) — xem [chi tiết](#qa-1--rà-soát-chất-lượng--sửa-lỗi-2026-11-04) | `f5c0236`, `06998b9`, `a117bf9` |
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
-| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` |
+| 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99, sửa #93–#97, #99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` (rà soát), _(điền sau commit)_ (sửa) |
 
 ---
 
@@ -1970,3 +1970,34 @@ Ngoài plan, theo yêu cầu người dùng.
 - **Vận hành:** dev server `npm run dev` khởi động trước khi `prisma generate` của P4.8 vẫn giữ Prisma client cũ → mọi truy vấn kế toán lỗi `Unknown argument status` trên :3000 (bản build :3001 bình thường). Khởi động lại `npm run dev` (và `dev:realtime`, `dev:worker` nếu không tự nạp lại) sau mỗi migration — đã ghi vào `CLAUDE.md`.
 - **Dọn dẹp:** xoá mọi dòng tạo trong phiên (so `max(id)` từng bảng với snapshot: 2 ca POS, 2 HĐ + dòng / thanh toán, 1 phiếu trả, 4 phiếu kho, kho tạm, PO + công nợ, mã giảm giá, 2 flash sale, 1 mua X tặng Y, quy tắc + 2 dòng hoa hồng, chấm công, đơn online, 2 thông báo + log gửi, 21 audit, user `qa3.seller` + phân quyền, user cục bộ `demo.manager@bizone.vn` tạo khi mở ca); khôi phục tồn kho / lô / lượt dùng mã / chi tiêu khách — **so với snapshot: giống hệt**; xoá key Redis (giỏ ca 9, token ghép màn hình, cache rbac, file báo cáo); xoá user Keycloak `qa3.seller`; dừng :3001. Không đụng ca POS #6 đang mở của admin.
 - **Đề xuất:** sửa #93 (cao) và #94–#96 trước P5.1 (cùng một nhóm: phạm vi chi nhánh cho POS / ca làm việc); #97, #99 cùng lượt nếu đồng ý; #98 cần người dùng chọn (theo thiết kế: `staff:write` = quản trị, hay chặn cấp vai trò admin/manager).
+
+#### QA-3 fix — sửa lỗi (2026-11-10)
+
+- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone` — `lib/pos/access.ts`, `lib/client-ip.ts`, `lib/rate-limit.ts`, `server/ws/pos.ts`, `server/routers/{pos,staff,branch,reports}.ts`, `server/middleware/branchScope.ts`, `server/services/{cashSession,invoice,preorder,posPairing,payhubPayment,attendance,commission,notificationDelivery}.service.ts`, `app/api/pos/pair/route.ts`, `.env.example`, `tests/qa3.test.ts`
+- **Đã làm** (người dùng chọn sửa #93–#97, #99; #98 để quyết định sau):
+  - **#93 WebSocket POS** — `sessionAccess` (hàm thuần, `lib/pos/access.ts`): chi nhánh của ca phải nằm trong phạm vi P4.6 của người dùng (không → từ chối kết nối 403); người mở ca và quản lý (admin / manager) của chi nhánh đó được ghi, nhân viên khác chỉ xem (mọi lệnh ghi, kể cả `display:qr`, → `FORBIDDEN`). Kiểm lại ở mỗi lệnh ghi và mỗi 60 s (mất quyền / bị chuyển chi nhánh → đóng 4403 hoặc hạ xuống chỉ xem). `actorFor` của WS mang chi nhánh được phép
+  - **#94 đọc theo id** — `pos.session`, `sessionSummary`, `storeInfo` (theo ca), `exchangeQuote`, `preorder`, `preorderQuote`, `payhubOpen`: tải bản ghi → `assertBranch(ctx.branch, branchId)`
+  - **#95 thao tác** — `PosActor.branchIds` (= `ctx.branch.allowed`) + `assertActorBranch` trong service: khoá ca, huỷ HĐ, trả hàng, đổi hàng, giao / huỷ đơn đặt trước, tạo PIN ghép, xem / huỷ thanh toán Payment Hub — áp cho cả đường tRPC lẫn WebSocket
+  - **#96 nhân viên** — `assertBranchOrAll`: tạo / sửa / xoá / phân / bỏ phân ca chỉ trong chi nhánh được phép, ca chung mọi chi nhánh chỉ quản trị viên; phân ca chỉ cho nhân viên trong phạm vi. `scopedStaffIds(scope)` (gán chi nhánh được phép, hoặc chưa gán khi chi nhánh mặc định được phép) lọc bảng chấm công của quản lý, `staff.sales`, `commission.list`
+  - **#97 ghép PIN** — IP lấy theo `lib/client-ip.ts`: chỉ tin `X-Real-IP` / hop cuối `X-Forwarded-For` khi `TRUST_PROXY=true` (sau reverse proxy), không thì mọi client chung một giới hạn; thêm trần **100 lần nhập sai / 10 phút toàn hệ thống** (`countInWindow` / `recordHit`) → 429
+  - **#99** — `branch.get` / `branch.config` kiểm chi nhánh (trừ quản trị viên); Web Push lấy vai trò hệ thống hiện tại từ `user_roles` (vai trò lưu lúc đăng ký chỉ là dự phòng); bán / trả hàng khoá chia sẻ dòng ca (`lockOpenSession`, `LOCK IN SHARE MODE`), khoá ca lấy khoá độc quyền rồi mới tổng kết → không còn HĐ lọt vào ca vừa khoá; `reports.emailReport`: người không có `config:read` (vai trò viewer) chỉ gửi tới email nhân viên đang hoạt động; `payCommissions` khoá các dòng còn chờ (`FOR UPDATE`) và trả đúng tổng đã thanh toán
+  - `tests/qa3.test.ts` (11 test): quyền theo ca, `assertActorBranch`, `assertBranchOrAll`, IP tin cậy
+- **Kiểm thử** (build production `:3001` + realtime `:3002` đã nạp code mới; token Keycloak thật cho `qa3.seller` (seller @ CN-HN), `qa3.manager` (manager @ CN-HN), `qa3.viewer` (viewer), `demo.seller`, `demo.manager` (quản lý chưa gán = mọi chi nhánh)):
+
+  | Lỗi | Kịch bản tấn công (trước: thành công) | Kết quả sau sửa |
+  |-----|---------------------------------------|-----------------|
+  | #93 | NV CN-HN mở WS ca CN-HCM, `cart:add` + `display:qr` giả | ✅ kết nối bị từ chối (403); quản lý gán CN-HN cũng bị từ chối. NV khác cùng chi nhánh: kết nối được (xem), gửi QR giả → `FORBIDDEN`. Chủ ca, quản lý CN-HN, quản trị → `ack` |
+  | #94 | NV CN-HN đọc `pos.session` / `sessionSummary` / `storeInfo` / `payhubOpen` của ca CN-HCM | ✅ 4 × 403 "Không có quyền truy cập chi nhánh #15"; NV vẫn xem tổng kết ca của mình |
+  | #95 | Quản lý CN-HN khoá ca / tạo PIN ghép cho ca CN-HCM | ✅ 403 "Ca #… thuộc chi nhánh bạn không được phép thao tác"; vẫn làm được với ca CN-HN |
+  | #96 | Quản lý CN-HN tạo ca cho CN-HCM / ca chung / sửa, xoá ca CN-HCM | ✅ 403 cả 4; tạo ca CN-HN ✅; bảng chấm công chỉ còn NV CN-HN + tài khoản chưa gán (thuộc chi nhánh mặc định CN-HN) |
+  | #97 | 12 lần nhập PIN sai, mỗi lần đổi `X-Forwarded-For` | ✅ không có bucket mới: 429 khi chạm giới hạn chung (lần 9 — đã có 2 lần ghép từ kịch bản trước trong cùng phút) |
+  | #99 | Quản lý CN-HN đọc cấu hình (tài khoản NH) CN-HCM; viewer gửi báo cáo ra email ngoài | ✅ 403 / 403; đọc cấu hình CN-HN ✅; viewer gửi tới email nhân viên của mình ✅. Khoá ca / push / hoa hồng: kiểm bằng code + unit (không dựng được đua thời gian thật) |
+  | Hồi quy P4.1–P4.7 | Chạy lại toàn bộ script QA-3 | ✅ như QA-3 (cùng các mục ⏭: QR Payment Hub do cấu hình placeholder, tách HĐ chỉ qua WS) |
+  | format:check / lint / typecheck / test / build / build:jobs | | ✅ (Vitest 157/157) |
+  | Dọn dẹp | | ✅ xoá mọi dòng mới so với snapshot (2 ca, 2 HĐ, phiếu trả, PO, kho tạm, khuyến mãi, ca làm việc, chấm công, hoa hồng, đơn, thông báo, 26 audit, 4 user cục bộ), tồn kho / lượt dùng mã / chi tiêu khách **giống hệt** snapshot; xoá key Redis (giỏ, PIN / token ghép, bộ đếm `rl:pos-pair:*`, file báo cáo); xoá 3 user Keycloak `qa3.*`; dừng :3001 |
+
+- **Quyết định thiết kế:**
+  - Một quy tắc truy cập ca dùng chung (`sessionAccess`) cho WS và tRPC: phạm vi chi nhánh trước, rồi chủ ca / quản lý mới được ghi. Nhân viên cùng chi nhánh vẫn xem được (màn hình phụ, giám sát) nhưng không ghi.
+  - Kiểm chi nhánh đặt **trong service** cho thao tác ghi (đi qua cả WS / tRPC), ở router cho đọc theo id.
+  - Không có proxy tin cậy thì coi mọi client là một nguồn (an toàn hơn tin header); triển khai sau reverse proxy đặt `TRUST_PROXY=true` (`.env.example`).
+- **Vấn đề / lưu ý:** còn mở #98 (`staff:write` gán được vai trò admin — chờ quyết định). Tài khoản Keycloak chưa có dòng vai trò trong DB vẫn dùng vai trò lưu lúc đăng ký push. Production: đặt `TRUST_PROXY=true` khi chạy sau nginx / load balancer (ghi chú cho P6.5).

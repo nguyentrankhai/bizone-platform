@@ -4,7 +4,7 @@ import { currentTenantId } from "@/lib/tenant";
 import type { Prisma, PosPaymentIntent } from "@/generated/prisma/client";
 import type { CreatePayhubIntentInput, PayhubMethod } from "@/lib/validators/pos";
 import type { PayhubIntentView } from "@/lib/pos/protocol";
-import type { PosActor } from "./cashSession.service";
+import { assertActorBranch, type PosActor } from "./cashSession.service";
 import { publishPosEvent } from "./posEvents";
 import { recordAudit } from "./auditLog.service";
 import type { SalePayment } from "./payment.service";
@@ -243,10 +243,20 @@ export async function applyOutcome(intent: PosPaymentIntent, o: PayhubOutcome) {
 }
 
 /** Trạng thái hiện tại; còn chờ → hỏi Payment Hub (dự phòng khi webhook chưa tới) */
+/** QA-3 (#95): managers act on intents of their branches only */
+async function assertIntentBranch(cashSessionId: number, actor: PosActor) {
+  const s = await getPrisma().cashSession.findUnique({
+    where: { id: cashSessionId },
+    select: { branchId: true },
+  });
+  if (s) assertActorBranch(actor, s.branchId, "Thanh toán");
+}
+
 export async function intentStatus(id: number, actor: PosActor) {
   let intent = await loadIntent(id);
   if (intent.userId !== actor.userId && !actor.canManage)
     throw bizoneError("FORBIDDEN", "Không xem được thanh toán của nhân viên khác");
+  await assertIntentBranch(intent.cashSessionId, actor);
   const cfg = payhubConfig();
   const stale = !intent.lastCheckedAt || Date.now() - intent.lastCheckedAt.getTime() > RECHECK_MS;
   if (cfg && intent.payhubTxnCode && stale && intent.status !== "success" && !intent.invoiceId) {
@@ -271,6 +281,7 @@ export async function cancelIntent(id: number, actor: PosActor) {
   const intent = await loadIntent(id);
   if (intent.userId !== actor.userId && !actor.canManage)
     throw bizoneError("FORBIDDEN", "Không huỷ được thanh toán của nhân viên khác");
+  await assertIntentBranch(intent.cashSessionId, actor);
   await getPrisma().posPaymentIntent.updateMany({
     where: { id, status: "pending" },
     data: { status: "cancelled" },

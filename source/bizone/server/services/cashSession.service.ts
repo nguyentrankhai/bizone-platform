@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
 import { bizoneError } from "@/lib/errors";
+import type { Prisma } from "@/generated/prisma/client";
 import type { CloseSessionInput, ListSessionsInput, OpenSessionInput } from "@/lib/validators/pos";
 import { CREDIT_METHODS } from "@/lib/validators/pos";
 import { sumByMethod } from "./payment.service";
@@ -11,6 +12,25 @@ export interface PosActor {
   userId: number;
   tenantId: string;
   canManage: boolean;
+  /** QA-3: branches the actor may work on (P4.6 scope) — invoices / shifts / pre-orders outside are refused */
+  branchIds: number[];
+}
+
+/**
+ * QA-3 (#99): inside a sale / refund transaction — share-lock the shift row and require it open.
+ * `closeSession` takes the exclusive lock, so money can't land in a shift while it is being
+ * totalled (the sale waits, then sees the shift closed).
+ */
+export async function lockOpenSession(tx: Prisma.TransactionClient, sessionId: number) {
+  const rows = await tx.$queryRaw<{ status: string }[]>`
+    SELECT status FROM cash_sessions WHERE id = ${sessionId} LOCK IN SHARE MODE`;
+  if (rows[0]?.status !== "open") throw bizoneError("CONFLICT", `Ca #${sessionId} đã khóa`);
+}
+
+/** QA-3 (#95): the record belongs to a branch the actor may work on */
+export function assertActorBranch(actor: PosActor, branchId: number, what: string) {
+  if (!actor.branchIds.includes(branchId))
+    throw bizoneError("FORBIDDEN", `${what} thuộc chi nhánh bạn không được phép thao tác`);
 }
 
 /** Refund payouts are stored as negative invoice_payments tagged with the paying shift */
@@ -192,26 +212,35 @@ export async function sessionSummary(id: number) {
 export async function closeSession(input: CloseSessionInput, actor: PosActor) {
   const prisma = getPrisma();
   const session = await getSession(input.sessionId);
+  assertActorBranch(actor, session.branchId, `Ca #${session.id}`);
   if (session.status !== "open") throw bizoneError("CONFLICT", `Ca #${session.id} đã khóa`);
   if (session.userId !== actor.userId && !actor.canManage) {
     throw bizoneError("FORBIDDEN", "Chỉ người mở ca hoặc quản lý mới được khóa ca");
   }
 
-  const summary = await sessionSummary(session.id);
-  const difference = input.actualClosingBalance - summary.expectedCash;
-  // Guard on status so two concurrent close requests can't both win
-  const updated = await prisma.cashSession.updateMany({
-    where: { id: session.id, status: "open" },
-    data: {
-      status: "closed",
-      closedAt: new Date(),
-      closingBalance: summary.expectedCash,
-      actualClosingBalance: input.actualClosingBalance,
-      difference,
-      notes: input.notes ?? null,
+  // QA-3 (#99): exclusive lock on the shift — sales / refunds in flight (share lock) finish
+  // first and new ones wait, so the totals below are final when the shift closes
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT id FROM cash_sessions WHERE id = ${session.id} FOR UPDATE`;
+      const summary = await sessionSummary(session.id);
+      const difference = input.actualClosingBalance - summary.expectedCash;
+      // Guard on status so two concurrent close requests can't both win
+      const updated = await tx.cashSession.updateMany({
+        where: { id: session.id, status: "open" },
+        data: {
+          status: "closed",
+          closedAt: new Date(),
+          closingBalance: summary.expectedCash,
+          actualClosingBalance: input.actualClosingBalance,
+          difference,
+          notes: input.notes ?? null,
+        },
+      });
+      if (updated.count === 0) throw bizoneError("CONFLICT", `Ca #${session.id} đã khóa`);
     },
-  });
-  if (updated.count === 0) throw bizoneError("CONFLICT", `Ca #${session.id} đã khóa`);
+    { timeout: 15_000 },
+  );
 
   const final = await sessionSummary(session.id);
   await publishPosEvent(session.id, {

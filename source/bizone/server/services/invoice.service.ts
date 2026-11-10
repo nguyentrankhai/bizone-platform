@@ -15,7 +15,12 @@ import type {
 import type { Prisma } from "@/generated/prisma/client";
 import { enqueueStockChanged } from "@/server/queue/inventory";
 import { enqueueCommissionRecalc } from "@/server/queue/commission";
-import { refundTag, type PosActor } from "./cashSession.service";
+import {
+  assertActorBranch,
+  lockOpenSession,
+  refundTag,
+  type PosActor,
+} from "./cashSession.service";
 import { recordAudit } from "./auditLog.service";
 import { invalidateDashboardCache } from "./dashboard.service";
 import { settlePayments, type SalePayment, type Settlement } from "./payment.service";
@@ -275,6 +280,7 @@ export async function prepareSale(
 /** Write the invoice, its payments, coupon/promotion usage, stock and loyalty (inside `tx`) */
 export async function writeSale(tx: Tx, sale: PreparedSale, actor: PosActor) {
   const { quote, settlement, session } = sale;
+  await lockOpenSession(tx, session.id); // QA-3 (#99): not while the shift is being closed
   const t = quote.totals;
   const invoice = await tx.invoice.create({
     data: {
@@ -718,6 +724,7 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
     },
   });
   if (!inv) throw bizoneError("NOT_FOUND", `Hóa đơn #${input.id} không tồn tại`);
+  assertActorBranch(actor, inv.branchId, `Hóa đơn ${inv.invoiceCode}`);
   if (inv.status !== "active")
     throw bizoneError(
       "CONFLICT",
@@ -937,6 +944,7 @@ export async function writeRefund(
   },
 ) {
   const { inv, lines, total } = prep;
+  await lockOpenSession(tx, opts.sessionId); // QA-3 (#99): payouts come from an open shift
   // Serialize refunds of one invoice, then re-check what is still returnable (the quantities in
   // `prep` were read before the lock — a concurrent refund may have taken some)
   await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${inv.id} FOR UPDATE`;
@@ -1060,6 +1068,8 @@ async function finishRefund(
 export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) {
   const session = await actorOpenSession(actor, "đổi/trả");
   const prep = await prepareRefund(input.id, input.items);
+  // QA-3 (#95): returns only for invoices of a branch the cashier may work on (#82)
+  assertActorBranch(actor, prep.inv.branchId, `Hóa đơn ${prep.inv.invoiceCode}`);
   const written = await getPrisma().$transaction(
     (tx) =>
       writeRefund(tx, prep, {
@@ -1118,6 +1128,7 @@ export async function exchangeInvoice(input: ExchangeInput, actor: PosActor) {
     async () => {
       const session = await actorOpenSession(actor, "đổi hàng");
       const prep = await prepareRefund(input.invoiceId, input.returnItems);
+      assertActorBranch(actor, prep.inv.branchId, `Hóa đơn ${prep.inv.invoiceCode}`);
       const customerId =
         input.customerId === undefined ? prep.inv.customerId : (input.customerId ?? null);
       const sale = await prepareSale(

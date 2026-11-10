@@ -49,12 +49,13 @@ import {
   resolveCoupon,
   loadCustomer,
 } from "@/server/services/pricing.service";
-import { ensureDbUserId } from "@/server/services/user.service";
+import { ensureDbUserId, resolveDbUserId } from "@/server/services/user.service";
+import { resolveBranchScope } from "@/server/middleware/branchScope";
+import { isPosManager, sessionAccess, type SessionAccess } from "@/lib/pos/access";
 import { createNotificationHub } from "@/server/ws/notifications";
 import { NOTIFY_WS_PATH } from "@/lib/notifications/events";
 
 const port = Number(process.env.POS_WS_PORT ?? 3002);
-const MANAGER_ROLES = ["bizone-admin", "bizone-manager"];
 
 interface Client {
   sessionId: number;
@@ -71,6 +72,31 @@ interface Client {
 async function staffCan(user: AuthUser, permission: "pos:read" | "pos:write") {
   const access = await getStaffAccess(user);
   return access.active && hasPermission(user, permission, access.capabilities);
+}
+
+const canManageOf = (user: AuthUser) => hasPermission(user, "admin:*") || isPosManager(user.roles);
+
+/**
+ * QA-3 (#93): what this user may do on this shift — its branch must be in the user's branch
+ * scope; only the cashier who opened it and managers of the branch may write. Run in tenant.
+ */
+async function accessToSession(user: AuthUser, sessionId: number): Promise<SessionAccess> {
+  const access = await getStaffAccess(user);
+  if (!access.active || !hasPermission(user, "pos:read", access.capabilities)) return "none";
+  const session = await getPrisma().cashSession.findUnique({
+    where: { id: sessionId },
+    select: { branchId: true, userId: true },
+  });
+  if (!session) return "none";
+  const scope = await resolveBranchScope(user, access, null);
+  return sessionAccess({
+    allowedBranchIds: scope.allowed,
+    sessionBranchId: session.branchId,
+    sessionUserId: session.userId,
+    userId: await resolveDbUserId(user),
+    canManage: canManageOf(user),
+    canWrite: hasPermission(user, "pos:write", access.capabilities),
+  });
 }
 
 const clients = new Map<WebSocket, Client>();
@@ -157,13 +183,16 @@ async function authorize(
   );
   if (!session) return { status: 404, message: "Cash session not found" };
   if (session.status !== "open") return { status: 409, message: "Cash session closed" };
+  // QA-3 (#93): another branch's shift is off limits; other cashiers' shifts are read-only
+  const level = await runWithTenant(tenantId, () => accessToSession(verified.user, sessionId));
+  if (level === "none") return { status: 403, message: "Shift belongs to another branch" };
 
   return {
     sessionId,
     room: roomKey(tenantId, sessionId),
     user: verified.user,
     tenantId,
-    canWrite: await runWithTenant(tenantId, () => staffCan(verified.user, "pos:write")),
+    canWrite: level === "write",
   };
 }
 
@@ -275,7 +304,8 @@ async function actorFor(client: Client): Promise<PosActor> {
   client.actor ??= {
     userId: await ensureDbUserId(user),
     tenantId: client.tenantId,
-    canManage: hasPermission(user, "admin:*") || user.roles.some((r) => MANAGER_ROLES.includes(r)),
+    canManage: canManageOf(user),
+    branchIds: (await resolveBranchScope(user, await getStaffAccess(user), null)).allowed,
   };
   return client.actor;
 }
@@ -333,9 +363,11 @@ async function handle(client: Client, event: PosClientEvent): Promise<void> {
   const { sessionId } = client;
   if (!client.canWrite || !client.user)
     throw new Error(JSON.stringify({ code: "FORBIDDEN", message: "Màn hình chỉ xem" }));
-  // Re-checked on every write (cached 60 s): deactivation / role changes apply immediately
-  if (!(await staffCan(client.user, "pos:write")))
-    throw new Error(JSON.stringify({ code: "FORBIDDEN", message: "Không có quyền bán hàng" }));
+  // Re-checked on every write (cached 60 s): deactivation / role / branch changes apply at once
+  if ((await accessToSession(client.user, sessionId)) !== "write")
+    throw new Error(
+      JSON.stringify({ code: "FORBIDDEN", message: "Không có quyền thao tác trên ca này" }),
+    );
 
   switch (event.type) {
     case "cart:add": {
@@ -540,9 +572,10 @@ const accessCheck = setInterval(() => {
   for (const [ws, client] of clients) {
     if (!client.user) continue;
     const user = client.user;
-    runWithTenant(client.tenantId, () => staffCan(user, "pos:read"))
-      .then((ok) => {
-        if (!ok) ws.close(4403, "Forbidden");
+    runWithTenant(client.tenantId, () => accessToSession(user, client.sessionId))
+      .then((level) => {
+        if (level === "none") ws.close(4403, "Forbidden");
+        else client.canWrite = level === "write";
       })
       .catch(() => {
         /* DB/Redis hiccup: keep the socket, next round decides */

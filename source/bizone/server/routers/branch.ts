@@ -17,7 +17,7 @@ import {
   setDefaultBranch,
   updateBranch,
 } from "@/server/services/branch.service";
-import { resolveBranchScope } from "@/server/middleware/branchScope";
+import { assertBranch, resolveBranchScope } from "@/server/middleware/branchScope";
 import { getStaffAccess } from "@/server/services/rbac.service";
 
 const id = z.object({ id: z.number().int().positive() });
@@ -38,7 +38,11 @@ export const branchRouter = router({
 
   get: permissionProcedure("config:read")
     .input(id)
-    .query(({ input }) => getBranch(input.id)),
+    .query(({ input, ctx }) => {
+      // QA-3 (#99): branch managers see their branches only (admins also inactive ones)
+      if (!ctx.branch.canAll) assertBranch(ctx.branch, input.id);
+      return getBranch(input.id);
+    }),
 
   create: permissionProcedure("config:write")
     .input(createBranchSchema)
@@ -62,7 +66,11 @@ export const branchRouter = router({
 
   config: permissionProcedure("config:read")
     .input(z.object({ branchId: z.number().int().positive() }))
-    .query(({ input }) => branchConfig(input.branchId)),
+    .query(({ input, ctx }) => {
+      // QA-3 (#99): no reading the bank account of other branches
+      if (!ctx.branch.canAll) assertBranch(ctx.branch, input.branchId);
+      return branchConfig(input.branchId);
+    }),
 
   setConfig: permissionProcedure("config:write")
     .input(setBranchConfigSchema)

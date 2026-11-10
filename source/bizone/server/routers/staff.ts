@@ -1,4 +1,10 @@
-import { branchFilter } from "@/server/middleware/branchScope";
+import {
+  assertBranchOrAll,
+  branchFilter,
+  resolveBranchScope,
+  scopedStaffIds,
+  type BranchScope,
+} from "@/server/middleware/branchScope";
 import { z } from "zod";
 import { bizoneError } from "@/lib/errors";
 import { getPrisma } from "@/lib/prisma";
@@ -64,25 +70,65 @@ const roleRouter = router({
     .mutation(({ input }) => staff.deleteRole(input.id)),
 });
 
+/** QA-3 (#96): the shift belongs to a branch in scope (store-wide shifts: admins only) */
+async function assertShift(scope: BranchScope, shiftId: number) {
+  const shift = await getPrisma().shift.findUnique({
+    where: { id: shiftId },
+    select: { branchId: true },
+  });
+  if (!shift) throw bizoneError("NOT_FOUND", `Ca làm việc #${shiftId} không tồn tại`);
+  assertBranchOrAll(scope, shift.branchId);
+}
+
+async function assertStaffInScope(scope: BranchScope, userIds: number[]) {
+  const allowed = await scopedStaffIds(scope);
+  if (!allowed) return;
+  const outside = userIds.filter((id) => !allowed.includes(id));
+  if (outside.length)
+    throw bizoneError("FORBIDDEN", `Nhân viên #${outside.join(", #")} thuộc chi nhánh khác`);
+}
+
 const shiftRouter = router({
   list: permissionProcedure("staff:read")
     .input(z.object({ includeInactive: z.boolean().default(false) }).optional())
     .query(({ input }) => shifts.listShifts(input?.includeInactive)),
+  // QA-3 (#96): shifts of other branches / store-wide shifts are off limits for branch managers
   create: permissionProcedure("staff:manage_shift")
     .input(shiftInputSchema)
-    .mutation(({ input }) => shifts.createShift(input)),
+    .mutation(({ input, ctx }) => {
+      assertBranchOrAll(ctx.branch, input.branchId);
+      return shifts.createShift(input);
+    }),
   update: permissionProcedure("staff:manage_shift")
     .input(updateShiftSchema)
-    .mutation(({ input }) => shifts.updateShift(input)),
+    .mutation(async ({ input, ctx }) => {
+      await assertShift(ctx.branch, input.id);
+      if (input.branchId !== undefined) assertBranchOrAll(ctx.branch, input.branchId);
+      return shifts.updateShift(input);
+    }),
   delete: permissionProcedure("staff:manage_shift")
     .input(idInput)
-    .mutation(({ input }) => shifts.deleteShift(input.id)),
+    .mutation(async ({ input, ctx }) => {
+      await assertShift(ctx.branch, input.id);
+      return shifts.deleteShift(input.id);
+    }),
   assign: permissionProcedure("staff:manage_shift")
     .input(assignShiftSchema)
-    .mutation(({ input }) => shifts.assignShift(input)),
+    .mutation(async ({ input, ctx }) => {
+      await assertShift(ctx.branch, input.shiftId);
+      await assertStaffInScope(ctx.branch, input.userIds);
+      return shifts.assignShift(input);
+    }),
   unassign: permissionProcedure("staff:manage_shift")
     .input(idInput)
-    .mutation(({ input }) => shifts.unassignShift(input.id)),
+    .mutation(async ({ input, ctx }) => {
+      const row = await getPrisma().shiftAssignment.findUnique({
+        where: { id: input.id },
+        select: { shiftId: true },
+      });
+      if (row) await assertShift(ctx.branch, row.shiftId);
+      return shifts.unassignShift(input.id);
+    }),
   calendar: permissionProcedure("staff:read")
     .input(calendarSchema)
     .query(({ input, ctx }) =>
@@ -104,7 +150,12 @@ const attendanceRouter = router({
   timesheet: staffSelfProcedure.input(timesheetSchema).query(async ({ ctx, input }) => {
     const access = await getStaffAccess(ctx.user);
     if (hasPermission(ctx.user, "staff:manage_attendance", access.capabilities)) {
-      return attendance.timesheet(input);
+      // QA-3 (#96): staff of the manager's branches only
+      const scope = await resolveBranchScope(ctx.user, access, null);
+      const userIds = await scopedStaffIds(scope);
+      if (input.userId && userIds && !userIds.includes(input.userId))
+        throw bizoneError("FORBIDDEN", "Nhân viên thuộc chi nhánh khác");
+      return attendance.timesheet({ ...input, ...(userIds ? { userIds } : {}) });
     }
     const self = await resolveDbUserId(ctx.user);
     if (!self) throw bizoneError("FORBIDDEN", "Chưa có hồ sơ nhân viên");
@@ -122,7 +173,10 @@ const commissionRouter = router({
     .mutation(({ input }) => commission.updateRule(input)),
   list: permissionProcedure("staff:manage_commission")
     .input(listCommissionsSchema)
-    .query(({ input }) => commission.listCommissions(input)),
+    .query(async ({ input, ctx }) => {
+      const userIds = await scopedStaffIds(ctx.branch); // QA-3 (#96)
+      return commission.listCommissions({ ...input, ...(userIds ? { userIds } : {}) });
+    }),
   /** Rebuild pending commissions now (normally done by the worker after each sale / month end) */
   recalculate: permissionProcedure("staff:manage_commission")
     .input(monthSchema)
@@ -165,7 +219,10 @@ export const staffRouter = router({
   /** Sales performance per seller (revenue, invoices, average); top products when userId given */
   sales: permissionProcedure("staff:read")
     .input(salesSchema)
-    .query(({ input }) => commission.staffSales(input)),
+    .query(async ({ input, ctx }) => {
+      const userIds = await scopedStaffIds(ctx.branch); // QA-3 (#96)
+      return commission.staffSales({ ...input, ...(userIds ? { userIds } : {}) });
+    }),
   role: roleRouter,
   shift: shiftRouter,
   attendance: attendanceRouter,

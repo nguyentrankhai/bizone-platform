@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import { bizoneError } from "@/lib/errors";
 import { currentTenantId, isKnownTenant, runWithTenant } from "@/lib/tenant";
-import type { PosActor } from "./cashSession.service";
+import { assertActorBranch, type PosActor } from "./cashSession.service";
 import { publishPosEvent } from "./posEvents";
 import { recordAudit } from "./auditLog.service";
 import { effectiveConfig } from "./branch.service";
@@ -40,6 +40,7 @@ export interface DisplayGrant {
 export async function createPairingPin(sessionId: number, actor: PosActor) {
   const session = await getPrisma().cashSession.findUnique({ where: { id: sessionId } });
   if (!session) throw bizoneError("NOT_FOUND", `Ca #${sessionId} không tồn tại`);
+  assertActorBranch(actor, session.branchId, `Ca #${sessionId}`);
   if (session.status !== "open") throw bizoneError("CONFLICT", "Ca đã khóa");
   if (session.userId !== actor.userId && !actor.canManage)
     throw bizoneError("FORBIDDEN", "Không thể ghép màn hình cho ca của nhân viên khác");

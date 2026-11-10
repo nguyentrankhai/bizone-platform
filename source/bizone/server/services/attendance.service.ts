@@ -246,8 +246,15 @@ export interface TimesheetDay extends DayResult {
   notes: string | null;
 }
 
+/** One user, or the staff of a branch scope (QA-3 #96) */
+function userFilter(input: { userId?: number; userIds?: number[] }) {
+  if (input.userId) return { userId: input.userId };
+  if (input.userIds) return { userId: { in: input.userIds } };
+  return {};
+}
+
 export async function timesheet(
-  input: { from: string; to: string; userId?: number },
+  input: { from: string; to: string; userId?: number; userIds?: number[] },
   now = new Date(),
 ) {
   const days = dateKeysBetween(input.from, input.to);
@@ -257,7 +264,7 @@ export async function timesheet(
   const range = { gte: dbDate(input.from), lte: dbDate(input.to) };
   const [assignments, attendance] = await Promise.all([
     prisma.shiftAssignment.findMany({
-      where: { date: range, ...(input.userId ? { userId: input.userId } : {}) },
+      where: { date: range, ...userFilter(input) },
       select: {
         userId: true,
         date: true,
@@ -265,7 +272,7 @@ export async function timesheet(
       },
     }),
     prisma.attendance.findMany({
-      where: { date: range, ...(input.userId ? { userId: input.userId } : {}) },
+      where: { date: range, ...userFilter(input) },
     }),
   ]);
   const userIds = new Set([

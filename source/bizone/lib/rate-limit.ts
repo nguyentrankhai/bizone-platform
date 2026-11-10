@@ -46,3 +46,20 @@ export const rateLimitPos = (tenantId: string, userId: string) =>
   rateLimit(`rl:pos:${tenantId}:${userId}`, 300, 60);
 
 export const rateLimitAuth = (ip: string) => rateLimit(`rl:auth:${ip}`, 10, 60);
+
+/** Hits recorded with `recordHit` in the last `window` seconds (no hit added) */
+export async function countInWindow(key: string, window: number): Promise<number> {
+  const redis = getRedis();
+  await redis.zremrangebyscore(key, 0, Date.now() - window * 1000);
+  return redis.zcard(key);
+}
+
+/** Record one hit for `countInWindow` (e.g. a failed attempt) */
+export async function recordHit(key: string, window: number): Promise<void> {
+  const now = Date.now();
+  await getRedis()
+    .pipeline()
+    .zadd(key, now, `${now}-${Math.random()}`)
+    .pexpire(key, window * 1000)
+    .exec();
+}

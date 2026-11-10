@@ -166,3 +166,36 @@ export async function assertStockTake(scope: BranchScope, id: number) {
   if (!n) throw bizoneError("NOT_FOUND", `Phiếu kiểm kê #${id} không tồn tại`);
   await assertWarehouse(scope, n.warehouseId);
 }
+
+/**
+ * QA-3 (#96): a store-wide record (branch NULL, e.g. a shift for every branch) may only be
+ * changed by users who see every branch; branch records follow `assertBranch`.
+ */
+export function assertBranchOrAll(scope: BranchScope, branchId: number | null | undefined) {
+  if (branchId === null || branchId === undefined) {
+    if (!scope.canAll)
+      throw bizoneError("FORBIDDEN", "Chỉ quản trị viên được thao tác dữ liệu chung mọi chi nhánh");
+    return;
+  }
+  assertBranch(scope, branchId);
+}
+
+/**
+ * QA-3 (#96): staff (users.id) working in the scope — assigned to an allowed branch, or without
+ * any assignment while the default branch is allowed (they fall back to it). null = everyone.
+ */
+export async function scopedStaffIds(scope: BranchScope): Promise<number[] | null> {
+  if (scope.canAll) return null;
+  const prisma = getPrisma();
+  const defaultId = (await activeBranchRows()).find((b) => b.isDefault)?.id ?? null;
+  const [assigned, unassigned] = await Promise.all([
+    prisma.userBranch.findMany({
+      where: { branchId: { in: scope.allowed } },
+      select: { userId: true },
+    }),
+    defaultId !== null && scope.allowed.includes(defaultId)
+      ? prisma.user.findMany({ where: { userBranches: { none: {} } }, select: { id: true } })
+      : Promise.resolve([] as { id: number }[]),
+  ]);
+  return [...new Set([...assigned.map((a) => a.userId), ...unassigned.map((u) => u.id)])];
+}

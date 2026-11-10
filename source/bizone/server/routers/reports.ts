@@ -12,6 +12,10 @@ import { enqueueReportExport, exportStatus } from "@/server/queue/reportExport";
 import { enqueueReportEmail } from "@/server/queue/notification";
 import { emailListSchema } from "@/lib/validators/notification";
 import { bizoneError } from "@/lib/errors";
+import { getPrisma } from "@/lib/prisma";
+import { hasPermission } from "@/lib/rbac";
+import { getStaffAccess } from "@/server/services/rbac.service";
+import type { AuthUser } from "@/types/auth";
 import { assertWarehouse, branchFilter, type BranchScope } from "@/server/middleware/branchScope";
 
 /** P4.6: an explicit branch must be allowed; otherwise the branch the user works on */
@@ -21,6 +25,26 @@ const scoped = <T extends { branchId?: number }>(input: T, branch: BranchScope):
 });
 
 const report = permissionProcedure("report:read");
+
+/**
+ * QA-3 (#99): any address only for users who manage the store (`config:read` — admin, manager);
+ * report viewers may mail reports to staff accounts only, not to arbitrary outside addresses.
+ */
+async function assertRecipients(user: AuthUser, to: string[]) {
+  const access = await getStaffAccess(user);
+  if (hasPermission(user, "config:read", access.capabilities)) return;
+  const staff = await getPrisma().user.findMany({
+    where: { isActive: true, email: { in: to } },
+    select: { email: true },
+  });
+  const known = new Set(staff.map((s) => s.email?.toLowerCase()));
+  const outside = to.filter((e) => !known.has(e.toLowerCase()));
+  if (outside.length)
+    throw bizoneError(
+      "FORBIDDEN",
+      `Chỉ gửi báo cáo tới email nhân viên của cửa hàng: ${outside.join(", ")} không hợp lệ`,
+    );
+}
 
 export const reportsRouter = router({
   options: report.query(({ ctx }) =>
@@ -69,6 +93,7 @@ export const reportsRouter = router({
   emailReport: report
     .input(z.object({ report: exportReportSchema, to: emailListSchema }))
     .mutation(async ({ ctx, input }) => {
+      await assertRecipients(ctx.user, input.to);
       const f = input.report.filter as { branchId?: number };
       const scopedInput = {
         ...input.report,
