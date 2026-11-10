@@ -208,7 +208,7 @@
 | P4.5 | POS Advanced Features | ✅ | `e0488e5` | Xem [kết quả P4.5](#p45--pos-advanced-features) |
 | P4.6 | Multi-Store Support | ✅ | `b735f80` | Xem [kết quả P4.6](#p46--multi-store-support) |
 | P4.7 | Thông báo — Hệ thống + Email + SMS | ✅ | `99cd07f` | Xem [kết quả P4.7](#p47--thông-báo--hệ-thống--email--sms) |
-| P4.8 | Kế toán & Tài chính — API & UI | ✅ | — | Xem [kết quả P4.8](#p48--kế-toán--tài-chính--api--ui) |
+| P4.8 | Kế toán & Tài chính — API & UI | ✅ | `af2bbab` | Xem [kết quả P4.8](#p48--kế-toán--tài-chính--api--ui) |
 
 ## Giai đoạn 5 — Payment Hub Mở rộng (Tuần 9–12)
 
@@ -1869,7 +1869,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P4.8 — Kế toán & Tài chính — API & UI
 
-- **Hoàn thành:** 2026-11-10 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/bizone/lib/accounting/calc.ts`, `lib/validators/accounting.ts`, `server/services/{cashFund,ledger,accountingReport}.service.ts`, `server/routers/accounting.ts`, `server/trpc.ts` (`permissionProcedure` nhận mảng quyền), `server/services/{supplier,customer,report}.service.ts` + `server/routers/{supplier,customer}.ts` (phiếu tự động), `app/accounting/**` (7 trang), `components/accounting/*`, `components/suppliers/PaymentModal.tsx`, `components/crm/CustomerDetail.tsx`, `components/layout/Sidebar.tsx`, `lib/{permissions,rbac}.ts`, `types/auth.ts`, `server/middleware/auditLog.ts`, `prisma/migrations/6_accounting`, `prisma/seed.ts`, `tests/accounting.test.ts`; `database/schema.sql`
+- **Hoàn thành:** 2026-11-10 · **Commit:** `af2bbab` · **Vị trí:** `source/bizone/lib/accounting/calc.ts`, `lib/validators/accounting.ts`, `server/services/{cashFund,ledger,accountingReport}.service.ts`, `server/routers/accounting.ts`, `server/trpc.ts` (`permissionProcedure` nhận mảng quyền), `server/services/{supplier,customer,report}.service.ts` + `server/routers/{supplier,customer}.ts` (phiếu tự động), `app/accounting/**` (7 trang), `components/accounting/*`, `components/suppliers/PaymentModal.tsx`, `components/crm/CustomerDetail.tsx`, `components/layout/Sidebar.tsx`, `lib/{permissions,rbac}.ts`, `types/auth.ts`, `server/middleware/auditLog.ts`, `prisma/migrations/6_accounting`, `prisma/seed.ts`, `tests/accounting.test.ts`; `database/schema.sql`
 - **Đã làm:**
   - **Quỹ (SRS-ACC-02)** — `cashFund.service`: nhiều quỹ, loại tiền mặt / ngân hàng (số tài khoản), theo chi nhánh hoặc quỹ chung (`branch_id NULL`), số dư đầu kỳ. Mọi thay đổi số dư qua `postMovement` (khoá `FOR UPDATE`, ghi `fund_transactions` số dư trước / sau, chi vượt số dư → 409). Chuyển quỹ (2 biến động tham chiếu nhau, khoá 2 quỹ theo thứ tự id), kiểm quỹ (nhập số đếm / sao kê → biến động điều chỉnh), ngừng quỹ chỉ khi số dư = 0
   - **Đối soát cuối ca → quỹ**: danh sách ca POS đã khoá 14 ngày (tiền mặt dự kiến / thực đếm / chênh lệch) + "Nộp vào quỹ" (mỗi ca 1 lần, khoá dòng ca; quỹ phải cùng chi nhánh hoặc quỹ chung)
