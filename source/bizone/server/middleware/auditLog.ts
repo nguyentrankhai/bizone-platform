@@ -60,6 +60,10 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "transfer.cancel": { module: "inventory", action: "cancel_transfer", entityType: "transfer" },
   "pos.openSession": { module: "pos", action: "open_session", entityType: "cash_session" },
   "pos.closeSession": { module: "pos", action: "close_session", entityType: "cash_session" },
+  // P4.5 — exchange / pre-order / invoices audit themselves in the services (also reached via WS)
+  "pos.payhubCreate": { module: "pos", action: "payhub_create", entityType: "pos_payment_intent" },
+  "pos.payhubCancel": { module: "pos", action: "payhub_cancel", entityType: "pos_payment_intent" },
+  "pos.createPairingPin": { module: "pos", action: "pairing_pin", entityType: "cash_session" },
   "order.create": { module: "order", action: "create", entityType: "order" },
   "order.updateStatus": { module: "order", action: "update_status", entityType: "order" },
   "order.cancel": { module: "order", action: "cancel", entityType: "order" },

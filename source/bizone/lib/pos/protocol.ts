@@ -44,6 +44,39 @@ export interface DisplayQr {
   bankName: string;
   accountNo: string;
   accountName: string;
+  /**
+   * `bank` (default): VietQR to the shop account from store_config. `payhub`: VietQR issued by
+   * Payment Hub (auto-confirmed). `card`: link to the Payment Hub card page, scanned by phone.
+   */
+  kind?: "bank" | "payhub" | "card";
+  /** Caption shown under the QR (e.g. "Thanh toán thẻ qua cổng VNPay") */
+  caption?: string;
+}
+
+/** Payment Hub card/QR payment as seen by the POS (P4.5) */
+export interface PayhubIntentView {
+  id: number;
+  method: "qr" | "card";
+  amount: number;
+  status: "pending" | "success" | "failed" | "expired" | "cancelled";
+  txnCode: string | null;
+  qrData: string | null;
+  paymentUrl: string | null;
+  expiresAt: string | null;
+  paidAt: string | null;
+  failureReason: string | null;
+  /** Already spent on an invoice / pre-order */
+  used: boolean;
+}
+
+/** A parked bill of the session (split / merge, P4.5) */
+export interface HeldCartSummary {
+  id: string;
+  label: string;
+  itemCount: number;
+  quantity: number;
+  customerId: number | null;
+  createdAt: string;
 }
 
 export interface ScannedProduct {
@@ -62,6 +95,9 @@ export type PosServerEvent =
   | { type: "product:scanned"; data: { barcode: string; product: ScannedProduct } }
   | { type: "session:status"; data: { status: "open" | "closed"; summary?: unknown } }
   | { type: "display:qr"; data: DisplayQr | null }
+  | { type: "payhub:updated"; data: PayhubIntentView }
+  | { type: "held:updated"; data: { held: HeldCartSummary[] } }
+  | { type: "display:paired"; data: { pairedAt: string } }
   | { type: "ack"; data: { ok: true } }
   | { type: "error"; data: { code: string; message: string } };
 
@@ -76,6 +112,19 @@ export type PosClientEvent =
   | { type: "cart:apply-coupon"; data: { code: string } }
   | { type: "cart:remove-coupon"; data?: Record<string, never> }
   | { type: "display:qr"; data: DisplayQr | null }
+  /** Park the current cart as a held bill (cart becomes empty) */
+  | { type: "cart:hold"; data?: { label?: string } }
+  /** Bring a held bill back; a non-empty current cart is parked in its place */
+  | { type: "cart:resume"; data: { heldId: string } }
+  /** Move the chosen quantities out of the cart into a new held bill (1 → 2 bills) */
+  | {
+      type: "cart:split";
+      data: { items: { itemId: string; quantity: number }[]; label?: string };
+    }
+  /** Pull held bills into the current cart (n → 1 bill) */
+  | { type: "cart:merge"; data: { heldIds: string[] } }
+  /** Delete a held bill */
+  | { type: "held:discard"; data: { heldId: string } }
   | {
       type: "payment:process";
       data: {

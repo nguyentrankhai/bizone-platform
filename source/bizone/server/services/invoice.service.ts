@@ -6,6 +6,9 @@ import type { PaymentCompleted } from "@/lib/pos/protocol";
 import type {
   CancelInvoiceInput,
   CreateInvoiceInput,
+  CreditMethod,
+  ExchangeInput,
+  ExchangeQuoteInput,
   ListInvoicesInput,
   RefundInvoiceInput,
 } from "@/lib/validators/pos";
@@ -15,22 +18,23 @@ import { enqueueCommissionRecalc } from "@/server/queue/commission";
 import { refundTag, type PosActor } from "./cashSession.service";
 import { recordAudit } from "./auditLog.service";
 import { invalidateDashboardCache } from "./dashboard.service";
-import { settlePayments } from "./payment.service";
+import { settlePayments, type SalePayment, type Settlement } from "./payment.service";
+import { consumeIntents, validateIntentPayments } from "./payhubPayment.service";
 import { clearCart } from "./posCart";
 import { publishPosEvent } from "./posEvents";
 import { quoteCart } from "./pricing.service";
 import type { PromotionUse } from "@/lib/pos/promotions";
 
-type Tx = Prisma.TransactionClient;
+export type Tx = Prisma.TransactionClient;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function storeConfig(keys: string[]) {
+export async function storeConfig(keys: string[]) {
   const rows = await getPrisma().storeConfig.findMany({ where: { configKey: { in: keys } } });
   return Object.fromEntries(rows.map((r) => [r.configKey, r.configValue ?? ""]));
 }
 
-function ymd(d = new Date()) {
+export function ymd(d = new Date()) {
   return `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -50,7 +54,7 @@ function isUniqueViolation(e: unknown) {
 }
 
 /** Sales deduct from the branch's first active warehouse */
-async function branchWarehouseId(branchId: number): Promise<number | null> {
+export async function branchWarehouseId(branchId: number): Promise<number | null> {
   const wh = await getPrisma().warehouse.findFirst({
     where: { branchId, isActive: true },
     orderBy: { id: "asc" },
@@ -70,7 +74,7 @@ async function txTypeId(tx: Tx, code: string) {
  * `sign` -1 = out (sale), +1 = back in (refund/cancel). Decrements are guarded
  * in SQL (quantity >= n) so two concurrent sales can never oversell.
  */
-async function moveStock(
+export async function moveStock(
   tx: Tx,
   opts: {
     warehouseId: number;
@@ -140,7 +144,7 @@ async function moveStock(
 }
 
 /** Add (or remove, with negative values) spending and points, then re-rank the customer */
-async function applyLoyalty(
+export async function applyLoyalty(
   tx: Tx,
   customerId: number,
   spentDelta: number,
@@ -184,6 +188,308 @@ async function applyLoyalty(
 
 export type CreatedInvoice = PaymentCompleted & { createdAt: string };
 
+/** Everything decided before the write transaction (prices, payments, stock location, points) */
+export interface PreparedSale {
+  session: { id: number; branchId: number };
+  input: Pick<CreateInvoiceInput, "customerId" | "items" | "couponCode" | "notes">;
+  quote: Awaited<ReturnType<typeof quoteCart>>;
+  payments: SalePayment[];
+  settlement: Settlement;
+  warehouseId: number | null;
+  prefix: string;
+  points: number;
+  invoiceType: "pos" | "preorder";
+  /** Amount of the server-added credit line (exchange / deposit) actually used */
+  creditUsed: number;
+}
+
+export interface SaleCredit {
+  method: CreditMethod;
+  /** Credit available; only what the new total needs is used */
+  available: number;
+  referenceCode: string | null;
+}
+
+/** Open session the actor may sell on */
+export async function sellableSession(cashSessionId: number, actor: PosActor) {
+  const session = await getPrisma().cashSession.findUnique({ where: { id: cashSessionId } });
+  if (!session) throw bizoneError("NOT_FOUND", `Ca #${cashSessionId} không tồn tại`);
+  if (session.status !== "open")
+    throw bizoneError("CONFLICT", "Ca đã khóa — mở ca mới để bán hàng");
+  if (session.userId !== actor.userId && !actor.canManage) {
+    throw bizoneError("FORBIDDEN", "Không thể bán hàng trên ca của nhân viên khác");
+  }
+  return session;
+}
+
+/**
+ * Price the sale from the DB and check how it is paid. `credit` (exchange / deposit) is added
+ * as a non-cash payment line covering up to the new total.
+ */
+export async function prepareSale(
+  input: Pick<
+    CreateInvoiceInput,
+    "cashSessionId" | "customerId" | "items" | "couponCode" | "notes"
+  > & {
+    payments: SalePayment[];
+  },
+  actor: PosActor,
+  opts: { credit?: SaleCredit; invoiceType?: "pos" | "preorder" } = {},
+): Promise<PreparedSale> {
+  const session = await sellableSession(input.cashSessionId, actor);
+  const quote = await quoteCart(input);
+  const t = quote.totals;
+  if (input.couponCode && t.couponError) throw bizoneError("VALIDATION_ERROR", t.couponError);
+
+  const creditUsed = opts.credit ? Math.min(opts.credit.available, t.total) : 0;
+  const payments: SalePayment[] = [
+    ...(creditUsed > 0
+      ? [
+          {
+            method: opts.credit!.method,
+            amount: creditUsed,
+            referenceCode: opts.credit!.referenceCode,
+          },
+        ]
+      : []),
+    ...(await validateIntentPayments(input.payments, session.id)),
+  ];
+  if (payments.length === 0)
+    throw bizoneError("VALIDATION_ERROR", "Chưa chọn phương thức thanh toán");
+  const settlement = settlePayments(t.total, payments);
+
+  const warehouseId = await branchWarehouseId(session.branchId);
+  const cfg = await storeConfig(["invoice_prefix", "loyalty_rate"]);
+  const loyaltyRate = Number(cfg.loyalty_rate || 1);
+  return {
+    session: { id: session.id, branchId: session.branchId },
+    input,
+    quote,
+    payments,
+    settlement,
+    warehouseId,
+    prefix: cfg.invoice_prefix || "HD",
+    points: quote.customer ? pointsFor(t.total, quote.customer.ranking, loyaltyRate) : 0,
+    invoiceType: opts.invoiceType ?? "pos",
+    creditUsed,
+  };
+}
+
+/** Write the invoice, its payments, coupon/promotion usage, stock and loyalty (inside `tx`) */
+export async function writeSale(tx: Tx, sale: PreparedSale, actor: PosActor) {
+  const { quote, settlement, session } = sale;
+  const t = quote.totals;
+  const invoice = await tx.invoice.create({
+    data: {
+      invoiceCode: await nextCode(tx, sale.prefix),
+      cashSessionId: session.id,
+      customerId: quote.customer?.id ?? null,
+      userId: actor.userId,
+      branchId: session.branchId,
+      subtotal: t.subtotal,
+      discountAmount: t.discountAmount,
+      discountPercent: t.memberDiscountPercent,
+      taxAmount: t.taxAmount,
+      totalAmount: t.total,
+      paidAmount: settlement.paid,
+      changeAmount: settlement.change,
+      notes: sale.input.notes ?? null,
+      invoiceType: sale.invoiceType,
+      invoiceItems: {
+        create: t.lines.map((l) => ({
+          productId: l.productId,
+          variantId: l.variantId,
+          unitName: l.unit,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discountPercent: l.discountPercent,
+          discountAmount: l.discountAmount,
+          taxAmount: l.taxAmount,
+          totalAmount: l.totalAmount,
+        })),
+      },
+      invoicePayments: {
+        create: sale.payments.map((p) => ({
+          paymentMethod: p.method,
+          amount: p.amount,
+          referenceCode: p.referenceCode ?? null,
+        })),
+      },
+    },
+  });
+
+  // Cost price snapshot for profit reports
+  const costs = await tx.product.findMany({
+    where: { id: { in: t.lines.map((l) => l.productId) } },
+    select: { id: true, costPrice: true },
+  });
+  for (const c of costs) {
+    await tx.invoiceItem.updateMany({
+      where: { invoiceId: invoice.id, productId: c.id },
+      data: { costPrice: c.costPrice },
+    });
+  }
+
+  if (quote.couponId && t.coupon) {
+    if (quote.voucherId) {
+      // Personal voucher: single use — the template's usage limit doesn't apply
+      const v = await tx.voucher.updateMany({
+        where: { id: quote.voucherId, status: "active" },
+        data: { status: "used", usedAt: new Date() },
+      });
+      if (v.count === 0) throw bizoneError("CONFLICT", `Voucher ${t.coupon.code} vừa được sử dụng`);
+      await tx.coupon.update({
+        where: { id: quote.couponId },
+        data: { usedCount: { increment: 1 } },
+      });
+    } else {
+      // Prisma can't compare two columns, so guard on the limit read in this transaction
+      const { usageLimit } = await tx.coupon.findUniqueOrThrow({
+        where: { id: quote.couponId },
+        select: { usageLimit: true },
+      });
+      const used = await tx.coupon.updateMany({
+        where: {
+          id: quote.couponId,
+          ...(usageLimit !== null ? { usedCount: { lt: usageLimit } } : {}),
+        },
+        data: { usedCount: { increment: 1 } },
+      });
+      if (used.count === 0)
+        throw bizoneError("CONFLICT", `Mã ${t.coupon.code} vừa hết lượt sử dụng`);
+    }
+    await tx.couponUsage.create({
+      data: {
+        couponId: quote.couponId,
+        voucherId: quote.voucherId,
+        invoiceId: invoice.id,
+        customerId: quote.customer?.id ?? null,
+        discountAmount: t.coupon.discount,
+      },
+    });
+  }
+
+  await recordPromotionUses(tx, quote.promotionUses, invoice.id, quote.customer?.id ?? null);
+  await consumeIntents(tx, sale.payments, { invoiceId: invoice.id });
+
+  let movedProducts: number[] = [];
+  if (sale.warehouseId) {
+    movedProducts = await moveStock(tx, {
+      warehouseId: sale.warehouseId,
+      sign: -1,
+      typeCode: "sales_issue",
+      referenceType: "invoice",
+      referenceId: invoice.id,
+      userId: actor.userId,
+      note: `Bán hàng ${invoice.invoiceCode}`,
+      items: t.lines,
+    });
+  } else if (
+    await tx.product.count({
+      where: { id: { in: t.lines.map((l) => l.productId) }, trackInventory: true },
+    })
+  ) {
+    throw bizoneError("VALIDATION_ERROR", "Chi nhánh chưa có kho hoạt động để trừ tồn");
+  }
+
+  if (quote.customer) {
+    await applyLoyalty(tx, quote.customer.id, t.total, sale.points, {
+      type: "earn",
+      referenceType: "invoice",
+      referenceId: invoice.id,
+      userId: actor.userId,
+      notes: `Tích điểm hóa đơn ${invoice.invoiceCode}`,
+    });
+  }
+  return { invoice, movedProducts };
+}
+
+/** After commit: queues, dashboard, audit and the customer display */
+export async function finishSale(
+  sale: PreparedSale,
+  written: {
+    invoice: { id: number; invoiceCode: string; userId: number; createdAt: Date };
+    movedProducts: number[];
+  },
+  actor: PosActor,
+  opts: { clearCart: boolean; audit?: Record<string, unknown> },
+): Promise<CreatedInvoice> {
+  const { invoice, movedProducts } = written;
+  const t = sale.quote.totals;
+  const result: CreatedInvoice = {
+    invoiceId: invoice.id,
+    invoiceCode: invoice.invoiceCode,
+    amount: t.total,
+    paid: sale.settlement.paid,
+    change: sale.settlement.change,
+    pointsEarned: sale.points,
+    createdAt: invoice.createdAt.toISOString(),
+  };
+
+  if (sale.warehouseId && movedProducts.length) {
+    await enqueueStockChanged({
+      warehouseId: sale.warehouseId,
+      productIds: movedProducts,
+      reason: "sale",
+      invoiceId: invoice.id,
+    });
+  }
+  await enqueueCommissionRecalc(invoice.userId, invoice.createdAt);
+  await refreshDashboard();
+  await recordAudit({
+    userId: actor.userId,
+    module: "pos",
+    action: "create",
+    entityType: "invoice",
+    entityId: invoice.id,
+    newValue: {
+      invoiceCode: invoice.invoiceCode,
+      cashSessionId: sale.session.id,
+      customerId: sale.quote.customer?.id ?? null,
+      amount: t.total,
+      items: sale.input.items.length,
+      payments: sale.payments.map((p) => p.method),
+      ...(sale.invoiceType !== "pos" ? { invoiceType: sale.invoiceType } : {}),
+      ...opts.audit,
+    },
+  });
+  if (opts.clearCart) {
+    await clearCart(sale.session.id);
+    await publishPosEvent(sale.session.id, { type: "payment:completed", data: result });
+    await publishPosEvent(sale.session.id, { type: "cart:cleared", data: {} });
+  } else {
+    await publishPosEvent(sale.session.id, { type: "payment:completed", data: result });
+  }
+  return result;
+}
+
+/** Run `write` in one transaction, retrying when two tills took the same invoice number */
+export async function withInvoiceNumberRetry<T>(write: (tx: Tx) => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await getPrisma().$transaction(write, { timeout: 15_000 });
+    } catch (e) {
+      if (isUniqueViolation(e) && attempt < 5) continue;
+      throw e;
+    }
+  }
+}
+
+/** Run `fn` once per idempotency key: a retried request gets the first result back */
+export async function idempotent<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = await claimIdempotencyKey<T>(key);
+  if (existing?.status === "done" && existing.response) return existing.response;
+  if (existing) throw bizoneError("CONFLICT", "Yêu cầu này đang được xử lý, vui lòng đợi");
+  try {
+    const result = await fn();
+    await setIdempotencyDone(key, result);
+    return result;
+  } catch (e) {
+    await releaseIdempotencyKey(key);
+    throw e;
+  }
+}
+
 /**
  * Tạo hóa đơn POS: tính lại giá từ DB, kiểm tra thanh toán, trừ tồn, ghi coupon,
  * tích điểm — tất cả trong một transaction. Idempotent theo `idempotencyKey`:
@@ -193,229 +499,18 @@ export async function createInvoice(
   input: CreateInvoiceInput,
   actor: PosActor,
 ): Promise<CreatedInvoice> {
-  const idemKey = `pos:invoice:${actor.tenantId}:${actor.userId}:${input.idempotencyKey}`;
-  const existing = await claimIdempotencyKey<CreatedInvoice>(idemKey);
-  if (existing?.status === "done" && existing.response) return existing.response;
-  if (existing) throw bizoneError("CONFLICT", "Hóa đơn này đang được xử lý, vui lòng đợi");
-
-  try {
-    const result = await createInvoiceOnce(input, actor);
-    await setIdempotencyDone(idemKey, result);
-    return result;
-  } catch (e) {
-    await releaseIdempotencyKey(idemKey);
-    throw e;
-  }
-}
-
-async function createInvoiceOnce(
-  input: CreateInvoiceInput,
-  actor: PosActor,
-): Promise<CreatedInvoice> {
-  const prisma = getPrisma();
-  const session = await prisma.cashSession.findUnique({ where: { id: input.cashSessionId } });
-  if (!session) throw bizoneError("NOT_FOUND", `Ca #${input.cashSessionId} không tồn tại`);
-  if (session.status !== "open")
-    throw bizoneError("CONFLICT", "Ca đã khóa — mở ca mới để bán hàng");
-  if (session.userId !== actor.userId && !actor.canManage) {
-    throw bizoneError("FORBIDDEN", "Không thể bán hàng trên ca của nhân viên khác");
-  }
-
-  const quote = await quoteCart(input);
-  const t = quote.totals;
-  if (input.couponCode && t.couponError) throw bizoneError("VALIDATION_ERROR", t.couponError);
-  const settlement = settlePayments(t.total, input.payments);
-
-  const warehouseId = await branchWarehouseId(session.branchId);
-  const cfg = await storeConfig(["invoice_prefix", "loyalty_rate"]);
-  const prefix = cfg.invoice_prefix || "HD";
-  const loyaltyRate = Number(cfg.loyalty_rate || 1);
-  const points = quote.customer ? pointsFor(t.total, quote.customer.ranking, loyaltyRate) : 0;
-
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const { invoice, movedProducts } = await prisma.$transaction(
-        async (tx) => {
-          const invoice = await tx.invoice.create({
-            data: {
-              invoiceCode: await nextCode(tx, prefix),
-              cashSessionId: session.id,
-              customerId: quote.customer?.id ?? null,
-              userId: actor.userId,
-              branchId: session.branchId,
-              subtotal: t.subtotal,
-              discountAmount: t.discountAmount,
-              discountPercent: t.memberDiscountPercent,
-              taxAmount: t.taxAmount,
-              totalAmount: t.total,
-              paidAmount: settlement.paid,
-              changeAmount: settlement.change,
-              notes: input.notes ?? null,
-              invoiceItems: {
-                create: t.lines.map((l) => ({
-                  productId: l.productId,
-                  variantId: l.variantId,
-                  unitName: l.unit,
-                  quantity: l.quantity,
-                  unitPrice: l.unitPrice,
-                  discountPercent: l.discountPercent,
-                  discountAmount: l.discountAmount,
-                  taxAmount: l.taxAmount,
-                  totalAmount: l.totalAmount,
-                })),
-              },
-              invoicePayments: {
-                create: input.payments.map((p) => ({
-                  paymentMethod: p.method,
-                  amount: p.amount,
-                  referenceCode: p.referenceCode ?? null,
-                })),
-              },
-            },
-          });
-
-          // Cost price snapshot for profit reports
-          const costs = await tx.product.findMany({
-            where: { id: { in: t.lines.map((l) => l.productId) } },
-            select: { id: true, costPrice: true },
-          });
-          for (const c of costs) {
-            await tx.invoiceItem.updateMany({
-              where: { invoiceId: invoice.id, productId: c.id },
-              data: { costPrice: c.costPrice },
-            });
-          }
-
-          if (quote.couponId && t.coupon) {
-            if (quote.voucherId) {
-              // Personal voucher: single use — the template's usage limit doesn't apply
-              const v = await tx.voucher.updateMany({
-                where: { id: quote.voucherId, status: "active" },
-                data: { status: "used", usedAt: new Date() },
-              });
-              if (v.count === 0)
-                throw bizoneError("CONFLICT", `Voucher ${t.coupon.code} vừa được sử dụng`);
-              await tx.coupon.update({
-                where: { id: quote.couponId },
-                data: { usedCount: { increment: 1 } },
-              });
-            } else {
-              // Prisma can't compare two columns, so guard on the limit read in this transaction
-              const { usageLimit } = await tx.coupon.findUniqueOrThrow({
-                where: { id: quote.couponId },
-                select: { usageLimit: true },
-              });
-              const used = await tx.coupon.updateMany({
-                where: {
-                  id: quote.couponId,
-                  ...(usageLimit !== null ? { usedCount: { lt: usageLimit } } : {}),
-                },
-                data: { usedCount: { increment: 1 } },
-              });
-              if (used.count === 0)
-                throw bizoneError("CONFLICT", `Mã ${t.coupon.code} vừa hết lượt sử dụng`);
-            }
-            await tx.couponUsage.create({
-              data: {
-                couponId: quote.couponId,
-                voucherId: quote.voucherId,
-                invoiceId: invoice.id,
-                customerId: quote.customer?.id ?? null,
-                discountAmount: t.coupon.discount,
-              },
-            });
-          }
-
-          await recordPromotionUses(
-            tx,
-            quote.promotionUses,
-            invoice.id,
-            quote.customer?.id ?? null,
-          );
-
-          let movedProducts: number[] = [];
-          if (warehouseId) {
-            movedProducts = await moveStock(tx, {
-              warehouseId,
-              sign: -1,
-              typeCode: "sales_issue",
-              referenceType: "invoice",
-              referenceId: invoice.id,
-              userId: actor.userId,
-              note: `Bán hàng ${invoice.invoiceCode}`,
-              items: t.lines,
-            });
-          } else if (
-            await tx.product.count({
-              where: { id: { in: t.lines.map((l) => l.productId) }, trackInventory: true },
-            })
-          ) {
-            throw bizoneError("VALIDATION_ERROR", "Chi nhánh chưa có kho hoạt động để trừ tồn");
-          }
-
-          if (quote.customer) {
-            await applyLoyalty(tx, quote.customer.id, t.total, points, {
-              type: "earn",
-              referenceType: "invoice",
-              referenceId: invoice.id,
-              userId: actor.userId,
-              notes: `Tích điểm hóa đơn ${invoice.invoiceCode}`,
-            });
-          }
-          return { invoice, movedProducts };
-        },
-        { timeout: 15_000 },
-      );
-
-      const result: CreatedInvoice = {
-        invoiceId: invoice.id,
-        invoiceCode: invoice.invoiceCode,
-        amount: t.total,
-        paid: settlement.paid,
-        change: settlement.change,
-        pointsEarned: points,
-        createdAt: invoice.createdAt.toISOString(),
-      };
-
-      if (warehouseId && movedProducts.length) {
-        await enqueueStockChanged({
-          warehouseId,
-          productIds: movedProducts,
-          reason: "sale",
-          invoiceId: invoice.id,
-        });
-      }
-      await enqueueCommissionRecalc(invoice.userId, invoice.createdAt);
-      await refreshDashboard();
-      await recordAudit({
-        userId: actor.userId,
-        module: "pos",
-        action: "create",
-        entityType: "invoice",
-        entityId: invoice.id,
-        newValue: {
-          invoiceCode: invoice.invoiceCode,
-          cashSessionId: session.id,
-          customerId: input.customerId ?? null,
-          amount: t.total,
-          items: input.items.length,
-          payments: input.payments.map((p) => p.method),
-        },
-      });
-      await clearCart(session.id);
-      await publishPosEvent(session.id, { type: "payment:completed", data: result });
-      await publishPosEvent(session.id, { type: "cart:cleared", data: {} });
-      return result;
-    } catch (e) {
-      // Two cashiers took the same sequence number — retry with the next one
-      if (isUniqueViolation(e) && attempt < 5) continue;
-      throw e;
-    }
-  }
+  return idempotent(
+    `pos:invoice:${actor.tenantId}:${actor.userId}:${input.idempotencyKey}`,
+    async () => {
+      const sale = await prepareSale(input, actor);
+      const written = await withInvoiceNumberRetry((tx) => writeSale(tx, sale, actor));
+      return finishSale(sale, written, actor, { clearCart: true });
+    },
+  );
 }
 
 /** Revenue changed — drop this tenant's dashboard cache (best effort; TTL covers failures) */
-async function refreshDashboard(): Promise<void> {
+export async function refreshDashboard(): Promise<void> {
   await invalidateDashboardCache().catch(() => undefined);
 }
 
@@ -721,27 +816,47 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
 
 // ─── Refund (đổi/trả) ─────────────────────────────────────────────────────────
 
-/**
- * Đổi/trả: trả một phần hoặc toàn bộ. Tiền hoàn tính theo giá thực trả (đã chia đều
- * giảm giá cấp hóa đơn), chi từ ca đang mở của người thực hiện. Đổi hàng = trả +
- * hóa đơn mới.
- */
-export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) {
-  const prisma = getPrisma();
-  const session = await prisma.cashSession.findFirst({
+/** Open session of the actor — refunds / exchanges are paid from it */
+async function actorOpenSession(actor: PosActor, what: string) {
+  const session = await getPrisma().cashSession.findFirst({
     where: { userId: actor.userId, status: "open" },
   });
   if (!session)
-    throw bizoneError("CONFLICT", "Cần mở ca trước khi đổi/trả (tiền hoàn chi từ ca hiện tại)");
+    throw bizoneError("CONFLICT", `Cần mở ca trước khi ${what} (tiền hoàn chi từ ca hiện tại)`);
+  return session;
+}
 
-  const inv = await getInvoice(input.id);
+export interface PreparedRefund {
+  inv: Awaited<ReturnType<typeof getInvoice>>;
+  lines: {
+    item: Awaited<ReturnType<typeof getInvoice>>["invoiceItems"][number];
+    quantity: number;
+    amount: number;
+    reason: string | null;
+  }[];
+  total: number;
+  fullyRefunded: boolean;
+  warehouseId: number | null;
+  pointsBack: number;
+}
+
+/**
+ * Tiền hoàn tính theo giá thực trả (đã chia đều giảm giá cấp hóa đơn); kiểm số lượng còn trả được.
+ * Read-only — also used to quote an exchange.
+ */
+export async function prepareRefund(
+  invoiceId: number,
+  items: { invoiceItemId: number; quantity: number; reason?: string | null }[],
+): Promise<PreparedRefund> {
+  const prisma = getPrisma();
+  const inv = await getInvoice(invoiceId);
   if (inv.status === "cancelled")
     throw bizoneError("CONFLICT", `Hóa đơn ${inv.invoiceCode} đã hủy`);
 
   const itemsTotal = inv.invoiceItems.reduce((s, i) => s + Number(i.totalAmount), 0);
   const ratio = itemsTotal > 0 ? Number(inv.totalAmount) / itemsTotal : 0;
 
-  const lines = input.items.map((req) => {
+  const lines = items.map((req) => {
     const item = inv.invoiceItems.find((i) => i.id === req.invoiceItemId);
     if (!item)
       throw bizoneError(
@@ -750,7 +865,10 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
       );
     const sold = Number(item.quantity);
     const refunded = item.invoiceRefundItems.reduce((s, r) => s + Number(r.quantity), 0);
-    if (req.quantity > sold - refunded) {
+    const already = items
+      .filter((r) => r.invoiceItemId === req.invoiceItemId && r !== req)
+      .reduce((s, r) => s + r.quantity, 0);
+    if (req.quantity + already > sold - refunded) {
       throw bizoneError(
         "VALIDATION_ERROR",
         `"${item.product.name}" chỉ còn ${sold - refunded} có thể trả`,
@@ -767,7 +885,6 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
     return already + now >= Number(i.quantity);
   });
 
-  const warehouseId = await branchWarehouseId(inv.branchId);
   const earned = inv.customerId
     ? await prisma.customerLoyaltyPoint.aggregate({
         where: { referenceType: "invoice", referenceId: inv.id, customerId: inv.customerId },
@@ -779,75 +896,136 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
       ? Math.round(((earned?._sum.points ?? 0) * total) / Number(inv.totalAmount))
       : 0;
 
-  const { refund, moved } = await prisma.$transaction(async (tx) => {
-    const count = await tx.invoiceRefund.count({
-      where: { refundCode: { startsWith: `TH${ymd()}` } },
-    });
-    const refund = await tx.invoiceRefund.create({
-      data: {
-        invoiceId: inv.id,
-        refundCode: `TH${ymd()}${String(count + 1).padStart(4, "0")}`,
-        reason: input.reason ?? null,
-        totalRefundAmount: total,
-        status: "completed",
-        createdBy: actor.userId,
-        invoiceRefundItems: {
-          create: lines.map((l) => ({
-            invoiceItemId: l.item.id,
-            productId: l.item.productId,
-            quantity: l.quantity,
-            refundAmount: l.amount,
-            reason: l.reason,
-          })),
-        },
+  return {
+    inv,
+    lines,
+    total,
+    fullyRefunded,
+    warehouseId: await branchWarehouseId(inv.branchId),
+    pointsBack,
+  };
+}
+
+async function nextRefundCode(tx: Tx): Promise<string> {
+  const base = `TH${ymd()}`;
+  const last = await tx.invoiceRefund.findFirst({
+    where: { refundCode: { startsWith: base } },
+    orderBy: { refundCode: "desc" },
+    select: { refundCode: true },
+  });
+  const seq = last ? Number(last.refundCode.slice(base.length)) + 1 : 1;
+  return `${base}${String(seq).padStart(4, "0")}`;
+}
+
+/**
+ * Write the refund (inside `tx`): refund rows, payouts as negative payments tagged with the paying
+ * shift, stock back in, loyalty taken back.
+ */
+export async function writeRefund(
+  tx: Tx,
+  prep: PreparedRefund,
+  opts: {
+    actor: PosActor;
+    sessionId: number;
+    reason: string | null;
+    payouts: { method: string; amount: number }[];
+  },
+) {
+  const { inv, lines, total } = prep;
+  // Serialize refunds of one invoice, then re-check what is still returnable (the quantities in
+  // `prep` were read before the lock — a concurrent refund may have taken some)
+  await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${inv.id} FOR UPDATE`;
+  const done = await tx.invoiceRefundItem.groupBy({
+    by: ["invoiceItemId"],
+    where: { refund: { invoiceId: inv.id, status: "completed" } },
+    _sum: { quantity: true },
+  });
+  for (const l of lines) {
+    const already = Number(done.find((d) => d.invoiceItemId === l.item.id)?._sum.quantity ?? 0);
+    const now = lines.filter((x) => x.item.id === l.item.id).reduce((s, x) => s + x.quantity, 0);
+    if (already + now > Number(l.item.quantity))
+      throw bizoneError("CONFLICT", `"${l.item.product.name}" vừa được trả ở giao dịch khác`);
+  }
+  const refund = await tx.invoiceRefund.create({
+    data: {
+      invoiceId: inv.id,
+      refundCode: await nextRefundCode(tx),
+      reason: opts.reason,
+      totalRefundAmount: total,
+      status: "completed",
+      createdBy: opts.actor.userId,
+      invoiceRefundItems: {
+        create: lines.map((l) => ({
+          invoiceItemId: l.item.id,
+          productId: l.item.productId,
+          quantity: l.quantity,
+          refundAmount: l.amount,
+          reason: l.reason,
+        })),
       },
-    });
+    },
+  });
+  for (const p of opts.payouts) {
+    if (p.amount <= 0) continue;
     await tx.invoicePayment.create({
       data: {
         invoiceId: inv.id,
-        paymentMethod: input.refundMethod,
-        amount: -total,
+        paymentMethod: p.method,
+        amount: -p.amount,
         referenceCode: refund.refundCode,
-        notes: refundTag(session.id),
+        notes: refundTag(opts.sessionId),
       },
     });
-    if (fullyRefunded)
-      await tx.invoice.update({ where: { id: inv.id }, data: { status: "refunded" } });
+  }
+  if (prep.fullyRefunded) {
+    // Guarded: a concurrent refund that already finished the invoice can't be double counted
+    await tx.invoice.updateMany({
+      where: { id: inv.id, status: { not: "cancelled" } },
+      data: { status: "refunded" },
+    });
+  }
 
-    let moved: number[] = [];
-    if (warehouseId) {
-      moved = await moveStock(tx, {
-        warehouseId,
-        sign: 1,
-        typeCode: "return_in",
-        referenceType: "invoice_refund",
-        referenceId: refund.id,
-        userId: actor.userId,
-        note: `Trả hàng ${refund.refundCode} (${inv.invoiceCode})`,
-        items: lines.map((l) => ({
-          productId: l.item.productId,
-          variantId: l.item.variantId,
-          quantity: l.quantity,
-          name: l.item.product.name,
-        })),
-      });
-    }
-    if (inv.customerId) {
-      await applyLoyalty(tx, inv.customerId, -total, -pointsBack, {
-        type: "adjust",
-        referenceType: "invoice_refund",
-        referenceId: refund.id,
-        userId: actor.userId,
-        notes: `Thu hồi điểm do trả hàng ${refund.refundCode}`,
-      });
-    }
-    return { refund, moved };
-  });
+  let moved: number[] = [];
+  if (prep.warehouseId) {
+    moved = await moveStock(tx, {
+      warehouseId: prep.warehouseId,
+      sign: 1,
+      typeCode: "return_in",
+      referenceType: "invoice_refund",
+      referenceId: refund.id,
+      userId: opts.actor.userId,
+      note: `Trả hàng ${refund.refundCode} (${inv.invoiceCode})`,
+      items: lines.map((l) => ({
+        productId: l.item.productId,
+        variantId: l.item.variantId,
+        quantity: l.quantity,
+        name: l.item.product.name,
+      })),
+    });
+  }
+  if (inv.customerId) {
+    await applyLoyalty(tx, inv.customerId, -total, -prep.pointsBack, {
+      type: "adjust",
+      referenceType: "invoice_refund",
+      referenceId: refund.id,
+      userId: opts.actor.userId,
+      notes: `Thu hồi điểm do trả hàng ${refund.refundCode}`,
+    });
+  }
+  return { refund, moved };
+}
 
-  if (warehouseId && moved.length) {
+async function finishRefund(
+  prep: PreparedRefund,
+  written: { refund: { id: number; refundCode: string }; moved: number[] },
+  actor: PosActor,
+  audit: Record<string, unknown> = {},
+) {
+  const { inv } = prep;
+  if (prep.warehouseId && written.moved.length) {
     await enqueueStockChanged({
-      warehouseId,
-      productIds: moved,
+      warehouseId: prep.warehouseId,
+      productIds: written.moved,
       reason: "refund",
       invoiceId: inv.id,
     });
@@ -862,15 +1040,133 @@ export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) 
     entityId: inv.id,
     newValue: {
       invoiceCode: inv.invoiceCode,
-      refundCode: refund.refundCode,
-      amount: total,
-      items: input.items.length,
+      refundCode: written.refund.refundCode,
+      amount: prep.total,
+      items: prep.lines.length,
+      ...audit,
     },
   });
+}
+
+/**
+ * Trả hàng: trả một phần hoặc toàn bộ, tiền hoàn chi từ ca đang mở của người thực hiện.
+ * Đổi hàng (trả + mua mới, tính chênh lệch) là `exchangeInvoice`.
+ */
+export async function refundInvoice(input: RefundInvoiceInput, actor: PosActor) {
+  const session = await actorOpenSession(actor, "đổi/trả");
+  const prep = await prepareRefund(input.id, input.items);
+  const written = await getPrisma().$transaction(
+    (tx) =>
+      writeRefund(tx, prep, {
+        actor,
+        sessionId: session.id,
+        reason: input.reason ?? null,
+        payouts: [{ method: input.refundMethod, amount: prep.total }],
+      }),
+    { timeout: 15_000 },
+  );
+  await finishRefund(prep, written, actor);
   return {
-    refundId: refund.id,
-    refundCode: refund.refundCode,
-    totalRefundAmount: total,
-    invoiceStatus: fullyRefunded ? "refunded" : inv.status,
+    refundId: written.refund.id,
+    refundCode: written.refund.refundCode,
+    totalRefundAmount: prep.total,
+    invoiceStatus: prep.fullyRefunded ? "refunded" : prep.inv.status,
   };
+}
+
+// ─── Exchange (đổi hàng) ──────────────────────────────────────────────────────
+
+/** Xem trước đổi hàng: tiền hàng trả, hoá đơn mới, chênh lệch khách trả thêm / được hoàn */
+export async function exchangeQuote(input: ExchangeQuoteInput) {
+  const prep = await prepareRefund(input.invoiceId, input.returnItems);
+  const customerId =
+    input.customerId === undefined ? prep.inv.customerId : (input.customerId ?? null);
+  const quote = input.newItems.length
+    ? await quoteCart({ items: input.newItems, customerId, couponCode: input.couponCode })
+    : null;
+  const newTotal = quote?.totals.total ?? 0;
+  return {
+    invoiceCode: prep.inv.invoiceCode,
+    returnLines: prep.lines.map((l) => ({
+      invoiceItemId: l.item.id,
+      name: l.item.product.name,
+      quantity: l.quantity,
+      amount: l.amount,
+    })),
+    returnTotal: prep.total,
+    newTotals: quote?.totals ?? null,
+    newTotal,
+    /** > 0: customer pays more; < 0: shop gives back */
+    difference: newTotal - prep.total,
+    pointsBack: prep.pointsBack,
+  };
+}
+
+/**
+ * Đổi hàng trong một transaction: phiếu trả cho hàng cũ + hoá đơn mới cho hàng mới. Giá trị hàng
+ * trả cấn vào hoá đơn mới (dòng thanh toán `exchange`); khách trả thêm phần chênh lệch hoặc được
+ * hoàn phần dư theo `refundMethod`. Idempotent theo `idempotencyKey`.
+ */
+export async function exchangeInvoice(input: ExchangeInput, actor: PosActor) {
+  return idempotent(
+    `pos:exchange:${actor.tenantId}:${actor.userId}:${input.idempotencyKey}`,
+    async () => {
+      const session = await actorOpenSession(actor, "đổi hàng");
+      const prep = await prepareRefund(input.invoiceId, input.returnItems);
+      const customerId =
+        input.customerId === undefined ? prep.inv.customerId : (input.customerId ?? null);
+      const sale = await prepareSale(
+        {
+          cashSessionId: session.id,
+          customerId,
+          items: input.newItems,
+          couponCode: input.couponCode,
+          notes: `Đổi hàng từ ${prep.inv.invoiceCode}`,
+          payments: input.payments,
+        },
+        actor,
+        { credit: { method: "exchange", available: prep.total, referenceCode: null } },
+      );
+      const giveBack = prep.total - sale.creditUsed;
+
+      const written = await withInvoiceNumberRetry(async (tx) => {
+        const r = await writeRefund(tx, prep, {
+          actor,
+          sessionId: session.id,
+          reason: input.reason ?? "Đổi hàng",
+          payouts: [
+            { method: "exchange", amount: sale.creditUsed },
+            { method: input.refundMethod, amount: giveBack },
+          ],
+        });
+        // The credit line on the new invoice points at the refund it came from
+        const credited: PreparedSale = {
+          ...sale,
+          payments: sale.payments.map((p) =>
+            p.method === "exchange" ? { ...p, referenceCode: r.refund.refundCode } : p,
+          ),
+        };
+        const s = await writeSale(tx, credited, actor);
+        return { refund: r, sale: s };
+      });
+
+      await finishRefund(prep, written.refund, actor, {
+        exchangeInvoiceId: written.sale.invoice.id,
+      });
+      const created = await finishSale(sale, written.sale, actor, {
+        clearCart: false,
+        audit: { exchangeFrom: prep.inv.invoiceCode, refundCode: written.refund.refund.refundCode },
+      });
+      return {
+        ...created,
+        refundCode: written.refund.refund.refundCode,
+        returnTotal: prep.total,
+        exchangeCredit: sale.creditUsed,
+        /** Paid back to the customer (returned goods worth more than the new ones) */
+        refunded: giveBack,
+        refundMethod: giveBack > 0 ? input.refundMethod : null,
+        originalStatus: prep.fullyRefunded ? "refunded" : prep.inv.status,
+      };
+    },
+  );
 }

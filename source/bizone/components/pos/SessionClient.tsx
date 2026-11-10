@@ -17,8 +17,7 @@ import {
   type ApiAuth,
   type RouterOutputs,
 } from "@/components/inventory/shared";
-import { METHOD_LABEL } from "./PaymentModal";
-import type { PaymentMethod } from "@/lib/validators/pos";
+import { ANY_METHOD_LABEL } from "./PaymentModal";
 
 type Session = NonNullable<RouterOutputs["pos"]["currentSession"]>;
 type Summary = RouterOutputs["pos"]["sessionSummary"];
@@ -275,14 +274,26 @@ function SummaryCard({ title, summary }: { title: string; summary: Summary }) {
     ],
     ["Doanh thu", fmtMoney(summary.revenue)],
     ...Object.entries(summary.received).map(
-      ([m, v]) => [`  • ${METHOD_LABEL[m as PaymentMethod] ?? m}`, fmtMoney(v)] as [string, string],
+      ([m, v]) => [`  • ${ANY_METHOD_LABEL[m] ?? m}`, fmtMoney(v)] as [string, string],
+    ),
+    ...Object.entries(summary.credits).map(
+      ([m, v]) =>
+        [`  • ${ANY_METHOD_LABEL[m] ?? m} (không thu tiền)`, fmtMoney(v)] as [string, string],
     ),
     ["Tiền thối", `−${fmtMoney(summary.change)}`],
-    ["Tiền mặt dự kiến trong két", fmtMoney(summary.expectedCash)],
   ];
-  if (summary.refundTotal > 0)
-    rows.splice(rows.length - 1, 0, ["Hoàn trả", `−${fmtMoney(summary.refundTotal)}`]);
+  if (summary.refundTotal > 0) rows.push(["Hoàn trả", `−${fmtMoney(summary.refundTotal)}`]);
+  // P4.5: pre-order deposits are cash in the drawer but not revenue yet
+  if (summary.depositTotal > 0) {
+    rows.push(["Nhận cọc đặt trước", fmtMoney(summary.depositTotal)]);
+    for (const [m, v] of Object.entries(summary.deposits))
+      rows.push([`  • ${ANY_METHOD_LABEL[m] ?? m}`, fmtMoney(v)]);
+  }
+  if (summary.depositRefundTotal > 0)
+    rows.push(["Hoàn cọc", `−${fmtMoney(summary.depositRefundTotal)}`]);
+  rows.push(["Tiền mặt dự kiến trong két", fmtMoney(summary.expectedCash)]);
   if (summary.difference !== null) rows.push(["Chênh lệch khi khóa", fmtMoney(summary.difference)]);
+  const unused = summary.payhubUnused;
   return (
     <div className="mb-5 rounded-xl bg-gray-50 p-4" data-testid="session-summary">
       <p className="mb-2 text-sm font-semibold text-gray-700">{title}</p>
@@ -294,6 +305,13 @@ function SummaryCard({ title, summary }: { title: string; summary: Summary }) {
           </div>
         ))}
       </dl>
+      {unused.length > 0 && (
+        <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800" role="alert">
+          {unused.length} thanh toán Payment Hub đã nhận tiền nhưng chưa gắn hoá đơn (
+          {unused.map((u) => `${u.txnCode}: ${fmtMoney(u.amount)}`).join(", ")}) — đối soát / hoàn
+          tiền cho khách.
+        </p>
+      )}
     </div>
   );
 }

@@ -1201,6 +1201,85 @@ CREATE INDEX idx_pu_invoice   ON promotion_usage(invoice_id);
 CREATE INDEX idx_pu_used      ON promotion_usage(used_at);
 
 -- ============================================================
+-- 11b. POS ADVANCED (P4.5) — Payment Hub payments + pre-orders
+-- ============================================================
+
+-- Card / QR payment requested from Payment Hub at the POS (merchant_txn_id = BZ-{tenant}-{id}).
+-- Spent once on an invoice or a pre-order deposit after Payment Hub reports success.
+CREATE TABLE IF NOT EXISTS pos_payment_intents (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  cash_session_id  INT            NOT NULL,
+  user_id          INT            NOT NULL,
+  method           ENUM('qr','card') NOT NULL,
+  amount           DECIMAL(15,2)  NOT NULL,
+  status           ENUM('pending','success','failed','expired','cancelled') NOT NULL DEFAULT 'pending',
+  merchant_txn_id  VARCHAR(100)   NOT NULL,
+  payhub_txn_code  VARCHAR(50),
+  payhub_method    VARCHAR(50),
+  qr_data          TEXT,
+  payment_url      VARCHAR(1000),
+  partner_txn_id   VARCHAR(255),
+  failure_reason   VARCHAR(500),
+  invoice_id       INT,
+  preorder_id      INT,
+  expires_at       DATETIME,
+  paid_at          DATETIME,
+  last_checked_at  DATETIME,
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_ppi_merchant_txn UNIQUE (merchant_txn_id),
+  CONSTRAINT fk_ppi_session FOREIGN KEY (cash_session_id) REFERENCES cash_sessions(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+CREATE INDEX idx_ppi_session  ON pos_payment_intents(cash_session_id, status);
+CREATE INDEX idx_ppi_invoice  ON pos_payment_intents(invoice_id);
+CREATE INDEX idx_ppi_preorder ON pos_payment_intents(preorder_id);
+
+-- Pre-order with deposit (SRS-POS-09). Handing over creates a normal invoice (invoice_type
+-- 'preorder') whose payments include a 'deposit' credit line.
+CREATE TABLE IF NOT EXISTS preorders (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  preorder_code      VARCHAR(50)    NOT NULL,
+  branch_id          INT            NOT NULL,
+  cash_session_id    INT            NOT NULL,          -- shift that took the deposit
+  customer_id        INT            NOT NULL,
+  user_id            INT            NOT NULL,
+  estimated_total    DECIMAL(15,2)  NOT NULL,
+  deposit_amount     DECIMAL(15,2)  NOT NULL,
+  deposit_method     VARCHAR(50)    NOT NULL,
+  deposit_reference  VARCHAR(255),
+  due_date           DATE,
+  status             ENUM('pending','completed','cancelled') NOT NULL DEFAULT 'pending',
+  invoice_id         INT,                               -- invoice created on handover
+  refund_amount      DECIMAL(15,2)  NOT NULL DEFAULT 0,  -- deposit given back (cancel / excess)
+  refund_method      VARCHAR(50),
+  closed_session_id  INT,                               -- shift that completed / cancelled it
+  notes              TEXT,
+  completed_at       DATETIME,
+  cancelled_at       DATETIME,
+  created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_po_code UNIQUE (preorder_code),
+  CONSTRAINT fk_preo_branch   FOREIGN KEY (branch_id)       REFERENCES branches(id)      ON DELETE RESTRICT,
+  CONSTRAINT fk_preo_session  FOREIGN KEY (cash_session_id) REFERENCES cash_sessions(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_preo_customer FOREIGN KEY (customer_id)     REFERENCES customers(id)     ON DELETE RESTRICT
+) ENGINE=InnoDB;
+CREATE INDEX idx_preo_status         ON preorders(status, due_date);
+CREATE INDEX idx_preo_closed_session ON preorders(closed_session_id);
+
+CREATE TABLE IF NOT EXISTS preorder_items (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  preorder_id      INT            NOT NULL,
+  product_id       INT            NOT NULL,
+  variant_id       INT,
+  quantity         DECIMAL(15,2)  NOT NULL,
+  unit_price       DECIMAL(15,2)  NOT NULL,
+  discount_percent DECIMAL(5,2)   NOT NULL DEFAULT 0,
+  total_amount     DECIMAL(15,2)  NOT NULL,              -- estimate at order time
+  CONSTRAINT fk_preoi_preorder FOREIGN KEY (preorder_id) REFERENCES preorders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_preoi_product  FOREIGN KEY (product_id)  REFERENCES products(id)  ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- ============================================================
 -- 12. SYSTEM CONFIGURATION
 -- ============================================================
 

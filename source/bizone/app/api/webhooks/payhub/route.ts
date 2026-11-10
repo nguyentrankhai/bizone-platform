@@ -1,13 +1,18 @@
 import { getRedis } from "@/lib/redis";
 import { isFreshTimestamp, verifyPayhubSignature } from "@/lib/payhub/webhook";
+import { isKnownTenant, runWithTenant } from "@/lib/tenant";
+import { applyWebhook, parseMerchantTxnId } from "@/server/services/payhubPayment.service";
 
 /**
  * POST /api/webhooks/payhub — receives Payment Hub events (payment.success / failed / expired,
  * refund.completed, webhook.ping). Public route (no JWT): authenticated by the HMAC signature.
  *
  * Payment Hub retries on any non-2xx, so: answer 2xx once the event is safely accepted,
- * de-duplicate on X-Webhook-Id (retries and replays reuse it). Applying events to invoices/orders
- * is P4.5 (POS ↔ Payment Hub); for now accepted events are logged.
+ * de-duplicate on X-Webhook-Id (retries and replays reuse it).
+ *
+ * P4.5: payment events for POS card/QR payments (`merchant_txn_id = BZ-{tenant}-{intentId}`) are
+ * applied to that tenant's `pos_payment_intents` row; the POS is notified over its WS channel.
+ * Other merchant transactions are only logged.
  */
 
 const DEDUPE_TTL_SECONDS = 7 * 86400;
@@ -51,7 +56,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  let payload: { event?: string; transaction_id?: string; merchant_txn_id?: string | null };
+  let payload: Parameters<typeof applyWebhook>[0];
   try {
     payload = JSON.parse(rawBody);
   } catch {
@@ -67,13 +72,8 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const first = await getRedis().set(
-    `bizone:payhub:webhook:${webhookId}`,
-    "1",
-    "EX",
-    DEDUPE_TTL_SECONDS,
-    "NX",
-  );
+  const dedupeKey = `bizone:payhub:webhook:${webhookId}`;
+  const first = await getRedis().set(dedupeKey, "1", "EX", DEDUPE_TTL_SECONDS, "NX");
   if (first !== "OK") {
     return reply(200, { success: true, data: { received: true, duplicate: true } });
   }
@@ -81,5 +81,30 @@ export async function POST(req: Request): Promise<Response> {
   console.log(
     `[payhub-webhook] ${event} ${payload.transaction_id ?? ""} (merchant txn ${payload.merchant_txn_id ?? "-"}) id=${webhookId}`,
   );
-  return reply(200, { success: true, data: { received: true, duplicate: false } });
+
+  const ref = parseMerchantTxnId(payload.merchant_txn_id);
+  if (!ref || !event.startsWith("payment.")) {
+    return reply(200, { success: true, data: { received: true, duplicate: false } });
+  }
+  if (!isKnownTenant(ref.tenantId)) {
+    console.warn(`[payhub-webhook] unknown tenant in ${payload.merchant_txn_id}`);
+    return reply(200, {
+      success: true,
+      data: { received: true, duplicate: false, applied: false },
+    });
+  }
+  try {
+    const result = await runWithTenant(ref.tenantId, () => applyWebhook(payload));
+    return reply(200, { success: true, data: { received: true, duplicate: false, ...result } });
+  } catch (err) {
+    // Not applied: forget the id so Payment Hub's retry is processed instead of skipped
+    await getRedis()
+      .del(dedupeKey)
+      .catch(() => undefined);
+    console.error("[payhub-webhook] apply failed:", err);
+    return reply(500, {
+      success: false,
+      error: { code: "INTERNAL_ERROR", message: "Could not apply event" },
+    });
+  }
 }

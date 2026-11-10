@@ -1,7 +1,9 @@
 import { getPrisma } from "@/lib/prisma";
 import { bizoneError } from "@/lib/errors";
 import type { CloseSessionInput, ListSessionsInput, OpenSessionInput } from "@/lib/validators/pos";
+import { CREDIT_METHODS } from "@/lib/validators/pos";
 import { sumByMethod } from "./payment.service";
+import { unusedPaidIntents } from "./payhubPayment.service";
 import { publishPosEvent } from "./posEvents";
 
 /** Who is acting: the local users.id and whether they may act on other cashiers' shifts */
@@ -91,34 +93,65 @@ export async function sessionSummary(id: number) {
   const prisma = getPrisma();
   const session = await getSession(id);
 
-  const [invoices, salePayments, refundPayments] = await Promise.all([
-    prisma.invoice.groupBy({
-      by: ["status"],
-      where: { cashSessionId: id },
-      _count: { _all: true },
-      _sum: { totalAmount: true, discountAmount: true, changeAmount: true },
-      orderBy: { status: "asc" },
-    }),
-    prisma.invoicePayment.findMany({
-      where: { amount: { gt: 0 }, invoice: { cashSessionId: id, status: { not: "cancelled" } } },
-      select: { paymentMethod: true, amount: true },
-    }),
-    prisma.invoicePayment.findMany({
-      where: { amount: { lt: 0 }, notes: refundTag(id) },
-      select: { paymentMethod: true, amount: true },
-    }),
-  ]);
+  const [invoices, salePayments, refundPayments, deposits, depositRefunds, payhubUnused] =
+    await Promise.all([
+      prisma.invoice.groupBy({
+        by: ["status"],
+        where: { cashSessionId: id },
+        _count: { _all: true },
+        _sum: { totalAmount: true, discountAmount: true, changeAmount: true },
+        orderBy: { status: "asc" },
+      }),
+      prisma.invoicePayment.findMany({
+        where: { amount: { gt: 0 }, invoice: { cashSessionId: id, status: { not: "cancelled" } } },
+        select: { paymentMethod: true, amount: true },
+      }),
+      prisma.invoicePayment.findMany({
+        where: { amount: { lt: 0 }, notes: refundTag(id) },
+        select: { paymentMethod: true, amount: true },
+      }),
+      // P4.5: pre-order deposits taken in this shift / deposits given back from it
+      prisma.preorder.findMany({
+        where: { cashSessionId: id },
+        select: { depositMethod: true, depositAmount: true },
+      }),
+      prisma.preorder.findMany({
+        where: { closedSessionId: id, refundAmount: { gt: 0 } },
+        select: { refundMethod: true, refundAmount: true },
+      }),
+      unusedPaidIntents(id),
+    ]);
 
   const byStatus = (s: string) => invoices.find((g) => g.status === s);
   const counted = invoices.filter((g) => g.status !== "cancelled");
   const revenue = counted.reduce((s, g) => s + Number(g._sum?.totalAmount ?? 0), 0);
   const discounts = counted.reduce((s, g) => s + Number(g._sum?.discountAmount ?? 0), 0);
   const change = counted.reduce((s, g) => s + Number(g._sum?.changeAmount ?? 0), 0);
-  const received = sumByMethod(salePayments);
-  const refunds = sumByMethod(refundPayments);
+  // Credit lines (exchange value, applied deposits) are not money changing hands in this shift
+  const isCredit = (m: string) => (CREDIT_METHODS as readonly string[]).includes(m);
+  const allReceived = sumByMethod(salePayments);
+  const allRefunds = sumByMethod(refundPayments);
+  const received = Object.fromEntries(Object.entries(allReceived).filter(([m]) => !isCredit(m)));
+  const refunds = Object.fromEntries(Object.entries(allRefunds).filter(([m]) => !isCredit(m)));
+  const credits = Object.fromEntries(Object.entries(allReceived).filter(([m]) => isCredit(m)));
+  const depositIn = sumByMethod(
+    deposits.map((d) => ({ paymentMethod: d.depositMethod, amount: d.depositAmount })),
+  );
+  const depositOut = sumByMethod(
+    depositRefunds.map((d) => ({
+      paymentMethod: d.refundMethod ?? "cash",
+      amount: d.refundAmount,
+    })),
+  );
 
   const opening = Number(session.openingBalance);
-  const expectedCash = opening + (received.cash ?? 0) - change + (refunds.cash ?? 0);
+  const expectedCash =
+    opening +
+    (received.cash ?? 0) -
+    change +
+    (refunds.cash ?? 0) +
+    (depositIn.cash ?? 0) -
+    (depositOut.cash ?? 0);
 
   return {
     sessionId: id,
@@ -141,6 +174,14 @@ export async function sessionSummary(id: number) {
     // Stored negative; report as positive amounts (and avoid -0 when there were none)
     refunds: Object.fromEntries(Object.entries(refunds).map(([k, v]) => [k, Math.abs(v)])),
     refundTotal: Math.abs(Object.values(refunds).reduce((s, v) => s + v, 0)),
+    /** Exchange credit / applied deposits on this shift's invoices (no money moved) */
+    credits,
+    deposits: depositIn,
+    depositTotal: Object.values(depositIn).reduce((s, v) => s + v, 0),
+    depositRefunds: depositOut,
+    depositRefundTotal: Object.values(depositOut).reduce((s, v) => s + v, 0),
+    /** Paid through Payment Hub but not attached to any invoice — reconcile before closing */
+    payhubUnused,
     expectedCash,
     actualClosingBalance:
       session.actualClosingBalance === null ? null : Number(session.actualClosingBalance),

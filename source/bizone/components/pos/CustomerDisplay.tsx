@@ -14,21 +14,43 @@ const THANKS_MS = 8_000;
  * lớn, QR thanh toán khi thu ngân chọn chuyển khoản/QR, lời cảm ơn sau khi thanh toán.
  * Chỉ nhận dữ liệu — đồng bộ qua WebSocket (hoặc BroadcastChannel khi mất kết nối).
  */
-export function CustomerDisplay({ auth, sessionId }: { auth: ApiAuth; sessionId: number }) {
-  const { cart, qr, completed, mode, sessionClosed, dismissCompleted } = usePosWebSocket({
+export function CustomerDisplay({
+  auth,
+  sessionId,
+  storeName: givenName,
+  onRejected,
+  onSessionClosed,
+}: {
+  auth: ApiAuth;
+  sessionId: number;
+  /** Paired displays (PIN) get the name at pairing — they can't call the API */
+  storeName?: string;
+  onRejected?: () => void;
+  onSessionClosed?: () => void;
+}) {
+  const { cart, qr, completed, mode, sessionClosed, rejected, dismissCompleted } = usePosWebSocket({
     sessionId,
     auth,
     role: "display",
   });
-  const [storeName, setStoreName] = useState("BizOne");
+  const [storeName, setStoreName] = useState(givenName ?? "BizOne");
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    if (givenName) return;
     trpc.pos.storeInfo
       .query(undefined, apiContext(auth))
       .then((s) => setStoreName(s.name))
       .catch(() => {});
-  }, [auth]);
+  }, [auth, givenName]);
+
+  useEffect(() => {
+    if (rejected) onRejected?.();
+  }, [rejected, onRejected]);
+
+  useEffect(() => {
+    if (sessionClosed) onSessionClosed?.();
+  }, [sessionClosed, onSessionClosed]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -143,13 +165,21 @@ export function CustomerDisplay({ auth, sessionId }: { auth: ApiAuth; sessionId:
                 className="flex flex-col items-center gap-3 rounded-3xl bg-white p-6 text-slate-900"
                 data-testid="display-qr"
               >
-                <p className="text-xl font-bold">Quét QR để thanh toán</p>
+                <p className="text-xl font-bold">
+                  {qr.kind === "card" ? "Quét để thanh toán thẻ" : "Quét QR để thanh toán"}
+                </p>
                 <PaymentQr payload={qr.payload} size={260} />
                 <p className="text-center text-base">
-                  {qr.bankName} · {qr.accountNo}
-                  <br />
-                  {qr.accountName}
+                  {qr.bankName}
+                  {qr.accountNo ? ` · ${qr.accountNo}` : ""}
+                  {qr.accountName && (
+                    <>
+                      <br />
+                      {qr.accountName}
+                    </>
+                  )}
                 </p>
+                {qr.caption && <p className="text-center text-sm text-slate-500">{qr.caption}</p>}
                 <p className="text-3xl font-black">{fmtMoney(qr.amount)}</p>
               </div>
             )}

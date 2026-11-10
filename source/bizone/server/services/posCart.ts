@@ -1,6 +1,7 @@
 import { getRedis } from "@/lib/redis";
 import { currentTenantId } from "@/lib/tenant";
-import type { CartSnapshot } from "@/lib/pos/protocol";
+import type { CartSnapshot, HeldCartSummary } from "@/lib/pos/protocol";
+import { totalQuantity } from "@/lib/pos/held";
 import { quoteCart } from "./pricing.service";
 
 /** Server-side cart of a cash session, shared by both screens (and survives reconnects) */
@@ -65,4 +66,49 @@ export async function snapshotCart(sessionId: number, cart: StoredCart): Promise
         }
       : null,
   };
+}
+
+// ─── Held bills (tách / gộp hoá đơn, P4.5) ────────────────────────────────────
+
+export interface HeldCart extends StoredCart {
+  id: string;
+  label: string;
+  createdAt: string;
+}
+
+const heldKey = (sessionId: number) => `pos:held:${currentTenantId()}:${sessionId}`;
+
+export async function listHeld(sessionId: number): Promise<HeldCart[]> {
+  const all = await getRedis().hgetall(heldKey(sessionId));
+  return Object.values(all)
+    .map((v) => JSON.parse(v) as HeldCart)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function saveHeld(sessionId: number, held: HeldCart): Promise<void> {
+  const key = heldKey(sessionId);
+  await getRedis()
+    .multi()
+    .hset(key, held.id, JSON.stringify(held))
+    .expire(key, CART_TTL_SECONDS)
+    .exec();
+}
+
+export async function deleteHeld(sessionId: number, ...ids: string[]): Promise<void> {
+  if (ids.length) await getRedis().hdel(heldKey(sessionId), ...ids);
+}
+
+export async function clearHeld(sessionId: number): Promise<void> {
+  await getRedis().del(heldKey(sessionId));
+}
+
+export function heldSummaries(held: HeldCart[]): HeldCartSummary[] {
+  return held.map((h) => ({
+    id: h.id,
+    label: h.label,
+    itemCount: h.items.length,
+    quantity: totalQuantity(h.items),
+    customerId: h.customerId,
+    createdAt: h.createdAt,
+  }));
 }

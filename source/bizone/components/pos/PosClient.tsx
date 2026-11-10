@@ -3,7 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, HelpCircle, Lock, Monitor, Printer, Wifi, WifiOff } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  CalendarClock,
+  HelpCircle,
+  Lock,
+  Monitor,
+  MonitorSmartphone,
+  Printer,
+  Scissors,
+  Settings2,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
@@ -11,6 +24,8 @@ import { Modal } from "@/components/ui/Modal";
 import { usePosWebSocket } from "@/hooks/usePosWebSocket";
 import { useBarcodeScan } from "@/hooks/useBarcodeScan";
 import type { PaymentMethod } from "@/lib/validators/pos";
+import type { PayhubIntentView } from "@/lib/pos/protocol";
+import { loadPrinterSettings, printReceipt, type PrinterSettings } from "@/lib/printing/printer";
 import {
   apiContext,
   errorMessage,
@@ -22,6 +37,11 @@ import { ProductGrid, type ProductGridHandle } from "./ProductGrid";
 import { CartPanel, type CartPanelHandle } from "./CartPanel";
 import { PaymentModal } from "./PaymentModal";
 import { Receipt } from "./Receipt";
+import { ReturnForm } from "./ReturnForm";
+import { SplitInvoiceModal } from "./SplitInvoiceModal";
+import { PreOrderForm } from "./PreOrderForm";
+import { PairDisplayModal } from "./PairDisplayModal";
+import { PrinterSettingsModal } from "./PrinterSettingsModal";
 
 type Session = NonNullable<RouterOutputs["pos"]["currentSession"]>;
 type StoreInfo = RouterOutputs["pos"]["storeInfo"];
@@ -32,6 +52,7 @@ export const SHORTCUTS: [string, string][] = [
   ["F2", "Tìm / quét sản phẩm"],
   ["F3", "Chọn khách hàng"],
   ["F4", "Nhập mã giảm giá"],
+  ["F6", "Đổi / trả hàng"],
   ["F7", "Mở màn hình khách hàng"],
   ["F8", "Xóa giỏ hàng"],
   ["F9", "Thanh toán (trong modal: xác nhận)"],
@@ -53,6 +74,19 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
   const [lastInvoiceId, setLastInvoiceId] = useState<number | null>(null);
   const [printData, setPrintData] = useState<PrintData | null>(null);
   const [help, setHelp] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [split, setSplit] = useState<"split" | "held" | null>(null);
+  const [preorder, setPreorder] = useState<"create" | "list" | null>(null);
+  const [pairOpen, setPairOpen] = useState(false);
+  const [pairedAt, setPairedAt] = useState<number | null>(null);
+  const [printerOpen, setPrinterOpen] = useState(false);
+  const [printer, setPrinter] = useState<PrinterSettings | null>(null);
+  const [payhubEvent, setPayhubEvent] = useState<PayhubIntentView | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPrinter(loadPrinterSettings());
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -76,7 +110,14 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
     role: "cashier",
     onScanned: (p) => toast.success(`Đã thêm ${p.name}`),
     onError: (m) => toast.error(m),
+    onPayhub: setPayhubEvent,
+    onDisplayPaired: () => {
+      setPairedAt(Date.now());
+      toast.success("Màn hình khách đã kết nối");
+    },
   });
+  const anyModal =
+    payMethod !== null || returnOpen || split !== null || preorder !== null || pairOpen;
 
   const scan = useCallback(
     async (code: string) => {
@@ -89,7 +130,7 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
     },
     [pos],
   );
-  useBarcodeScan((code) => void scan(code), { enabled: !!session && payMethod === null });
+  useBarcodeScan((code) => void scan(code), { enabled: !!session && !anyModal });
 
   function openPayment(method: PaymentMethod) {
     if (!pos.cart?.lines.length) return;
@@ -97,15 +138,31 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
     setPayMethod(method);
   }
 
+  /** USB / Bluetooth printer when configured (ESC/POS), else the browser receipt + window.print */
   const print = useCallback(
     async (invoiceId: number) => {
+      let data: PrintData;
       try {
-        setPrintData(await trpc.pos.print.query({ id: invoiceId }, apiContext(auth)));
+        data = await trpc.pos.print.query({ id: invoiceId }, apiContext(auth));
       } catch (e) {
-        toast.error(errorMessage(e));
+        return toast.error(errorMessage(e));
       }
+      try {
+        if (await printReceipt(data, printer ?? undefined)) return toast.success("Đã gửi máy in");
+      } catch (e) {
+        toast.error(`Máy in lỗi: ${errorMessage(e)} — in qua trình duyệt`);
+      }
+      setPrintData(data);
     },
-    [auth, toast],
+    [auth, toast, printer],
+  );
+
+  const done = useCallback(
+    (message: string, invoiceId?: number) => {
+      toast.success(message);
+      if (invoiceId) setLastInvoiceId(invoiceId);
+    },
+    [toast],
   );
 
   // Print once the receipt is in the DOM
@@ -127,12 +184,13 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
   // Function-key shortcuts (F5/F11 stay with the browser: reload / full screen)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (payMethod !== null) return; // the payment modal handles its own keys
+      if (anyModal) return; // open dialogs handle their own keys
       const actions: Record<string, () => void> = {
         F1: () => setHelp(true),
         F2: () => gridRef.current?.focusSearch(),
         F3: () => cartRef.current?.focusCustomer(),
         F4: () => cartRef.current?.focusCoupon(),
+        F6: () => setReturnOpen(true),
         F7: openDisplay,
         F8: () => {
           if (pos.cart?.lines.length && confirm("Xóa toàn bộ giỏ hàng?"))
@@ -182,14 +240,14 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-bold text-gray-900">POS Bán hàng</h1>
+          <h1 className="text-lg font-bold whitespace-nowrap text-gray-900">POS Bán hàng</h1>
           <span className="ml-2 flex min-w-0 items-center gap-2 truncate rounded-full bg-emerald-50 px-3 py-1 text-sm text-emerald-700">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Ca #{session.id} · {session.branch.name} · từ {fmtDate(session.openedAt, true)}
           </span>
           <span
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs",
+              "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs whitespace-nowrap",
               pos.mode === "ws" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700",
             )}
             title={
@@ -210,8 +268,32 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
                 ? "Đang kết nối"
                 : "Cục bộ"}
           </span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 xl:gap-2">
+            <TopButton
+              onClick={() => setReturnOpen(true)}
+              icon={ArrowLeftRight}
+              label="Đổi/Trả"
+              kbd="F6"
+            />
+            <TopButton
+              onClick={() =>
+                setSplit(!pos.cart?.lines.length && pos.held.length ? "held" : "split")
+              }
+              icon={Scissors}
+              label="Tách/Gộp"
+              badge={pos.held.length || undefined}
+            />
+            <TopButton
+              onClick={() => setPreorder("create")}
+              icon={CalendarClock}
+              label="Đặt trước"
+            />
             <TopButton onClick={openDisplay} icon={Monitor} label="Màn hình khách" kbd="F7" />
+            <TopButton
+              onClick={() => setPairOpen(true)}
+              icon={MonitorSmartphone}
+              label="Ghép màn hình"
+            />
             <TopButton
               onClick={() => lastInvoiceId && void print(lastInvoiceId)}
               icon={Printer}
@@ -219,6 +301,7 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
               kbd="F10"
               disabled={!lastInvoiceId}
             />
+            <TopButton onClick={() => setPrinterOpen(true)} icon={Settings2} label="Máy in" />
             <TopButton
               onClick={() => router.push("/pos/session")}
               icon={Lock}
@@ -261,11 +344,16 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
         total={pos.cart?.total ?? 0}
         reference={`BizOne ca ${session.id}`}
         store={store}
+        sessionId={session.id}
+        auth={auth}
+        payhubEvent={payhubEvent}
         onShowQr={pos.showQr}
         onClose={() => {
           setPayMethod(null);
           void pos.showQr(null);
           gridRef.current?.focusSearch();
+          if (pos.held.length && !pos.cart?.lines.length)
+            toast.info(`Còn ${pos.held.length} đơn chờ — mở “Tách/Gộp” để thanh toán tiếp`);
         }}
         onConfirm={async (payments) => {
           const result = await pos.pay(payments, idemKey.current);
@@ -295,6 +383,82 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
         </p>
       </Modal>
 
+      <ReturnForm
+        open={returnOpen}
+        auth={auth}
+        sessionId={session.id}
+        branchId={session.branch.id}
+        store={store}
+        payhubEvent={payhubEvent}
+        onShowQr={pos.showQr}
+        onClose={() => {
+          setReturnOpen(false);
+          gridRef.current?.focusSearch();
+        }}
+        onDone={done}
+        onPrint={(id) => void print(id)}
+      />
+
+      <SplitInvoiceModal
+        open={split !== null}
+        initialTab={split ?? "split"}
+        cart={pos.cart}
+        held={pos.held}
+        online={pos.mode === "ws"}
+        onClose={() => {
+          setSplit(null);
+          gridRef.current?.focusSearch();
+        }}
+        onSplit={async (items, label) => {
+          await pos.split(items, label);
+          toast.success("Đã tách — hoá đơn mới nằm trong Đơn chờ");
+        }}
+        onHold={async (label) => {
+          await pos.hold(label);
+          toast.success("Đã lưu tạm đơn");
+        }}
+        onResume={pos.resume}
+        onMerge={async (ids) => {
+          await pos.merge(ids);
+          toast.success(`Đã gộp ${ids.length} đơn vào đơn hiện tại`);
+        }}
+        onDiscard={pos.discardHeld}
+      />
+
+      <PreOrderForm
+        open={preorder !== null}
+        initialTab={preorder ?? "create"}
+        auth={auth}
+        sessionId={session.id}
+        cart={pos.cart}
+        store={store}
+        payhubEvent={payhubEvent}
+        onShowQr={pos.showQr}
+        onClose={() => {
+          setPreorder(null);
+          gridRef.current?.focusSearch();
+        }}
+        onDone={done}
+        onPrint={(id) => void print(id)}
+      />
+
+      <PairDisplayModal
+        open={pairOpen}
+        auth={auth}
+        sessionId={session.id}
+        pairedAt={pairedAt}
+        onClose={() => setPairOpen(false)}
+      />
+
+      <PrinterSettingsModal
+        open={printerOpen}
+        onClose={() => setPrinterOpen(false)}
+        onSaved={(s) => {
+          setPrinter(s);
+          toast.success("Đã lưu cài đặt máy in");
+        }}
+      />
+
       <Receipt data={printData} />
     </>
   );
@@ -306,24 +470,31 @@ function TopButton({
   label,
   kbd,
   disabled,
+  badge,
 }: {
   onClick: () => void;
   icon: React.ElementType;
   label: string;
-  kbd: string;
+  kbd?: string;
   disabled?: boolean;
+  badge?: number;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={`${label} (${kbd})`}
-      className="flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+      title={kbd ? `${label} (${kbd})` : label}
+      className="flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40 xl:px-3"
     >
       <Icon className="h-4 w-4" />
-      <span className="hidden xl:inline">{label}</span>
-      <kbd className="text-xs text-gray-400">{kbd}</kbd>
+      <span className="hidden 2xl:inline">{label}</span>
+      {kbd && <kbd className="hidden text-xs text-gray-400 xl:inline">{kbd}</kbd>}
+      {badge !== undefined && (
+        <span className="rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

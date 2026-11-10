@@ -33,8 +33,15 @@ import {
   saveCart,
   snapshotCart,
   clearCart,
+  listHeld,
+  saveHeld,
+  deleteHeld,
+  heldSummaries,
   type StoredCart,
 } from "@/server/services/posCart";
+import { HeldCartError, MAX_HELD_CARTS, mergeLines, splitLines } from "@/lib/pos/held";
+import { getStaffAccess } from "@/server/services/rbac.service";
+import { DISPLAY_TOKEN_PREFIX, resolveDisplayToken } from "@/server/services/posPairing.service";
 import { publishPosEvent } from "@/server/services/posEvents";
 import {
   findProductByCode,
@@ -51,10 +58,17 @@ interface Client {
   sessionId: number;
   /** `${tenantId}:${sessionId}` — session ids are only unique within one tenant DB */
   room: string;
-  user: AuthUser;
+  /** null for a customer display paired by PIN (read-only, no Keycloak user) */
+  user: AuthUser | null;
   tenantId: string;
   canWrite: boolean;
   actor?: PosActor;
+}
+
+/** Staff check from the tenant DB: deactivated staff / custom roles apply to WS too (#58) */
+async function staffCan(user: AuthUser, permission: "pos:read" | "pos:write") {
+  const access = await getStaffAccess(user);
+  return access.active && hasPermission(user, permission, access.capabilities);
 }
 
 const clients = new Map<WebSocket, Client>();
@@ -103,13 +117,30 @@ async function authorize(
   if (!protocols.includes(POS_WS_PROTOCOL) || !token)
     return { status: 401, message: "Missing token" };
 
+  const tenantId = url.searchParams.get("tenant");
+
+  // Customer display paired by PIN (P4.5): read-only token bound to one tenant + shift
+  if (token.startsWith(DISPLAY_TOKEN_PREFIX)) {
+    const grant = await resolveDisplayToken(token);
+    if (!grant) return { status: 401, message: "Invalid display token" };
+    if (grant.tenantId !== tenantId || grant.sessionId !== sessionId)
+      return { status: 403, message: "Display is paired with another shift" };
+    if (!isKnownTenant(tenantId)) return { status: 403, message: "Tenant is not provisioned" };
+    const s = await runWithTenant(tenantId, () =>
+      getPrisma().cashSession.findUnique({ where: { id: sessionId }, select: { status: true } }),
+    );
+    if (!s) return { status: 404, message: "Cash session not found" };
+    if (s.status !== "open") return { status: 409, message: "Cash session closed" };
+    return { sessionId, room: roomKey(tenantId, sessionId), user: null, tenantId, canWrite: false };
+  }
+
   const verified = await authenticateToken(token); // DEV_BYPASS_TOKEN → dev user (P4.0)
   if (!verified.ok) return { status: 401, message: "Invalid token" };
-  const tenantId = url.searchParams.get("tenant");
   if (!tenantId || tenantId !== verified.user.tenantId)
     return { status: 403, message: "Tenant mismatch" };
   if (!isKnownTenant(tenantId)) return { status: 403, message: "Tenant is not provisioned" };
-  if (!hasPermission(verified.user, "pos:read")) return { status: 403, message: "Forbidden" };
+  if (!(await runWithTenant(tenantId, () => staffCan(verified.user, "pos:read"))))
+    return { status: 403, message: "Forbidden" };
 
   const session = await runWithTenant(tenantId, () =>
     getPrisma().cashSession.findUnique({
@@ -125,7 +156,7 @@ async function authorize(
     room: roomKey(tenantId, sessionId),
     user: verified.user,
     tenantId,
-    canWrite: hasPermission(verified.user, "pos:write"),
+    canWrite: await runWithTenant(tenantId, () => staffCan(verified.user, "pos:write")),
   };
 }
 
@@ -176,6 +207,10 @@ wss.on("connection", async (ws: WebSocket, client: Client) => {
       snapshotCart(client.sessionId, await loadCart(client.sessionId)),
     );
     send(ws, { type: "cart:updated", data: snapshot });
+    if (client.user) {
+      const held = await runWithTenant(client.tenantId, () => listHeld(client.sessionId));
+      send(ws, { type: "held:updated", data: { held: heldSummaries(held) } });
+    }
   } catch (err) {
     send(ws, { type: "error", data: { code: "INTERNAL_ERROR", message: errorText(err) } });
   }
@@ -225,14 +260,34 @@ function errorCode(err: unknown): string {
 }
 
 async function actorFor(client: Client): Promise<PosActor> {
+  const user = client.user!;
   client.actor ??= {
-    userId: await ensureDbUserId(client.user),
+    userId: await ensureDbUserId(user),
     tenantId: client.tenantId,
-    canManage:
-      hasPermission(client.user, "admin:*") ||
-      client.user.roles.some((r) => MANAGER_ROLES.includes(r)),
+    canManage: hasPermission(user, "admin:*") || user.roles.some((r) => MANAGER_ROLES.includes(r)),
   };
   return client.actor;
+}
+
+const bad = (message: string, code = "VALIDATION_ERROR") =>
+  new Error(JSON.stringify({ code, message }));
+
+async function publishHeld(sessionId: number) {
+  await publishPosEvent(sessionId, {
+    type: "held:updated",
+    data: { held: heldSummaries(await listHeld(sessionId)) },
+  });
+}
+
+async function holdCart(sessionId: number, cart: StoredCart, label?: string) {
+  const held = await listHeld(sessionId);
+  if (held.length >= MAX_HELD_CARTS) throw bad(`Tối đa ${MAX_HELD_CARTS} đơn chờ mỗi ca`);
+  await saveHeld(sessionId, {
+    ...cart,
+    id: randomUUID().slice(0, 8),
+    label: label?.trim().slice(0, 50) || `Đơn chờ ${held.length + 1}`,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 async function commit(sessionId: number, cart: StoredCart) {
@@ -265,8 +320,11 @@ async function addItem(
 
 async function handle(client: Client, event: PosClientEvent): Promise<void> {
   const { sessionId } = client;
-  if (!client.canWrite)
+  if (!client.canWrite || !client.user)
     throw new Error(JSON.stringify({ code: "FORBIDDEN", message: "Màn hình chỉ xem" }));
+  // Re-checked on every write (cached 60 s): deactivation / role changes apply immediately
+  if (!(await staffCan(client.user, "pos:write")))
+    throw new Error(JSON.stringify({ code: "FORBIDDEN", message: "Không có quyền bán hàng" }));
 
   switch (event.type) {
     case "cart:add": {
@@ -356,6 +414,66 @@ async function handle(client: Client, event: PosClientEvent): Promise<void> {
       await publishPosEvent(sessionId, { type: "display:qr", data: event.data });
       return;
     }
+    case "cart:hold": {
+      const cart = await loadCart(sessionId);
+      if (cart.items.length === 0) throw bad("Giỏ hàng trống");
+      await holdCart(sessionId, cart, event.data?.label);
+      await publishHeld(sessionId);
+      return commit(sessionId, { ...cart, items: [], customerId: null, couponCode: null });
+    }
+    case "cart:resume": {
+      const held = (await listHeld(sessionId)).find((h) => h.id === event.data.heldId);
+      if (!held) throw bad("Đơn chờ không còn tồn tại", "NOT_FOUND");
+      const cart = await loadCart(sessionId);
+      // The bill on screen is parked in place of the one brought back
+      if (cart.items.length > 0) await holdCart(sessionId, cart);
+      await deleteHeld(sessionId, held.id);
+      await publishHeld(sessionId);
+      return commit(sessionId, {
+        items: held.items,
+        customerId: held.customerId,
+        couponCode: held.couponCode,
+        version: cart.version,
+      });
+    }
+    case "cart:split": {
+      const cart = await loadCart(sessionId);
+      let parts;
+      try {
+        parts = splitLines(cart.items, event.data.items ?? []);
+      } catch (e) {
+        if (e instanceof HeldCartError) throw bad(e.message);
+        throw e;
+      }
+      // The split-off bill keeps the customer; the coupon stays on the current bill
+      await holdCart(
+        sessionId,
+        { items: parts.moved, customerId: cart.customerId, couponCode: null, version: 0 },
+        event.data.label ?? "Hoá đơn tách",
+      );
+      await publishHeld(sessionId);
+      return commit(sessionId, { ...cart, items: parts.stay });
+    }
+    case "cart:merge": {
+      const ids = [...new Set(event.data.heldIds ?? [])];
+      if (ids.length === 0) throw bad("Chọn đơn chờ cần gộp");
+      const all = await listHeld(sessionId);
+      const picked = ids.map((id) => all.find((h) => h.id === id));
+      if (picked.some((h) => !h)) throw bad("Đơn chờ không còn tồn tại", "NOT_FOUND");
+      const cart = await loadCart(sessionId);
+      const merged = mergeLines(cart.items, ...picked.map((h) => h!.items));
+      await deleteHeld(sessionId, ...ids);
+      await publishHeld(sessionId);
+      return commit(sessionId, {
+        ...cart,
+        items: merged,
+        customerId: cart.customerId ?? picked.find((h) => h!.customerId)?.customerId ?? null,
+      });
+    }
+    case "held:discard": {
+      await deleteHeld(sessionId, event.data.heldId);
+      return publishHeld(sessionId);
+    }
     case "payment:process": {
       const cart = await loadCart(sessionId);
       if (cart.items.length === 0)
@@ -406,6 +524,21 @@ function onMessage(ws: WebSocket, client: Client, raw: string) {
 
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
+// Staff deactivated / stripped of POS access while connected → drop their sockets (#58)
+const accessCheck = setInterval(() => {
+  for (const [ws, client] of clients) {
+    if (!client.user) continue;
+    const user = client.user;
+    runWithTenant(client.tenantId, () => staffCan(user, "pos:read"))
+      .then((ok) => {
+        if (!ok) ws.close(4403, "Forbidden");
+      })
+      .catch(() => {
+        /* DB/Redis hiccup: keep the socket, next round decides */
+      });
+  }
+}, 60_000);
+
 const heartbeat = setInterval(() => {
   for (const ws of wss.clients) {
     if (!alive.get(ws)) {
@@ -433,6 +566,7 @@ function shutdown(signal: string) {
   shuttingDown = true;
   console.log(`[pos-ws] ${signal} received, closing…`);
   clearInterval(heartbeat);
+  clearInterval(accessCheck);
   for (const ws of wss.clients) ws.close(1001, "server shutting down");
   wss.close();
   http.close();

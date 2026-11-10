@@ -25,6 +25,8 @@ export interface PosSyncOptions {
   wsUrl?: string;
   onEvent: (event: PosEnvelope<PosServerEvent>, source: "ws" | "local") => void;
   onMode?: (mode: PosSyncMode) => void;
+  /** The server closed with 4401/4403 or kept refusing the handshake (bad / expired token) */
+  onRejected?: () => void;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -41,6 +43,8 @@ export class PosSyncClient {
   >();
   private retry: ReturnType<typeof setTimeout> | undefined;
   private attempts = 0;
+  /** Consecutive sockets that closed before opening (handshake refused) */
+  private refused = 0;
   private closed = false;
   mode: PosSyncMode = "connecting";
 
@@ -114,8 +118,11 @@ export class PosSyncClient {
       return this.scheduleReconnect();
     }
     this.ws = ws;
+    let opened = false;
     ws.onopen = () => {
+      opened = true;
       this.attempts = 0;
+      this.refused = 0;
       this.setMode("ws");
     };
     ws.onmessage = (e) => {
@@ -130,8 +137,11 @@ export class PosSyncClient {
       }
       this.opts.onEvent(msg, "ws");
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       if (this.ws === ws) this.ws = null;
+      if (e.code === 4401 || e.code === 4403) this.opts.onRejected?.();
+      // Browsers hide the HTTP status of a refused handshake; 3 refusals in a row → report it
+      else if (!opened && ++this.refused === 3) this.opts.onRejected?.();
       this.scheduleReconnect();
     };
   }

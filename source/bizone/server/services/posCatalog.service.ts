@@ -1,3 +1,4 @@
+import { isPayhubEnabled } from "./payhubPayment.service";
 import { getPrisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -152,5 +153,7 @@ export async function storeInfo() {
             accountName: cfg.bank_account_name || "",
           }
         : null,
+    /** P4.5: card / QR through Payment Hub available (credentials configured) */
+    payhubEnabled: isPayhubEnabled(),
   };
 }

@@ -43,7 +43,7 @@ BizOne is a SaaS platform that helps Vietnamese SMEs manage their sales operatio
 **BizOne Core (12 modules)**
 | Module | Description |
 |--------|-------------|
-| POS | Point-of-sale with cash session management, invoicing, returns |
+| POS | Point-of-sale with cash sessions, invoicing, returns & exchanges, split/merge bills, pre-orders with deposit, card/QR via Payment Hub, PIN-paired customer display, ESC/POS printing |
 | Products | Product catalog, variants, multi-unit, barcode |
 | Inventory | Multi-warehouse, stock transactions, batch/expiry tracking |
 | Customers (CRM) | Customer groups, loyalty points, debt management |
@@ -167,7 +167,7 @@ Xem sơ đồ bên trên (phần tiếng Anh).
 **BizOne Core (12 module)**
 | Module | Mô tả |
 |--------|-------|
-| POS | Bán hàng tại quầy: ca bán hàng, hóa đơn, đổi trả |
+| POS | Bán hàng tại quầy: ca bán hàng, hóa đơn, đổi trả, tách/gộp hóa đơn, đặt trước + cọc, thẻ/QR qua Payment Hub, màn hình khách ghép PIN, in ESC/POS |
 | Sản phẩm | Danh mục, biến thể, đa đơn vị, barcode |
 | Kho hàng | Đa kho, nhập/xuất/chuyển kho, theo dõi lô/hạn dùng |
 | Khách hàng (CRM) | Nhóm khách, tích điểm, quản lý công nợ |

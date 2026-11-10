@@ -12,6 +12,13 @@ import {
   openSessionSchema,
   quoteSchema,
   refundInvoiceSchema,
+  exchangeQuoteSchema,
+  exchangeSchema,
+  createPreorderSchema,
+  listPreordersSchema,
+  completePreorderSchema,
+  cancelPreorderSchema,
+  createPayhubIntentSchema,
 } from "@/lib/validators/pos";
 import {
   closeSession,
@@ -29,7 +36,24 @@ import {
   listInvoices,
   printData,
   refundInvoice,
+  exchangeInvoice,
+  exchangeQuote,
 } from "@/server/services/invoice.service";
+import {
+  cancelPreorder,
+  completePreorder,
+  createPreorder,
+  getPreorder,
+  listPreorders,
+  preorderQuote,
+} from "@/server/services/preorder.service";
+import {
+  cancelIntent,
+  createIntent,
+  intentStatus,
+  openIntents,
+} from "@/server/services/payhubPayment.service";
+import { createPairingPin } from "@/server/services/posPairing.service";
 import { findProductByCode, loadCartLines, quoteCart } from "@/server/services/pricing.service";
 import { ensureDbUserId } from "@/server/services/user.service";
 import {
@@ -155,4 +179,71 @@ export const posRouter = router({
   refundInvoice: posPermissionProcedure("pos:write")
     .input(refundInvoiceSchema)
     .mutation(async ({ input, ctx }) => refundInvoice(input, await actorOf(ctx))),
+
+  // ── P4.5: đổi hàng ─────────────────────────────────────────────────────────
+
+  /** Xem trước đổi hàng: tiền hàng trả, hoá đơn mới, chênh lệch */
+  exchangeQuote: posPermissionProcedure("pos:read")
+    .input(exchangeQuoteSchema)
+    .query(({ input }) => exchangeQuote(input)),
+
+  /** Đổi hàng: phiếu trả + hoá đơn mới trong một transaction (idempotent) */
+  exchange: posPermissionProcedure("pos:write")
+    .input(exchangeSchema)
+    .mutation(async ({ input, ctx }) => exchangeInvoice(input, await actorOf(ctx))),
+
+  // ── P4.5: đặt trước + cọc ──────────────────────────────────────────────────
+
+  preorders: posPermissionProcedure("pos:read")
+    .input(listPreordersSchema)
+    .query(({ input }) => listPreorders(input)),
+
+  preorder: posPermissionProcedure("pos:read")
+    .input(id)
+    .query(({ input }) => getPreorder(input.id)),
+
+  /** Giá lúc giao (tính lại), cọc cấn trừ, còn phải trả */
+  preorderQuote: posPermissionProcedure("pos:read")
+    .input(id)
+    .query(({ input }) => preorderQuote(input.id)),
+
+  createPreorder: posPermissionProcedure("pos:write")
+    .input(createPreorderSchema)
+    .mutation(async ({ input, ctx }) => createPreorder(input, await actorOf(ctx))),
+
+  completePreorder: posPermissionProcedure("pos:write")
+    .input(completePreorderSchema)
+    .mutation(async ({ input, ctx }) => completePreorder(input, await actorOf(ctx))),
+
+  cancelPreorder: posPermissionProcedure("pos:write")
+    .input(cancelPreorderSchema)
+    .mutation(async ({ input, ctx }) => cancelPreorder(input, await actorOf(ctx))),
+
+  // ── P4.5: thẻ / QR qua Payment Hub ─────────────────────────────────────────
+
+  /** Tạo GD Payment Hub (QR VietQR tự xác nhận / trang thanh toán thẻ) */
+  payhubCreate: posPermissionProcedure("pos:write")
+    .input(createPayhubIntentSchema)
+    .mutation(async ({ input, ctx }) => createIntent(input, await actorOf(ctx))),
+
+  /** Trạng thái (tự hỏi Payment Hub khi webhook chưa về) */
+  payhubStatus: posPermissionProcedure("pos:read")
+    .input(id)
+    .query(async ({ input, ctx }) => intentStatus(input.id, await actorOf(ctx))),
+
+  payhubCancel: posPermissionProcedure("pos:write")
+    .input(id)
+    .mutation(async ({ input, ctx }) => cancelIntent(input.id, await actorOf(ctx))),
+
+  /** Thanh toán Payment Hub đang chờ / đã trả mà chưa gắn hoá đơn của ca */
+  payhubOpen: posPermissionProcedure("pos:read")
+    .input(z.object({ cashSessionId: z.number().int().positive() }))
+    .query(({ input }) => openIntents(input.cashSessionId)),
+
+  // ── P4.5: ghép cặp màn hình khách ──────────────────────────────────────────
+
+  /** Mã PIN 6 số (5 phút, dùng 1 lần) để màn hình khách khác thiết bị kết nối vào ca */
+  createPairingPin: posPermissionProcedure("pos:write")
+    .input(z.object({ sessionId: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => createPairingPin(input.sessionId, await actorOf(ctx))),
 });

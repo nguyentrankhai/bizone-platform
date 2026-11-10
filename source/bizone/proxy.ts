@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/auth", // Keycloak callback routes
   "/api/webhooks/", // inbound partner webhooks — authenticated by HMAC in the route (P3.6)
+  "/api/pos/pair", // customer display exchanges a one-time PIN for a display token (P4.5)
   "/_next",
   "/favicon.ico",
 ];

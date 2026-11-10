@@ -6,6 +6,8 @@ import { PosSyncClient, type PosSyncMode } from "@/lib/pos/sync-client";
 import type {
   CartSnapshot,
   DisplayQr,
+  HeldCartSummary,
+  PayhubIntentView,
   PaymentCompleted,
   PosEnvelope,
   PosServerEvent,
@@ -36,6 +38,10 @@ interface Options {
   role: "cashier" | "display";
   onScanned?: (product: ScannedProduct) => void;
   onError?: (message: string) => void;
+  /** Payment Hub card/QR payment changed (webhook or status poll on the server) */
+  onPayhub?: (intent: PayhubIntentView) => void;
+  /** A customer display finished PIN pairing for this shift */
+  onDisplayPaired?: () => void;
 }
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -62,20 +68,31 @@ function cartFromSnapshot(s: CartSnapshot | null): LocalCart {
  * local cart priced by `pos.quote` and mirrors it to the display over
  * BroadcastChannel; on reconnect the local cart is replayed to the server.
  */
-export function usePosWebSocket({ sessionId, auth, role, onScanned, onError }: Options) {
+export function usePosWebSocket({
+  sessionId,
+  auth,
+  role,
+  onScanned,
+  onError,
+  onPayhub,
+  onDisplayPaired,
+}: Options) {
   const [cart, setCart] = useState<CartSnapshot | null>(null);
   const [mode, setMode] = useState<PosSyncMode>("connecting");
   const [completed, setCompleted] = useState<PaymentCompleted | null>(null);
   const [qr, setQr] = useState<DisplayQr | null>(null);
   const [sessionClosed, setSessionClosed] = useState(false);
+  const [held, setHeld] = useState<HeldCartSummary[]>([]);
+  /** The server refused the socket (bad / expired display token) — paired displays re-pair */
+  const [rejected, setRejected] = useState(false);
 
   const clientRef = useRef<PosSyncClient | null>(null);
   const cartRef = useRef<CartSnapshot | null>(null);
   const localRef = useRef<LocalCart | null>(null);
   const dirtyRef = useRef(false);
-  const cbRef = useRef({ onScanned, onError });
+  const cbRef = useRef({ onScanned, onError, onPayhub, onDisplayPaired });
   useEffect(() => {
-    cbRef.current = { onScanned, onError };
+    cbRef.current = { onScanned, onError, onPayhub, onDisplayPaired };
   });
 
   const applyCart = useCallback((s: CartSnapshot | null) => {
@@ -173,6 +190,7 @@ export function usePosWebSocket({ sessionId, auth, role, onScanned, onError }: O
       sessionId,
       tenantId: auth.tenantId,
       getToken: () => auth.authToken,
+      onRejected: () => setRejected(true),
       onMode: (m) => {
         setMode(m);
         if (m === "ws" && role === "cashier") void replayLocal();
@@ -199,6 +217,15 @@ export function usePosWebSocket({ sessionId, auth, role, onScanned, onError }: O
             break;
           case "session:status":
             if (e.data.status === "closed") setSessionClosed(true);
+            break;
+          case "held:updated":
+            setHeld(e.data.held);
+            break;
+          case "payhub:updated":
+            cbRef.current.onPayhub?.(e.data);
+            break;
+          case "display:paired":
+            cbRef.current.onDisplayPaired?.();
             break;
           case "error":
             cbRef.current.onError?.(e.data.message);
@@ -363,6 +390,68 @@ export function usePosWebSocket({ sessionId, auth, role, onScanned, onError }: O
     }
   }, []);
 
+  // ── Held bills: split / merge / park (server-side, needs the WebSocket) ──────
+
+  const requireOnline = useCallback(() => {
+    if (!online()) throw new Error("Tách / gộp / lưu tạm đơn cần kết nối máy chủ POS");
+    return clientRef.current!;
+  }, []);
+
+  const hold = useCallback(
+    async (label?: string) => {
+      try {
+        await requireOnline().send({ type: "cart:hold", data: { label } });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [requireOnline, fail],
+  );
+
+  const resume = useCallback(
+    async (heldId: string) => {
+      try {
+        await requireOnline().send({ type: "cart:resume", data: { heldId } });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [requireOnline, fail],
+  );
+
+  const split = useCallback(
+    async (items: { itemId: string; quantity: number }[], label?: string) => {
+      try {
+        await requireOnline().send({ type: "cart:split", data: { items, label } });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [requireOnline, fail],
+  );
+
+  const merge = useCallback(
+    async (heldIds: string[]) => {
+      try {
+        await requireOnline().send({ type: "cart:merge", data: { heldIds } });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [requireOnline, fail],
+  );
+
+  const discardHeld = useCallback(
+    async (heldId: string) => {
+      try {
+        await requireOnline().send({ type: "held:discard", data: { heldId } });
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [requireOnline, fail],
+  );
+
   /**
    * Checkout always goes through tRPC (works in both modes and returns the invoice);
    * the server then pushes payment:completed + cart:cleared to every screen.
@@ -412,7 +501,14 @@ export function usePosWebSocket({ sessionId, auth, role, onScanned, onError }: O
     completed,
     qr,
     sessionClosed,
+    rejected,
+    held,
     dismissCompleted: () => setCompleted(null),
+    hold,
+    resume,
+    split,
+    merge,
+    discardHeld,
     add,
     scan,
     setQuantity,

@@ -1,13 +1,23 @@
 import { bizoneError } from "@/lib/errors";
-import type { PaymentInput, PaymentMethod } from "@/lib/validators/pos";
+import type { CreditMethod, PaymentMethod } from "@/lib/validators/pos";
 
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod | CreditMethod, string> = {
   cash: "Tiền mặt",
   transfer: "Chuyển khoản",
   card: "Thẻ ngân hàng",
   wallet: "Ví điện tử",
   qr: "QR Code",
+  exchange: "Cấn trừ hàng đổi",
+  deposit: "Tiền cọc",
 };
+
+/** One payment line of an invoice: client methods, plus server-added credits (exchange/deposit) */
+export interface SalePayment {
+  method: PaymentMethod | CreditMethod;
+  amount: number;
+  referenceCode?: string | null;
+  intentId?: number;
+}
 
 export interface Settlement {
   paid: number;
@@ -20,7 +30,10 @@ export interface Settlement {
  * Validate a (possibly mixed) payment against the invoice total.
  * Only cash may exceed what is owed — change is always given back in cash.
  */
-export function settlePayments(total: number, payments: PaymentInput[]): Settlement {
+export function settlePayments(
+  total: number,
+  payments: Pick<SalePayment, "method" | "amount">[],
+): Settlement {
   const paid = Math.round(payments.reduce((s, p) => s + p.amount, 0));
   if (paid < total) {
     throw bizoneError(

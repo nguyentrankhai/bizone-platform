@@ -69,6 +69,7 @@ model Branch {
   userBranches          UserBranch[]
   userRoles             UserRole[]
   warehouses            Warehouse[]
+  preorders             Preorder[]
 
   @@map("branches")
 }
@@ -91,20 +92,22 @@ model CashFund {
 }
 
 model CashSession {
-  id                   Int               @id @default(autoincrement())
-  branchId             Int               @map("branch_id")
-  userId               Int               @map("user_id")
-  openedAt             DateTime          @default(now()) @map("opened_at") @db.DateTime(0)
-  closedAt             DateTime?         @map("closed_at") @db.DateTime(0)
-  openingBalance       Decimal           @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
-  closingBalance       Decimal?          @map("closing_balance") @db.Decimal(15, 2)
-  actualClosingBalance Decimal?          @map("actual_closing_balance") @db.Decimal(15, 2)
-  difference           Decimal?          @db.Decimal(15, 2)
-  notes                String?           @db.Text
-  status               CashSessionStatus @default(open)
-  branch               Branch            @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_cs_branch")
-  user                 User              @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "fk_cs_user")
+  id                   Int                @id @default(autoincrement())
+  branchId             Int                @map("branch_id")
+  userId               Int                @map("user_id")
+  openedAt             DateTime           @default(now()) @map("opened_at") @db.DateTime(0)
+  closedAt             DateTime?          @map("closed_at") @db.DateTime(0)
+  openingBalance       Decimal            @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance       Decimal?           @map("closing_balance") @db.Decimal(15, 2)
+  actualClosingBalance Decimal?           @map("actual_closing_balance") @db.Decimal(15, 2)
+  difference           Decimal?           @db.Decimal(15, 2)
+  notes                String?            @db.Text
+  status               CashSessionStatus  @default(open)
+  branch               Branch             @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_cs_branch")
+  user                 User               @relation(fields: [userId], references: [id], onUpdate: Restrict, map: "fk_cs_user")
   invoices             Invoice[]
+  paymentIntents       PosPaymentIntent[]
+  preorders            Preorder[]
 
   @@index([branchId], map: "idx_cs_branch")
   @@index([status], map: "idx_cs_status")
@@ -352,6 +355,7 @@ model Customer {
   invoices              Invoice[]
   orders                Order[]
   vouchers              Voucher[]
+  preorders             Preorder[]
 
   @@index([createdBy], map: "fk_cust_created")
   @@index([groupId], map: "fk_cust_group")
@@ -951,6 +955,7 @@ model Product {
   promotionComboItems         PromotionComboItem[]
   purchaseOrderItems          PurchaseOrderItem[]
   stockTakeItems              StockTakeItem[]
+  preorderItems               PreorderItem[]
 
   @@index([categoryId], map: "fk_prod_category")
   @@index([createdBy], map: "fk_prod_cby")
@@ -1648,4 +1653,110 @@ enum PromotionUsageType {
   flash_sale
   buy_x_get_y
   combo
+}
+
+// ─── P4.5: POS advanced — Payment Hub payments + pre-orders ────────────────────
+
+/// A card / QR payment requested from Payment Hub at the POS. Becomes usable as an invoice
+/// (or pre-order deposit) payment once Payment Hub reports success (webhook or status poll).
+model PosPaymentIntent {
+  id            Int                    @id @default(autoincrement())
+  cashSessionId Int                    @map("cash_session_id")
+  userId        Int                    @map("user_id")
+  method        PosPaymentIntentMethod
+  amount        Decimal                @db.Decimal(15, 2)
+  status        PosPaymentIntentStatus @default(pending)
+  merchantTxnId String                 @unique(map: "uq_ppi_merchant_txn") @map("merchant_txn_id") @db.VarChar(100)
+  payhubTxnCode String?                @map("payhub_txn_code") @db.VarChar(50)
+  payhubMethod  String?                @map("payhub_method") @db.VarChar(50)
+  qrData        String?                @map("qr_data") @db.Text
+  paymentUrl    String?                @map("payment_url") @db.VarChar(1000)
+  partnerTxnId  String?                @map("partner_txn_id") @db.VarChar(255)
+  failureReason String?                @map("failure_reason") @db.VarChar(500)
+  invoiceId     Int?                   @map("invoice_id")
+  preorderId    Int?                   @map("preorder_id")
+  expiresAt     DateTime?              @map("expires_at") @db.DateTime(0)
+  paidAt        DateTime?              @map("paid_at") @db.DateTime(0)
+  lastCheckedAt DateTime?              @map("last_checked_at") @db.DateTime(0)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt     DateTime               @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  cashSession   CashSession            @relation(fields: [cashSessionId], references: [id], onUpdate: Restrict, map: "fk_ppi_session")
+
+  @@index([cashSessionId, status], map: "idx_ppi_session")
+  @@index([invoiceId], map: "idx_ppi_invoice")
+  @@index([preorderId], map: "idx_ppi_preorder")
+  @@map("pos_payment_intents")
+}
+
+/// Đơn đặt trước (pre-order) có đặt cọc tại POS — giao sau; khi giao tạo hoá đơn thường,
+/// tiền cọc cấn trừ bằng dòng thanh toán `deposit`.
+model Preorder {
+  id               Int            @id @default(autoincrement())
+  preorderCode     String         @unique(map: "uq_po_code") @map("preorder_code") @db.VarChar(50)
+  branchId         Int            @map("branch_id")
+  cashSessionId    Int            @map("cash_session_id")
+  customerId       Int            @map("customer_id")
+  userId           Int            @map("user_id")
+  estimatedTotal   Decimal        @map("estimated_total") @db.Decimal(15, 2)
+  depositAmount    Decimal        @map("deposit_amount") @db.Decimal(15, 2)
+  depositMethod    String         @map("deposit_method") @db.VarChar(50)
+  depositReference String?        @map("deposit_reference") @db.VarChar(255)
+  dueDate          DateTime?      @map("due_date") @db.Date
+  status           PreorderStatus @default(pending)
+  invoiceId        Int?           @map("invoice_id")
+  refundAmount     Decimal        @default(0.00) @map("refund_amount") @db.Decimal(15, 2)
+  refundMethod     String?        @map("refund_method") @db.VarChar(50)
+  closedSessionId  Int?           @map("closed_session_id")
+  notes            String?        @db.Text
+  completedAt      DateTime?      @map("completed_at") @db.DateTime(0)
+  cancelledAt      DateTime?      @map("cancelled_at") @db.DateTime(0)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  branch           Branch         @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_preo_branch")
+  cashSession      CashSession    @relation(fields: [cashSessionId], references: [id], onUpdate: Restrict, map: "fk_preo_session")
+  customer         Customer       @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_preo_customer")
+  items            PreorderItem[]
+
+  @@index([status, dueDate], map: "idx_preo_status")
+  @@index([cashSessionId], map: "fk_preo_session")
+  @@index([closedSessionId], map: "idx_preo_closed_session")
+  @@index([customerId], map: "fk_preo_customer")
+  @@index([branchId], map: "fk_preo_branch")
+  @@map("preorders")
+}
+
+model PreorderItem {
+  id              Int      @id @default(autoincrement())
+  preorderId      Int      @map("preorder_id")
+  productId       Int      @map("product_id")
+  variantId       Int?     @map("variant_id")
+  quantity        Decimal  @db.Decimal(15, 2)
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(15, 2)
+  discountPercent Decimal  @default(0.00) @map("discount_percent") @db.Decimal(5, 2)
+  totalAmount     Decimal  @map("total_amount") @db.Decimal(15, 2)
+  preorder        Preorder @relation(fields: [preorderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_preoi_preorder")
+  product         Product  @relation(fields: [productId], references: [id], onUpdate: Restrict, map: "fk_preoi_product")
+
+  @@index([preorderId], map: "fk_preoi_preorder")
+  @@index([productId], map: "fk_preoi_product")
+  @@map("preorder_items")
+}
+
+enum PosPaymentIntentMethod {
+  qr
+  card
+}
+
+enum PosPaymentIntentStatus {
+  pending
+  success
+  failed
+  expired
+  cancelled
+}
+
+enum PreorderStatus {
+  pending
+  completed
+  cancelled
 }
