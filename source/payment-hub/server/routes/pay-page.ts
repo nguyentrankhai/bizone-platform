@@ -95,7 +95,7 @@ async function renderPicker(
   txn: { txnCode: string; amount: { toString(): string }; merchantId: number },
   notice?: string,
 ): Promise<Response> {
-  const methods = await availableMethods(txn.merchantId);
+  const methods = await availableMethods(txn.merchantId, Number(txn.amount));
   if (methods.length === 0) {
     return renderPayPage(
       {

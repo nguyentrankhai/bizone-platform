@@ -19,6 +19,9 @@ export interface RouteMethod {
   kind: RouteKind;
   /** Label on the hosted payment page */
   label: string;
+  /** Amount limits (VND) the PSP accepts for this method — outside → 400 / hidden on /pay. */
+  minAmount?: number;
+  maxAmount?: number;
 }
 
 export const ROUTE_MAP = {
@@ -47,7 +50,15 @@ export const ROUTE_MAP = {
     kind: "qr",
     label: "Chuyển khoản VietQR (NAPAS 247)",
   },
-  momo_qr: { connectorType: "MoMo", connectorCode: "momo", kind: "redirect", label: "Ví MoMo" },
+  momo_qr: {
+    connectorType: "MoMo",
+    connectorCode: "momo",
+    kind: "redirect",
+    label: "Ví MoMo",
+    // captureWallet limits (services/connectors/momo/momo.util.ts)
+    minAmount: 1_000,
+    maxAmount: 50_000_000,
+  },
   zalopay_qr: {
     connectorType: "ZaloPay",
     connectorCode: "zalopay",
@@ -66,6 +77,19 @@ export function isPaymentMethod(method: string): method is PaymentMethod {
 
 export function routeFor(method: string): RouteMethod | undefined {
   return isPaymentMethod(method) ? ROUTE_MAP[method] : undefined;
+}
+
+/** null when `amount` fits the method's limits, otherwise a message for the API / page. */
+export function amountError(method: string, amount: number): string | null {
+  const route = routeFor(method) as RouteMethod | undefined;
+  if (!route) return null;
+  if (route.minAmount !== undefined && amount < route.minAmount) {
+    return `${route.label}: số tiền tối thiểu ${route.minAmount.toLocaleString("vi-VN")} ₫`;
+  }
+  if (route.maxAmount !== undefined && amount > route.maxAmount) {
+    return `${route.label}: số tiền tối đa ${route.maxAmount.toLocaleString("vi-VN")} ₫`;
+  }
+  return null;
 }
 
 /** Methods served by a connector type (e.g. VNPay → vnpay_qr, vnpay_atm, …). */

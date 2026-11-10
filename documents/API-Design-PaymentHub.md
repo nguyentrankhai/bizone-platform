@@ -277,7 +277,7 @@ Header: Idempotency-Key: <UUID v4>
 | `currency` | string | Không | Mặc định "VND" |
 | `description` | string | Không | Mô tả thanh toán |
 | `payment_method` | string | Không | `vnpay_qr`, `vnpay_atm`, `vnpay_card`, `vnpay`, `vietqr`, `momo_qr`, `zalopay_qr` (`services/routing/routeMap.ts`). null = khách chọn trên trang `payment_url` (chỉ liệt kê phương thức đang khả dụng). Route Engine chọn đối tác theo ưu tiên của merchant, fallback khi đối tác lỗi (P3.8) |
-| `qr_size` | number | Không | Kích thước QR khi `payment_method = vietqr`: 200 / 300 (mặc định) / 500 |
+| `qr_size` | number | Không | Kích thước QR khi `payment_method = vietqr` hoặc `momo_qr`: 200 / 300 (mặc định) / 500 |
 | `return_url` | string | Không | URL redirect sau khi thanh toán |
 | `webhook_url` | string | Không | URL nhận webhook kết quả (ghi đè config) |
 | `customer` | object | Không | Thông tin khách hàng |
@@ -310,12 +310,14 @@ Header: Idempotency-Key: <UUID v4>
 |-------|------|-------|
 | `transaction_id` | string | Mã giao dịch nội bộ Payment Hub |
 | `payment_url` | string | URL trang thanh toán (nếu thanh toán online) |
-| `qr_code` | object | QR Code khi `payment_method = vietqr` (còn lại `null`); `payment_url` khi đó là trang QR của Hub |
+| `qr_code` | object | QR Code khi `payment_method = vietqr` (`type: VietQR`, có `bank`, `transfer_note`; `payment_url` là trang QR của Hub) hoặc `momo_qr` (`type: PartnerQR`, `provider: MoMo`, `raw_data` = `qrCodeUrl` của MoMo — app MoMo quét, `image_base64` do Hub vẽ, `deeplink` mở app MoMo, `image_url`/`bank` = `null`; `payment_url` là trang thanh toán của MoMo). Phương thức khác: `null` |
 | `partner` | string | Loại đối tác Route Engine đã chọn (`VNPay`, `VietQR`…) |
 | `fallback_used` | boolean | Có khi đối tác ưu tiên lỗi và GD được chuyển sang đối tác kế tiếp |
 | `payment_error` | object | Có khi mọi đối tác của phương thức lỗi lúc tạo — GD vẫn `Created`, khách chọn phương thức khác trên `payment_url` |
 | `expired_at` | datetime | Thời gian hết hạn giao dịch |
 
+> `amount` ngoài hạn mức của phương thức (`momo_qr`: 1.000 – 50.000.000 ₫) → **400 `VALIDATION_ERROR`** (`details.amount`), không tạo GD.
+>
 > Phương thức không còn đối tác khả dụng (đối tác Inactive/Error, connector tắt, circuit mở) → **503 `SERVICE_UNAVAILABLE`**, không tạo GD; `error.details` có `skipped` (lý do từng đối tác) và `available_methods`.
 
 **Error:**
@@ -1571,15 +1573,15 @@ Payment Hub nhận kết quả thanh toán từ đối tác qua các endpoint sa
 
 | Endpoint | Mô tả | Đối tác |
 |----------|-------|---------|
-| `/api/ipn/vnpay` | IPN từ VNPay | VNPay |
-| `/api/callback/momo` | Callback từ MoMo | MoMo |
-| `/api/callback/zalopay` | Callback từ ZaloPay | ZaloPay |
+| `GET /api/ipn/vnpay` | IPN từ VNPay (HMAC-SHA512) — luôn HTTP 200 + `{RspCode, Message}` | VNPay |
+| `POST /api/ipn/momo` | IPN từ MoMo (JSON, HMAC-SHA256 trên 13 trường theo thứ tự alphabet) — `204` đã nhận / đã xử lý / còn chờ; `400` sai chữ ký, sai JSON, lệch số tiền; `404` không có đơn; `500` lỗi xử lý | MoMo |
+| `GET /pay/{vnpay,momo}/return` | Trình duyệt khách quay về — chỉ xác thực chữ ký rồi chuyển về `return_url` của merchant, **không** đổi trạng thái | VNPay, MoMo |
+| `/api/callback/zalopay` | Callback từ ZaloPay (P5.2) | ZaloPay |
 
-Xử lý IPN:
-- Response HTTP 200 OK ngay lập tức
-- Xác thực chữ ký từ đối tác
-- Xử lý bất đồng bộ qua queue
-- Retry tối đa 3 lần nếu xử lý thất bại
+Xử lý IPN (P3.3, P5.1):
+- Xác thực chữ ký bằng secret của đúng `partner_config_id` đã tạo thanh toán; IPN là nguồn sự thật
+- Xử lý **đồng bộ** (một `UPDATE … WHERE status = 'Pending'`, ~10–30 ms) để mã phản hồi phản ánh kết quả; IPN lặp → không đổi gì
+- "Retry khi thất bại": đối tác tự gửi lại khi nhận mã lỗi; với MoMo, worker còn **truy vấn trạng thái** (`/v2/gateway/api/query`) các GD `Pending` quá 60 s chưa có IPN (mỗi phút, tối đa 20 GD/lượt — `PAYMENT_STATUS_SYNC_*`), và trang `/pay/momo/return` truy vấn một lần khi GD còn `Pending` để `return_url` mang trạng thái thật
 
 ---
 

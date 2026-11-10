@@ -16,6 +16,8 @@ export interface ConnectorConfig {
   secretKey: string; // decrypted (e.g. VNPay HashSecret)
   endpoint: string; // payment endpoint for the active environment
   apiEndpoint?: string; // query/refund API endpoint
+  /** Server-to-server notification URL sent with each request (MoMo ipnUrl). */
+  ipnUrl?: string;
   environment: PartnerEnvironment;
   timeoutMs: number;
 }
@@ -32,12 +34,25 @@ export interface PaymentRequest {
   locale?: "vn" | "en";
   createdAt: Date;
   expiredAt?: Date;
+  /** 1 for the first payment URL of a transaction, 2+ when regenerated (unique PSP order ids). */
+  attempt?: number;
+}
+
+/** QR / app deeplink returned by wallet PSPs (MoMo, ZaloPay) alongside the payment URL. */
+export interface PartnerQr {
+  /** String to encode in the QR (scanned by the wallet app) */
+  content: string;
+  deeplink?: string;
+  expiresAt?: Date;
 }
 
 export interface CreatePaymentResult {
   paymentUrl: string;
   /** Request data the connector sent/encoded — stored as raw data (no secrets). */
   partnerRequest: Record<string, string>;
+  /** PSP response body (no secrets) — stored as raw data when present. */
+  partnerResponse?: Record<string, unknown>;
+  partnerQr?: PartnerQr;
 }
 
 export type PaymentOutcome = "Success" | "Failed" | "Pending";
@@ -80,6 +95,8 @@ export interface RefundResult {
 
 export interface StatusQuery {
   txnCode: string;
+  /** Order id the PSP knows the payment by, when it differs from txnCode (MoMo `_2` suffix). */
+  partnerOrderId?: string;
   transactionDate: string;
   ipAddress: string;
 }

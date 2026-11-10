@@ -196,7 +196,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── app/                     # App Router; api/health/route.ts kiểm tra MariaDB + Redis
         ├── components/ui/           # shadcn/ui
         ├── app/api/ipn/vnpay/       # P3.3 — IPN VNPay (public, verify HMAC-SHA512)
-        ├── app/pay/                 # P3.3 — /pay/{txnCode} (chọn PT → PSP), /pay/vnpay/return (redirect)
+        ├── app/api/ipn/momo/        # P5.1 — IPN MoMo (POST JSON, HMAC-SHA256, trả 204)
+        ├── app/pay/                 # P3.3 — /pay/{txnCode} (chọn PT → PSP), /pay/vnpay/return, /pay/momo/return (P5.1)
         ├── app/api/v1/qr/           # P3.4 — POST generate, GET {transaction_id} (QR hiện hành, tự refresh khi hết hạn)
         ├── app/qr/[file]/           # P3.4 — ảnh QR public /qr/{token}.png (từ Redis, hết hạn cùng QR)
         ├── app/partners/            # P3.5 — /partners (card), /partners/new, /partners/{id} (form, test, kích hoạt, lịch sử)
@@ -205,9 +206,10 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
         ├── app/api/internal/routes/ # P3.8 — GET mặc định, GET/PUT /{merchantId} (ưu tiên đối tác), DELETE circuits/{partnerId} (server/routes/route-config.ts)
         ├── app/webhooks/            # P3.6 — UI thống kê, endpoint, lịch sử gửi + replay
         ├── lib/                     # db.ts, redis.ts, events.ts (publishEvent, canReceive), crypto.ts (AES-256-GCM), hmac.ts (chữ ký merchant), api-keys.ts
+        ├── server/jobs/             # expireTransactions, expireQrCodes, syncPendingPayments (P5.1 — query PSP khi mất IPN)
         ├── server/services/         # transaction.service, stateMachine, payment.service (P3.3: initiate + apply IPN), qr.service (P3.4), partner.service (P3.5), webhook.service (P3.6: outbox, CRUD, replay, stats), dashboard.service (P3.7: số liệu + cảnh báo, cache Redis 15 s)
         ├── services/
-        │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts)
+        │   ├── connectors/          # P3.3 — types.ts (PaymentConnector), registry.ts, vnpay/ (index.ts, vnpay.util.ts); P5.1 — momo/ (index.ts, momo.util.ts)
         │   ├── routing/             # P3.8 — routeMap.ts (payment_method → connector), routeEngine.ts (ưu tiên merchant, fallback, circuit breaker)
         │   ├── qr/vietqr.ts         # P3.4 — payload EMVCo/VietQR (NAPAS 247), CRC16, render PNG 200/300/500
         │   ├── queue/connection.ts  # kết nối BullMQ
@@ -278,6 +280,8 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 **Lưu ý đối tác (P3.5)**: cấu hình mới luôn `Inactive`; chỉ kích hoạt khi test kết nối của cấu hình hiện tại đạt; sửa trường kết nối → xoá kết quả test và về `Inactive`. API không bao giờ trả secret (che `••••`). Metadata từng loại connector ở `lib/partner-types.ts`. Log `partner_config_logs.changed_by` = username token.
 
 **Lưu ý Route Engine (P3.8)**: mọi chọn đối tác đi qua `services/routing/routeEngine.ts` (`planRoute` + `executeRoute`) — không lấy "partner Active đầu tiên" trực tiếp. Phương thức mới khai báo trong `routeMap.ts` (`kind: redirect | qr`). Thứ tự: `merchant_routes` của merchant (priority nhỏ trước, `is_enabled=0` loại) → các partner Active còn lại theo id. Bỏ qua partner Inactive/Error, `connectors.is_active=0`, connector chưa có code, circuit mở (Redis `payhub:route:fail|open:{id}`, `ROUTE_CB_*`). Lỗi nghiệp vụ (có `code` NOT_FOUND/CONFLICT/VALIDATION_ERROR) không fallback; lỗi khác → thử partner kế. `POST /api/v1/transactions` với `vietqr` trả `qr_code`; `/pay/{txn}` chỉ liệt kê phương thức khả dụng, VietQR hiển thị QR + tự reload 15 s. IPN/redirect vẫn dùng `transactions.partner_config_id`.
+
+**Lưu ý MoMo (P5.1)**: `momo_qr` → `MomoConnector` (`captureWallet`), ký HMAC-SHA256 trên danh sách trường cố định của từng API (`momo.util.ts`). Cấu hình đối tác: `merchant_code` = Partner Code, `api_key` = Access Key, `secret_key` = Secret Key, endpoint = URL `/create` (query/refund cùng host), `webhook_url` = `ipnUrl` gửi kèm mỗi yêu cầu (mặc định `{APP_URL}/api/ipn/momo`, phải public), `callback_url` = `/pay/momo/return`. `orderId` = `txn_code`, tạo lại link → `txn_code_2`…; IPN trả 204. Kết quả chưa kết luận (1000/7000/9000, mã lỗi API) không làm GD `Failed` (`applyPaymentResult` → `pending`). Mất IPN: worker `syncPendingPayments` query PSP mỗi phút (connector có `statusSync` trong `registry.ts`, `PAYMENT_STATUS_SYNC_*`) và trang return query 1 lần — cả hai qua `syncPaymentStatus()`. Hạn mức số tiền theo phương thức ở `routeMap.ts` (`minAmount`/`maxAmount`, MoMo 1.000–50 tr ₫). Seed tạo "MoMo Sandbox" `Inactive` từ `MOMO_*`. Sandbox thật chưa dùng được (#100) — kiểm bằng mock theo đặc tả.
 
 **Lưu ý webhook (P3.6)**: đổi trạng thái cuối của GD phải đặt `OUTBOX_PENDING` (`notify_webhook=1, webhook_sent_at=NULL`) trong cùng DB transaction rồi gọi `dispatchSoon(txnId)` sau commit; worker quét outbox mỗi 30 s. Ký `X-Signature = HMAC-SHA256(secret, X-Timestamp + "." + body)`, `X-Webhook-Id` giữ nguyên qua retry/replay. Job BullMQ không mang secret. Dev cần `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` (Payment Hub) và `PAYHUB_WEBHOOK_SECRET` (BizOne).
 

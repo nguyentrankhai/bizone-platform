@@ -56,6 +56,8 @@ export async function handleVnpayIpn(req: NextRequest): Promise<Response> {
         return reply({ RspCode: "04", Message: "Invalid amount" });
       case "already_final":
         return reply({ RspCode: "02", Message: "Order already confirmed" });
+      case "pending": // VNPay results are always final; never reached
+        return reply({ RspCode: "99", Message: "Unknown error" });
       case "applied":
         console.log(`[vnpay-ipn] txn=${txnCode} → ${applied.status} (${ms}ms)`);
         return reply({ RspCode: "00", Message: "Confirm Success" });

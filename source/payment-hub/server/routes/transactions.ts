@@ -24,41 +24,47 @@ import {
   initiatePayment,
   type InitiatedPayment,
 } from "@/server/services/payment.service";
-import { isPaymentMethod } from "@/services/routing/routeMap";
+import { amountError, isPaymentMethod } from "@/services/routing/routeMap";
 import { availableMethods, planRoute } from "@/services/routing/routeEngine";
 import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
-const createTxnSchema = z.object({
-  /** Required and unique per merchant (API-Design §5.1) — duplicates → 409 CONFLICT */
-  merchant_txn_id: z.string().trim().min(1, "merchant_txn_id is required").max(255),
-  amount: z.number().int().positive("Amount must be positive"),
-  currency: z.string().length(3).default("VND"),
-  description: z.string().max(500).optional(),
-  return_url: z.string().url("Invalid return_url").optional(),
-  webhook_url: z.string().url("Invalid webhook_url").optional(),
-  customer_name: z.string().max(255).optional(),
-  customer_email: z.string().email().optional(),
-  customer_phone: z.string().max(50).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  expiry_minutes: z.number().int().min(1).max(1440).default(15),
-  /**
-   * Optional (services/routing/routeMap.ts). Redirect methods → payment_url = PSP URL;
-   * `vietqr` → response carries `qr_code`, payment_url = hosted QR page.
-   * Omit / null → hosted page where the customer picks among the available methods.
-   */
-  payment_method: z
-    .string()
-    .refine((m) => isPaymentMethod(m), "Unsupported payment_method")
-    .nullish(),
-  qr_size: z
-    .number()
-    .int()
-    .refine((n) => (QR_SIZES as readonly number[]).includes(n), "qr_size must be 200, 300 or 500")
-    .optional(),
-  customer_ip: z.string().max(45).optional(),
-});
+const createTxnSchema = z
+  .object({
+    /** Required and unique per merchant (API-Design §5.1) — duplicates → 409 CONFLICT */
+    merchant_txn_id: z.string().trim().min(1, "merchant_txn_id is required").max(255),
+    amount: z.number().int().positive("Amount must be positive"),
+    currency: z.string().length(3).default("VND"),
+    description: z.string().max(500).optional(),
+    return_url: z.string().url("Invalid return_url").optional(),
+    webhook_url: z.string().url("Invalid webhook_url").optional(),
+    customer_name: z.string().max(255).optional(),
+    customer_email: z.string().email().optional(),
+    customer_phone: z.string().max(50).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    expiry_minutes: z.number().int().min(1).max(1440).default(15),
+    /**
+     * Optional (services/routing/routeMap.ts). Redirect methods → payment_url = PSP URL;
+     * `vietqr` → response carries `qr_code`, payment_url = hosted QR page.
+     * Omit / null → hosted page where the customer picks among the available methods.
+     */
+    payment_method: z
+      .string()
+      .refine((m) => isPaymentMethod(m), "Unsupported payment_method")
+      .nullish(),
+    qr_size: z
+      .number()
+      .int()
+      .refine((n) => (QR_SIZES as readonly number[]).includes(n), "qr_size must be 200, 300 or 500")
+      .optional(),
+    customer_ip: z.string().max(45).optional(),
+  })
+  .superRefine((v, ctx) => {
+    // PSP amount limits (e.g. MoMo 1 000 – 50 000 000 ₫) — reject before creating the transaction
+    const msg = v.payment_method ? amountError(v.payment_method, v.amount) : null;
+    if (msg) ctx.addIssue({ code: "custom", path: ["amount"], message: msg });
+  });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -182,7 +188,7 @@ async function createAndInitiate(
             partner_config_id: x.partnerConfigId,
             reason: x.reason,
           })),
-          available_methods: await availableMethods(merchant.merchantId),
+          available_methods: await availableMethods(merchant.merchantId, input.amount),
         }),
       };
     }
@@ -239,7 +245,7 @@ async function createAndInitiate(
     }
   }
 
-  const qr = initiated?.kind === "qr" ? initiated.qr : undefined;
+  const qr = initiated?.qr;
   const response = {
     transaction_id: txn.id,
     txn_code: txn.txnCode,
@@ -260,6 +266,9 @@ async function createAndInitiate(
           raw_data: qr.raw_data,
           transfer_note: qr.transfer_note,
           bank: qr.bank,
+          // PartnerQR (MoMo): wallet app QR content + deeplink; null for VietQR
+          provider: "provider" in qr ? qr.provider : "VietQR",
+          deeplink: "deeplink" in qr ? qr.deeplink : null,
           expires_at: qr.expires_at,
         }
       : null,

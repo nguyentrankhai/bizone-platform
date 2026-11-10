@@ -63,14 +63,14 @@ export const PARTNER_TYPES: Record<string, PartnerTypeSpec> = {
   },
   MoMo: {
     label: "MoMo",
-    description: "Ví MoMo — connector ở P5.1",
-    merchantCode: { label: "Partner Code", secret: false },
+    description: "Ví MoMo (QR / app MoMo) — IPN tại /api/ipn/momo",
+    merchantCode: { label: "Partner Code", secret: false, placeholder: "VD: MOMOXXXX" },
     apiKey: { label: "Access Key", secret: true },
     secretKey: { label: "Secret Key", secret: true },
     usesEndpoints: true,
     defaultEndpointSandbox: "https://test-payment.momo.vn/v2/gateway/api/create",
     defaultEndpointProduction: "https://payment.momo.vn/v2/gateway/api/create",
-    implemented: false,
+    implemented: true,
   },
   ZaloPay: {
     label: "ZaloPay",

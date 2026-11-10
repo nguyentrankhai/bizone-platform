@@ -150,7 +150,49 @@ async function main() {
     vietqr = "VietQR partner config upserted";
   }
 
-  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}; ${vietqr}`);
+  // MoMo sandbox partner config (P5.1) — created Inactive: activate on /partners after
+  // "Test kết nối" succeeds with real credentials (P3.5 rule). Existing rows are left alone so
+  // an admin's edits / activation survive re-seeding.
+  let momo = "skipped (MOMO_PARTNER_CODE / MOMO_ACCESS_KEY / MOMO_SECRET_KEY not set)";
+  const momoPartner = process.env.MOMO_PARTNER_CODE;
+  const momoAccess = process.env.MOMO_ACCESS_KEY;
+  const momoSecret = process.env.MOMO_SECRET_KEY;
+  if (momoPartner && momoAccess && momoSecret && process.env.PARTNER_ENCRYPTION_KEY) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:4000";
+    const apiBase = (process.env.MOMO_API_URL ?? "https://test-payment.momo.vn/v2/gateway/api")
+      .replace(/\/+$/, "")
+      .replace(/\/create$/, "");
+    const existing = await prisma.partnerConfig.findFirst({
+      where: { connectorType: "MoMo", environment: "Sandbox" },
+    });
+    if (!existing) {
+      await prisma.partnerConfig.create({
+        data: {
+          connectorType: "MoMo",
+          name: "MoMo Sandbox",
+          apiKey: encryptSecret(momoAccess),
+          secretKey: encryptSecret(momoSecret),
+          merchantCode: momoPartner,
+          endpointSandbox: `${apiBase}/create`,
+          endpointProduction: "https://payment.momo.vn/v2/gateway/api/create",
+          callbackUrl: `${appUrl}/pay/momo/return`,
+          webhookUrl: `${appUrl}/api/ipn/momo`,
+          timeout: 30000,
+          status: "Inactive",
+          environment: "Sandbox",
+        },
+      });
+      momo = "MoMo Sandbox partner config created (Inactive — test + activate on /partners)";
+    } else {
+      momo = "MoMo Sandbox partner config exists (unchanged)";
+    }
+    await prisma.connector.update({
+      where: { code: "momo" },
+      data: { status: "Installed", isActive: true },
+    });
+  }
+
+  console.log(`Seed completed: 1 admin, 1 merchant, 4 connectors; ${vnpay}; ${vietqr}; ${momo}`);
 }
 
 main()

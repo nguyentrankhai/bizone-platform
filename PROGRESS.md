@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-10 (QA-3 fix — đóng #93–#97, #99: WebSocket POS kiểm chủ ca + chi nhánh, đọc / thao tác POS và ca làm việc / chấm công / doanh số theo phạm vi chi nhánh, giới hạn ghép PIN không lách bằng header, khoá ca an toàn khi đang bán; #98 chờ người dùng quyết định. Kế tiếp: P5.1)
+**Cập nhật lần cuối:** 2026-11-10 (P5.1 — MoMo connector: tạo thanh toán + QR MoMo qua Route Engine, IPN `/api/ipn/momo` kiểm HMAC-SHA256, truy vấn trạng thái khi mất IPN, hoàn tiền ở mức connector, cấu hình trên `/partners`; 🟡 chờ credential / truy cập MoMo sandbox thật (#100). Kế tiếp: P5.2)
 
 ---
 
@@ -17,10 +17,10 @@
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
-| 5 — Payment Hub Mở rộng | 6 | 0 | 0 | 6 |
+| 5 — Payment Hub Mở rộng | 6 | 0 | 1 | 5 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **32** | **3** | **18** |
+| **Tổng** | **53** | **32** | **4** | **17** |
 
 ---
 
@@ -46,7 +46,7 @@
 | 15 | Thu ngân đang hiển thị `username` vì token Keycloak chưa có claim `name` (client `bizone-frontend` thiếu mapper họ tên) | P2.6 | Task auth UI |
 | 16 | `VNPAY_TMN_CODE` trong `.env.development` là placeholder (`SANDBOX_TMN`) → VNPay sandbox trả lỗi 72 (trang thanh toán) / 03 (refund, querydr). Cần đăng ký tại sandbox.vnpayment.vn/devreg và chạy lại `npm run db:seed`; IPN thật cần URL public (ngrok) khai báo trên cổng VNPay | P3.3 | Người dùng → hoàn tất P3.3 |
 | ~~17~~ | ~~Sau IPN chưa gửi webhook cho merchant~~ | ~~P3.3~~ | ✅ P3.6 |
-| 18 | `VnpayConnector.refund()` đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
+| 18 | `VnpayConnector.refund()` / `MomoConnector.refund()` (P5.1) đã sẵn sàng nhưng chưa có luồng nghiệp vụ (bảng `refunds`, trạng thái `Refunded`/`PartiallyRefunded`, API) | P3.3 | P5.3 |
 | 19 | IPN thành công cho GD đã `Expired`/`Failed` chỉ ghi log `late_payment` (trả `02`) → cần đối soát / hoàn tiền thủ công | P3.3 | P5.4 |
 | 20 | Cấp tenant mới đang làm tay: tạo DB → `prisma migrate deploy` → `SEED_TENANT_ID=… db:seed` → thêm vào `TENANT_DATABASES` + restart. Cần registry tenant trong DB (không phải env) + luồng onboarding tự động | QA-1 | P4.6 / P6.x |
 | 21 | Chưa có màn hình cấp/thu hồi API key merchant — dùng `npm run apikey:create -- <MERCHANT_CODE>` (Payment Hub) | QA-1 | P3.5 / module Merchant |
@@ -128,6 +128,10 @@
 | ~~97~~ | ~~Ghép màn hình bằng PIN~~ | ~~QA-3~~ | ✅ QA-3 fix (`lib/client-ip.ts` + `TRUST_PROXY`, trần 100 lần sai / 10 phút toàn hệ thống) |
 | 98 | `staff:write` (gán được cho vai trò tuỳ chỉnh qua catalog) = quyền quản trị: người có quyền này gán được vai trò hệ thống `admin` (kể cả cho mình) và đặt lại mật khẩu admin. Cần `admin:*` để cấp vai trò admin/manager, đặt lại mật khẩu admin, và không cho cấp quyền mình không có | QA-3 | QA-3 fix (quyết định: theo thiết kế hay chặn) |
 | ~~99~~ | ~~Thấp (đọc code)~~ | ~~QA-3~~ | ✅ QA-3 fix (5 mục) |
+| 100 | **[Chờ người dùng]** MoMo sandbox chưa nghiệm thu thật: `test-payment.momo.vn` trả **403 (nginx)** cho mọi API từ máy dev — cả với bộ credential demo công khai trong mã mẫu của MoMo; `MOMO_*` trong `.env.development` là placeholder. Cần Partner Code / Access Key / Secret Key sandbox thật (business.momo.vn — có thể kèm whitelist IP) và URL public cho IPN (ngrok) | P5.1 | Người dùng → hoàn tất P5.1 |
+| 101 | Phản hồi `create` / `query` / `refund` của MoMo không có chữ ký theo tài liệu → Hub tin qua HTTPS tới endpoint đã cấu hình + kiểm phản hồi lặp lại `partnerCode` / `orderId` / `requestId`. Nếu sandbox thật trả chữ ký phản hồi thì bổ sung xác thực | P5.1 | Khi có sandbox thật (#100) |
+| 102 | QR MoMo chỉ trả trong `qr_code` lúc tạo GD (`POST /api/v1/transactions`); `POST /api/v1/qr/generate` (`PartnerQR`) và `GET /api/v1/qr/{txn}` vẫn chỉ hỗ trợ VietQR; dòng `qr_codes` `PartnerQR` không có `image_url`. Lấy QR mới = gọi lại `/pay/{txn}?method=momo_qr` (orderId `_2`) | P5.1 | P7.1 (`generateQR` trong IConnector) / khi POS cần |
+| 103 | BizOne POS chưa thử với `PAYHUB_QR_METHOD=momo_qr` (response tương thích: `qr_code.raw_data`, `bank: null`) — chưa kiểm màn hình POS / màn hình khách hiển thị QR MoMo | P5.1 | Khi bật MoMo cho POS |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -221,7 +225,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P5.1 | MoMo Connector | ⬜ | — | |
+| P5.1 | MoMo Connector | 🟡 | — | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
 | P5.2 | ZaloPay Connector | ⬜ | — | |
 | P5.3 | Refund Module — API & UI | ⬜ | — | |
 | P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
@@ -2001,3 +2005,58 @@ Ngoài plan, theo yêu cầu người dùng.
   - Kiểm chi nhánh đặt **trong service** cho thao tác ghi (đi qua cả WS / tRPC), ở router cho đọc theo id.
   - Không có proxy tin cậy thì coi mọi client là một nguồn (an toàn hơn tin header); triển khai sau reverse proxy đặt `TRUST_PROXY=true` (`.env.example`).
 - **Vấn đề / lưu ý:** còn mở #98 (`staff:write` gán được vai trò admin — chờ quyết định). Tài khoản Keycloak chưa có dòng vai trò trong DB vẫn dùng vai trò lưu lúc đăng ký push. Production: đặt `TRUST_PROXY=true` khi chạy sau nginx / load balancer (ghi chú cho P6.5).
+
+
+### P5.1 — MoMo Connector
+
+- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential / truy cập MoMo sandbox thật (#100) · **Commit:** `—` · **Vị trí:** `source/payment-hub/services/connectors/momo/` (`index.ts`, `momo.util.ts`), `server/routes/momo-webhook.ts` + `app/api/ipn/momo/`, `server/routes/momo-redirect.ts` + `app/pay/momo/return/`, `server/jobs/syncPendingPayments.ts`, `server/services/payment.service.ts`, `services/connectors/{registry,types}.ts`, `services/routing/{routeMap,routeEngine}.ts`, `tests/momo.test.ts`
+- **Đã làm:**
+  - **`MomoConnector`** (implement `PaymentConnector`, MoMo All-In-One v2):
+    - `createTransaction` — `POST …/v2/gateway/api/create`, `requestType=captureWallet` (QR trên máy tính, mở app MoMo trên điện thoại), `autoCapture`, `orderExpireTime` = số phút còn lại của GD (làm tròn xuống ⇒ đơn MoMo không sống lâu hơn GD), `ipnUrl` = webhook URL của cấu hình đối tác (mặc định `{APP_URL}/api/ipn/momo`), `redirectUrl` = callback URL (`/pay/momo/return`); ký **HMAC-SHA256** trên `accessKey…requestType` (thứ tự alphabet); kiểm phản hồi lặp lại `orderId`/`requestId`; trả `payUrl` + `qrCodeUrl` + `deeplink`
+    - `processResult` — `resultCode` 0 → `Success`; 1001–1999, 4xxx (người dùng từ chối, hết hạn, không đủ tiền…) → `Failed` kèm thông điệp tiếng Việt; 1000/7000/7002/9000 và mã lỗi API (10–99) → `Pending` (không kết luận GD)
+    - `verifySignature` — 13 trường của IPN / redirect (`accessKey, amount, extraData, message, orderId, orderInfo, orderType, partnerCode, payType, requestId, responseTime, resultCode, transId`), so sánh constant-time, `partnerCode` phải khớp cấu hình
+    - `refund` — `POST …/refund` theo `transId` gốc, mã đơn hoàn riêng (`{txn}-RF…`), toàn phần / một phần; thiếu `transId` → không gọi MoMo
+    - `getStatus` — `POST …/query`; `healthCheck` — query một đơn không tồn tại: credential đúng → MoMo trả **42** (không có đơn), sai key/chữ ký → 11/13 ⇒ kiểm được cả 3 giá trị (cùng ý tưởng `querydr` của VNPay)
+    - Mã đơn MoMo (`orderId`) = `txn_code`; tạo lại link thanh toán → `txn_code_2`, `_3`… (MoMo bắt orderId duy nhất); MoMo báo trùng (41) → thử lại 1 lần với hậu tố mới. IPN / query ánh xạ ngược bằng cách bỏ hậu tố `_n`
+    - Số tiền ngoài 1.000 – 50.000.000 ₫ hoặc không phải VND → lỗi `VALIDATION_ERROR` (lỗi nghiệp vụ: Route Engine không fallback, không tính vào circuit)
+  - **Registry / Route Engine:** khai báo `MoMo` (endpoint mặc định sandbox, API base suy ra từ create URL ⇒ query/refund cùng host, `defaultIpnUrl`, `statusSync`); `momo_qr` có trong route map từ P3.8, nay có connector ⇒ được định tuyến (ưu tiên theo merchant, fallback, circuit breaker như VNPay). Route map thêm `minAmount`/`maxAmount` theo phương thức: `POST /api/v1/transactions` trả **400** trước khi tạo GD, trang `/pay` ẩn MoMo khi số tiền ngoài hạn mức. `resolveConnectorByCode` từ chối dựng connector từ cấu hình khác loại (GD đi VNPay không bao giờ bị kiểm bằng secret MoMo)
+  - **Tạo GD `momo_qr`** (`POST /api/v1/transactions`, `/pay/{txn}?method=momo_qr`): GD `Created → Pending`, `payment_url` = trang thanh toán MoMo, `qr_code` = `{ type: "PartnerQR", provider: "MoMo", raw_data: qrCodeUrl, image_base64 (Hub vẽ, theo qr_size), deeplink, expires_at }` (BizOne POS dùng được `raw_data` như VietQR); lưu request + response MoMo vào `transaction_raw_data` (`momo:pay`, không có secret) và 1 dòng `qr_codes` `PartnerQR` (QR cũ của GD bị đánh dấu hết hạn; job hết hạn dọn khi GD kết thúc)
+  - **IPN `POST /api/ipn/momo`** (public — `/api/ipn/` trong `proxy.ts`): kiểm chữ ký bằng secret của đúng `partner_config_id` của GD → `applyPaymentResult` (`UPDATE … WHERE status='Pending'` + outbox webhook `OUTBOX_PENDING` + `dispatchSoon`) — dùng chung với VNPay. Trả **204** (đã áp / đã kết thúc / còn chờ), 400 (JSON sai, chữ ký sai, lệch số tiền), 404 (không có đơn), 500 (lỗi xử lý). `applyPaymentResult` thêm nhánh `pending`: ghi raw, không đổi trạng thái
+  - **"Retry nếu thất bại"** — `syncPaymentStatus()` (`payment.service`) hỏi MoMo trạng thái GD `Pending` và áp kết quả cuối cùng qua cùng đường với IPN: (1) job worker `syncPendingPayments` mỗi phút cho GD MoMo `Pending` quá `PAYMENT_STATUS_SYNC_AFTER_S` (60 s) chưa có IPN, tối đa `PAYMENT_STATUS_SYNC_BATCH` (20)/lượt, chỉ GD chưa hết hạn; (2) trang `/pay/momo/return` hỏi một lần (≤ 5 s) khi GD còn `Pending` ⇒ `return_url` của merchant mang trạng thái thật. Redirect tự nó không đổi trạng thái (chỉ kiểm chữ ký, lưu raw)
+  - **Cấu hình qua UI đối tác (P3.5):** `lib/partner-types.ts` MoMo `implemented: true` ⇒ Test kết nối gọi `healthCheck`, kích hoạt sau khi test đạt; form điền sẵn `/pay/momo/return`, `/api/ipn/momo` cho mọi PSP đã có connector, gợi ý "ipnUrl gửi kèm mỗi yêu cầu" cho MoMo
+  - **Seed:** `MOMO_PARTNER_CODE/ACCESS_KEY/SECRET_KEY` (+ `MOMO_API_URL`) ⇒ tạo cấu hình "MoMo Sandbox" **Inactive** (mã hoá AES-256-GCM, không ghi đè cấu hình đã có) + bật connector `momo`; `.env.example` thêm `MOMO_*`, `PAYMENT_STATUS_SYNC_*`
+  - Tài liệu: API-Design §5.1 (`qr_code` PartnerQR, hạn mức 400) và §12 (IPN MoMo, mã phản hồi, cơ chế truy vấn trạng thái)
+  - Test Vitest `tests/momo.test.ts` (12): chữ ký IPN đúng / bị sửa / khác secret / khác partnerCode; chữ ký create tính độc lập theo tài liệu; map `resultCode`; orderId `_n`; `orderExpireTime`; hạn mức = lỗi nghiệp vụ; lỗi MoMo = lỗi đối tác + thử lại khi trùng orderId; từ chối phản hồi không lặp lại request; query / refund ký đúng + kiểm echo; health 42 / 13
+
+- **Kiểm thử** (`next build` + `next start` :4010 với `APP_URL=http://localhost:4010`, worker `dev:worker` đang chạy đã nạp code mới, **mock MoMo cục bộ :3998** (script riêng, tự kiểm chữ ký create/query/refund bằng thuật toán MoMo, giả lập khách thanh toán → gửi IPN ký HMAC + redirect, bật/tắt sự cố) + endpoint nhận webhook merchant; merchant `P51TEST` + API key do `apikey:create` cấp; script e2e ký HMAC độc lập với code app; trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo GD → QR MoMo | ✅ với mock: `POST /api/v1/transactions` `momo_qr` → 201 `Pending`, `partner: MoMo` (40–95 ms), `payment_url` = payUrl, `qr_code` `PartnerQR` có `deeplink`; ảnh PNG giải mã (jsQR) đúng `qrCodeUrl`; mock xác nhận chữ ký create hợp lệ, `orderId = txn_code`, `ipnUrl`/`redirectUrl` đúng, `orderExpireTime` 14–15, `orderInfo` không có `&`/`=`; DB: `payment_method=momo_qr`, `partner_config_id`, raw request + response, 1 dòng `qr_codes` PartnerQR, không có secret trong raw. 🟡 **MoMo sandbox thật trả 403** từ máy này (#100) |
+  | Webhook MoMo → update status | ✅ IPN (mock ký HMAC-SHA256) thành công → **204** trong 16–34 ms, GD `Success`, `partner_txn_id = transId`, `paid_at`; log `partner:momo-ipn`; webhook `payment.success` tới merchant (có `partner_txn_id`); IPN `1006` → `Failed` + lý do "Người dùng từ chối…" + webhook `payment.failed`; IPN `1000` → 204, vẫn `Pending`. 🟡 IPN thật từ MoMo chưa thử (cần sandbox + URL public) |
+  | Verify signature / lỗi IPN | ✅ IPN lặp → 204, chỉ 1 log; sửa `amount` → 400; ký bằng secret khác → 400; thiếu chữ ký → 400; JSON hỏng → 400; ký đúng nhưng lệch số tiền → 400, GD giữ `Pending`; đơn không tồn tại → 404 |
+  | Retry nếu thất bại (IPN mất) | ✅ khách trả tiền nhưng IPN không tới: (a) quay về `/pay/momo/return` → Hub query MoMo → GD `Success` (log `system:momo-return`, raw `momo:query`) → 302 `return_url?…status=Success&result=success`; (b) không quay về → **worker thật** áp `Success` sau ~1–2 phút (log `system:status-sync`). Redirect bị sửa tham số → 400 |
+  | Refund qua MoMo | 🟡 `MomoConnector.refund()` dựng từ cấu hình mã hoá, gọi mock: hoàn một phần 50.000 rồi 100.000 → `success`, mã hoàn MoMo (20 ms); vượt số đã trả → `1080`; `transId` chưa thanh toán → `1088`; thiếu `transId` → không gọi. Chưa refund được trên sandbox thật (#100); luồng nghiệp vụ hoàn tiền (bảng `refunds`, API, trạng thái) là P5.3 (#18) |
+  | Tích hợp route engine | ✅ MoMo sập (mock 503) → GD vẫn tạo `Created` + `payment_error` `all_failed`, **VietQR vẫn 201** (không ảnh hưởng); tắt cấu hình MoMo → `momo_qr` 503, `available_methods: ["vietqr"]`, picker `/pay` ẩn "Ví MoMo"; kích hoạt lại → hiện ngay (không restart); `/pay?method=momo_qr` → 302 MoMo, gọi lại → orderId `_2` (MoMo không báo trùng), IPN cho `_2` áp đúng GD; 500 ₫ / 60 tr ₫ → 400 `VALIDATION_ERROR`, không tạo GD; 800 ₫ → picker chỉ còn VietQR |
+  | Cấu hình qua UI đối tác (P3.5) | ✅ API: không kích hoạt được trước khi test (409); test → "kết nối và chữ ký hợp lệ (mã 42)" → kích hoạt; cấu hình sai secret → test "mã 13 Xác thực merchant thất bại", không kích hoạt được; secret che `••••`, không có `enc:v1` trong response. Trình duyệt: `/partners/new` chọn MoMo → nhãn Partner Code / Access Key / Secret Key, endpoint + callback + IPN điền sẵn → Lưu → Test (OK 4 ms) → Kích hoạt → lịch sử thay đổi 3 dòng; trang `/partners` hiện kết quả test từng cấu hình. Luồng khách: picker → "Ví MoMo" → (mock) thanh toán → trang "Thanh toán thành công". Không lỗi console của app |
+  | Seed | ✅ chạy seed chỉ với `MOMO_*` (tắt khối VNPay / VietQR bằng biến rỗng) → "MoMo Sandbox" `Inactive`, key/secret `enc:v1:`, connector `momo` bật; VNPay / VietQR không đổi |
+  | Test sandbox | 🟡 `test-payment.momo.vn` trả 403 (nginx) cho create / query / refund từ máy dev, cả với bộ credential demo công khai của MoMo; `MOMO_*` trong `.env.development` là placeholder (#100) |
+  | Script e2e | ✅ 43/43 (lần đầu 37/42: 5 kỳ vọng sai trong script — tên trường `test_result`, payload webhook phẳng, `orderExpireTime` 14 do làm tròn xuống) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 70/70; route mới `/api/ipn/momo`, `/pay/momo/return` đều `ƒ`); `dist/worker.mjs` khởi động được |
+  | Dọn dẹp | ✅ dừng :4010 và mock :3998; xoá 18 GD test (log / raw / QR cascade), 10+ `webhook_logs`, endpoint webhook, API key, merchant `P51TEST`, 3 cấu hình MoMo test (log cascade); connector `momo` trả về trạng thái ban đầu (tắt, `Not Installed`) vì `.env.local` chưa có `MOMO_*`; xoá key Redis (idempotency merchant, QR VietQR test) + 10 job BullMQ webhook; khôi phục `.claude/launch.json`; xoá file script tạm |
+
+- **Khác biệt so với plan:**
+  - Route handler đặt ở `app/api/ipn/momo` (logic trong `server/routes/momo-webhook.ts` như PLAN) thay vì `/api/callback/momo` của API-Design §12 — thống nhất với `/api/ipn/vnpay`; đã sửa API-Design.
+  - IPN xử lý **đồng bộ** và trả 204 (MoMo yêu cầu) thay vì "200 ngay + queue + retry 3 lần" của API-Design: mã phản hồi phải phản ánh kết quả. "Retry nếu thất bại" = MoMo gửi lại khi nhận mã lỗi **+** Hub chủ động query MoMo (worker mỗi phút, trang return) — bù cả trường hợp IPN không tới được.
+  - "MoMo QR: sinh QR qua API MoMo": QR lấy từ `qrCodeUrl` của API create, Hub vẽ PNG; trả trong `qr_code` của `POST /api/v1/transactions`, chưa qua `/api/v1/qr/*` (#102).
+  - "Test sandbox" không thực hiện được (403 + credential placeholder) → kiểm bằng mock MoMo cục bộ tuân theo đặc tả, như cách P3.3 ghi phần chờ credential.
+  - Thêm hạn mức số tiền theo phương thức trong route map (400 trước khi tạo GD) và kiểm cấu hình đúng loại connector khi xác thực IPN — PLAN không nêu.
+
+- **Quyết định thiết kế:**
+  - Connector vẫn thuần (không đụng DB): số lần tạo link (`attempt`) do `payment.service` đếm từ `transaction_raw_data`, connector chỉ dựng orderId ⇒ ZaloPay (P5.2) dùng lại được.
+  - Kết quả không kết luận (đang xử lý, lỗi API) không bao giờ làm GD `Failed` — chỉ mã lỗi phía người dùng / nhà phát hành mới là thất bại; GD còn lại do query hoặc job hết hạn quyết định.
+  - Query trạng thái là nguồn sự thật thứ hai (server-to-server, cấu hình đã kiểm), áp bằng cùng `UPDATE` có điều kiện với IPN ⇒ IPN và query chạy đua không ghi đôi; redirect của trình duyệt không bao giờ được tin.
+  - `orderExpireTime` làm tròn xuống: khách không thể trả tiền MoMo sau khi Hub đã cho GD hết hạn (tránh `late_payment` #19).
+  - Seed tạo cấu hình MoMo `Inactive` (khác VNPay seed `Active`) — đúng quy tắc P3.5: chỉ kích hoạt sau khi test kết nối đạt.
+
+- **Vấn đề / lưu ý:** mới #100–#103; #18 mở rộng sang MoMo. Để hoàn tất P5.1: lấy credential sandbox MoMo (business.momo.vn), bật URL public cho `/api/ipn/momo` (ngrok) → sửa cấu hình MoMo trên `/partners` (hoặc điền `MOMO_*` vào `source/payment-hub/.env.local` + `npm run db:seed`, rồi test + kích hoạt) → tạo GD `momo_qr`, thanh toán bằng app MoMo test, kiểm IPN thật, refund qua `MomoConnector.refund()`.

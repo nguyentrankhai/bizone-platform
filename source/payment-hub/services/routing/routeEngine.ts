@@ -2,7 +2,13 @@ import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import type { PartnerConfig } from "@/generated/prisma/client";
 import { definitionForConnectorType } from "@/services/connectors/registry";
-import { PAYMENT_METHODS, routeFor, type PaymentMethod, type RouteMethod } from "./routeMap";
+import {
+  PAYMENT_METHODS,
+  amountError,
+  routeFor,
+  type PaymentMethod,
+  type RouteMethod,
+} from "./routeMap";
 
 /**
  * Route Engine (P3.8, SRS §3.3.4) — picks the partner (partner_configs row) that serves a
@@ -283,9 +289,17 @@ export async function planRoute(merchantId: number | null, method: string): Prom
 }
 
 /** Methods a merchant can use right now (at least one candidate), in route-map order. */
-export async function availableMethods(merchantId: number | null): Promise<PaymentMethod[]> {
+/** Methods with a usable partner for this merchant (and, when given, accepting `amount`). */
+export async function availableMethods(
+  merchantId: number | null,
+  amount?: number,
+): Promise<PaymentMethod[]> {
   const ctx = await loadRoutingContext(merchantId);
-  return PAYMENT_METHODS.filter((m) => planFromContext(ctx, m).candidates.length > 0);
+  return PAYMENT_METHODS.filter(
+    (m) =>
+      (amount === undefined || amountError(m, amount) === null) &&
+      planFromContext(ctx, m).candidates.length > 0,
+  );
 }
 
 // ─── Execution with fallback ──────────────────────────────────────────────────

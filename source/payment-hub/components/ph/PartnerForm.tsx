@@ -156,8 +156,9 @@ export function PartnerForm({
       name: f.name || `${next.label} - ${f.environment}`,
       endpointSandbox: next.defaultEndpointSandbox ?? "",
       endpointProduction: next.defaultEndpointProduction ?? "",
-      callbackUrl: type === "VNPay" ? `${origin}/pay/${code}/return` : "",
-      webhookUrl: type === "VNPay" ? `${origin}/api/ipn/${code}` : "",
+      // PSPs with a connector get their return / IPN handlers (/pay/{code}/return, /api/ipn/{code})
+      callbackUrl: next.implemented && next.usesEndpoints ? `${origin}/pay/${code}/return` : "",
+      webhookUrl: next.implemented && next.usesEndpoints ? `${origin}/api/ipn/${code}` : "",
     }));
     setErrors({});
   }
@@ -500,7 +501,11 @@ export function PartnerForm({
             label="Webhook URL (nhận IPN)"
             htmlFor="webhookUrl"
             error={errors.webhookUrl}
-            hint="Khai báo URL này trên cổng quản trị của đối tác"
+            hint={
+              form.connectorType === "MoMo"
+                ? "Gửi kèm mỗi yêu cầu thanh toán (ipnUrl) — phải truy cập được từ Internet"
+                : "Khai báo URL này trên cổng quản trị của đối tác"
+            }
           >
             <input
               id="webhookUrl"
