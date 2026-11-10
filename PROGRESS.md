@@ -225,7 +225,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P5.1 | MoMo Connector | 🟡 | — | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
+| P5.1 | MoMo Connector | 🟡 | `07ce9dd` | Code + kiểm thử với mock MoMo cục bộ xong (e2e 43/43); chờ credential / truy cập MoMo sandbox thật (#100). Xem [kết quả P5.1](#p51--momo-connector) |
 | P5.2 | ZaloPay Connector | ⬜ | — | |
 | P5.3 | Refund Module — API & UI | ⬜ | — | |
 | P5.4 | Reconciliation Module — API & UI | ⬜ | — | |
@@ -2009,7 +2009,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P5.1 — MoMo Connector
 
-- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential / truy cập MoMo sandbox thật (#100) · **Commit:** `—` · **Vị trí:** `source/payment-hub/services/connectors/momo/` (`index.ts`, `momo.util.ts`), `server/routes/momo-webhook.ts` + `app/api/ipn/momo/`, `server/routes/momo-redirect.ts` + `app/pay/momo/return/`, `server/jobs/syncPendingPayments.ts`, `server/services/payment.service.ts`, `services/connectors/{registry,types}.ts`, `services/routing/{routeMap,routeEngine}.ts`, `tests/momo.test.ts`
+- **Trạng thái:** 🟡 (2026-11-10) — code + kiểm thử local xong; chờ credential / truy cập MoMo sandbox thật (#100) · **Commit:** `07ce9dd` · **Vị trí:** `source/payment-hub/services/connectors/momo/` (`index.ts`, `momo.util.ts`), `server/routes/momo-webhook.ts` + `app/api/ipn/momo/`, `server/routes/momo-redirect.ts` + `app/pay/momo/return/`, `server/jobs/syncPendingPayments.ts`, `server/services/payment.service.ts`, `services/connectors/{registry,types}.ts`, `services/routing/{routeMap,routeEngine}.ts`, `tests/momo.test.ts`
 - **Đã làm:**
   - **`MomoConnector`** (implement `PaymentConnector`, MoMo All-In-One v2):
     - `createTransaction` — `POST …/v2/gateway/api/create`, `requestType=captureWallet` (QR trên máy tính, mở app MoMo trên điện thoại), `autoCapture`, `orderExpireTime` = số phút còn lại của GD (làm tròn xuống ⇒ đơn MoMo không sống lâu hơn GD), `ipnUrl` = webhook URL của cấu hình đối tác (mặc định `{APP_URL}/api/ipn/momo`), `redirectUrl` = callback URL (`/pay/momo/return`); ký **HMAC-SHA256** trên `accessKey…requestType` (thứ tự alphabet); kiểm phản hồi lặp lại `orderId`/`requestId`; trả `payUrl` + `qrCodeUrl` + `deeplink`
