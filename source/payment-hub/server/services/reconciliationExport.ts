@@ -1,7 +1,5 @@
-import nodeModule from "node:module";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import ExcelJS from "exceljs";
+import { pdfmake } from "./pdf";
 import type { DetailView, RunView } from "./reconciliation.service";
 
 /**
@@ -92,36 +90,6 @@ export async function reconToXlsx(run: RunView, details: DetailView[]): Promise<
     details.filter((d) => d.match_status === "Matched"),
   );
   return Buffer.from(await wb.xlsx.writeBuffer());
-}
-
-let pdfmakeInstance: { createPdf: (d: unknown) => { getBuffer: () => Promise<Buffer> } } | null =
-  null;
-
-function pdfmake() {
-  if (!pdfmakeInstance) {
-    const req = nodeModule.createRequire(import.meta.url);
-    const lib = req("pdfmake");
-    // Fonts are read from disk: from the app dir (next start / standalone / Docker cwd). A
-    // require.resolve() here is rewritten by Turbopack into a module id, so it cannot be used.
-    const fontDir = [
-      process.env.PDF_FONT_DIR,
-      path.join(process.cwd(), "node_modules", "pdfmake", "fonts", "Roboto"),
-    ].find((d): d is string => !!d && existsSync(path.join(d, "Roboto-Regular.ttf")));
-    if (!fontDir) throw new Error("pdfmake Roboto fonts not found (set PDF_FONT_DIR)");
-    const font = (f: string) => path.join(fontDir, f);
-    lib.addFonts({
-      Roboto: {
-        normal: font("Roboto-Regular.ttf"),
-        bold: font("Roboto-Medium.ttf"),
-        italics: font("Roboto-Italic.ttf"),
-        bolditalics: font("Roboto-MediumItalic.ttf"),
-      },
-    });
-    lib.setLocalAccessPolicy((p: string) => p.includes("pdfmake"));
-    lib.setUrlAccessPolicy(() => false);
-    pdfmakeInstance = lib;
-  }
-  return pdfmakeInstance!;
 }
 
 /** PDF: summary + every discrepancy (the matched list is in the Excel export — can be 10 000 rows). */

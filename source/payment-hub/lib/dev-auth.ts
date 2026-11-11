@@ -25,6 +25,18 @@ export function devTokenCanWrite(token: string): boolean {
 }
 
 /**
+ * merchant_id claim of the dev token (UI scoping hint only — the API enforces the scope).
+ */
+export function devTokenMerchantId(token: string): number | undefined {
+  const raw =
+    token === DEV_BYPASS_TOKEN ? devBypassUser().merchantId : decodePayload(token)?.merchant_id;
+  const n = Number(raw);
+  return raw !== undefined && raw !== null && raw !== "" && Number.isSafeInteger(n) && n > 0
+    ? n
+    : undefined;
+}
+
+/**
  * Dev-mode notice: who admin pages act as while AUTH_DEV_BYPASS=true — the DEV_AUTH_TOKEN user
  * when that variable is set, otherwise the configured dev user. null when bypass is off.
  */

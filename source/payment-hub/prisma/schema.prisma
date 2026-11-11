@@ -226,6 +226,9 @@ model PartnerConfig {
   webhookUrl         String?             @map("webhook_url") @db.VarChar(500)
   timeout            Int                 @default(30000)
   retryPolicy        Json?               @map("retry_policy")
+  /// P5.5: contract fee per successful transaction = amount × fee_percent / 100 + fee_fixed
+  feePercent         Decimal             @default(0) @map("fee_percent") @db.Decimal(6, 4)
+  feeFixed           Decimal             @default(0) @map("fee_fixed") @db.Decimal(15, 0)
   status             PartnerConfigStatus @default(Inactive)
   environment        PartnerEnvironment  @default(Sandbox)
   testResult         Json?               @map("test_result")
@@ -327,6 +330,7 @@ model Transaction {
   @@index([partnerTxnId], map: "idx_txn_partner_txn")
   @@index([status], map: "idx_txn_status")
   @@index([createdAt], map: "idx_txn_created")
+  @@index([paidAt], map: "idx_txn_paid")
   @@index([idempotencyKey], map: "idx_txn_idempotency")
   @@index([expiredAt], map: "idx_txn_expired")
   @@map("transactions")

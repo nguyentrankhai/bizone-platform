@@ -811,9 +811,13 @@ Lý do bỏ qua (`skipped[].reason`): `inactive`, `error_status`, `connector_dis
     "max_retries": 3,
     "backoff_ms": 1000
   },
+  "fee_percent": 1.1,
+  "fee_fixed": 0,
   "environment": "Sandbox"
 }
 ```
+
+`fee_percent` (0–100, ≤ 4 chữ số thập phân) + `fee_fixed` (₫, số nguyên ≥ 0): biểu phí theo hợp đồng trên mỗi GD thành công — báo cáo (§6.9, P5.5) ước tính phí GD = `round(amount × fee_percent / 100) + fee_fixed`. Mặc định 0; đổi biểu phí ghi log, không làm mất kết quả test kết nối.
 
 #### `PUT /api/admin/partners/{id}` - Cập nhật cấu hình đối tác
 
@@ -1154,99 +1158,30 @@ Tải file trực tiếp (không qua task bất đồng bộ): Excel 3 sheet (T�
 
 ### 6.9. Reports
 
-#### `GET /api/admin/reports/transactions` - Báo cáo giao dịch
+> **Triển khai P5.5**: đường dẫn `/api/internal/reports/*` (JWT admin qua `proxy.ts`, role `payhub-admin` | `payhub-viewer`; token có claim `merchant_id` bị ép lọc theo merchant đó, báo cáo đối soát trả `403`). Dữ liệu trả về camelCase (như `/api/internal/dashboard`). Ngày theo giờ Việt Nam `YYYY-MM-DD`, cả hai đầu tính, tối đa 366 ngày; mặc định 7 ngày gần nhất. Phí GD là **ước tính** từ biểu phí cấu hình đối tác (`partner_configs.fee_percent` % + `fee_fixed` ₫ / GD thành công).
 
-**Query Parameters:** fromDate, toDate, partner, paymentMethod, merchantId, status, groupBy (day|week|month)
+| Method | Endpoint | Query | Mô tả |
+|--------|----------|-------|-------|
+| GET | `/api/internal/reports/options` | — | Giá trị bộ lọc: `partnerTypes`, `partnerConfigs`, `merchants`, `paymentMethods` |
+| GET | `/api/internal/reports/transactions` | `from`, `to`, `group_by` (day\|week\|month, mặc định theo độ dài), `status` (`paid`/`failed`/`pending` hoặc trạng thái, phân cách `,`), `partner` (connector type), `payment_method`, `merchant_id` | GD **tạo** trong khoảng: `summary` (total, paid, failed, pending, refunded, totalAmount, paidAmount, fees, successRate) + `buckets[]` theo kỳ (đủ mọi kỳ, kỳ trống = 0) |
+| GET | `/api/internal/reports/revenue` | `from`, `to`, `compare` (previous\|year), `partner`, `merchant_id` | GD **thanh toán** (`paid_at`) trong khoảng: `summary` (count, gross, refunded, fees, net, previous, growth, netGrowth, countGrowth), `byPartner[]`, `byMethod[]` (mỗi dòng có `percentage`, `previous`, `growth`), `trend[]` 12 tháng kết thúc ở tháng của `to`, `previousRange` |
+| GET | `/api/internal/reports/reconciliation` | `from`, `to`, `partner`, `partner_config_id` | Đợt `Completed` **mới nhất** của mỗi cấu hình đối tác × ngày: `days[]`, `daily[]`, `summary` (runs, matched, unmatched + từng loại, unverified, discrepancy, open, matchRate) |
+| GET | `/api/internal/reports/reconciliation/discrepancies` | … + `status` (Open\|Resolved), `search`, `page`, `limit` ≤ 100 | Dòng lệch của các đợt trên (chênh lệch lớn trước) kèm trạng thái xử lý |
+| GET | `/api/internal/reports/export` | `type` (transactions\|revenue\|reconciliation), `format` (xlsx\|pdf\|csv) + bộ lọc của báo cáo | Tải file trực tiếp (`Content-Disposition: attachment; filename="bao-cao-<loại>-<from>_<to>.<ext>"`) |
 
-**Response (200):**
+Nội dung file: **Excel** = sheet "Tổng hợp" + mỗi bảng 1 sheet (GD: theo kỳ + danh sách GD ≤ 50 000 dòng; doanh thu: theo đối tác, theo phương thức, 12 tháng; đối soát: theo ngày + giao dịch lệch). **PDF** (A4 ngang, Roboto) = tổng hợp + các bảng tổng hợp (≤ 500 dòng / bảng). **CSV** (UTF-8 BOM) = danh sách GD / doanh thu theo đối tác + phương thức / đối soát theo ngày.
+
 ```json
+// GET /api/internal/reports/transactions?from=2026-11-01&to=2026-11-10&status=paid
 {
   "success": true,
   "data": {
-    "summary": {
-      "total_transactions": 12500,
-      "total_amount": 7500000000,
-      "total_fees": 75000000,
-      "success_count": 12000,
-      "failed_count": 500,
-      "success_rate": 96.0
-    },
-    "chart": [
-      {
-        "date": "2026-06-01",
-        "count": 400,
-        "amount": 240000000,
-        "success_count": 385,
-        "failed_count": 15
-      }
-    ]
-  }
-}
-```
-
-#### `GET /api/admin/reports/revenue` - Báo cáo doanh thu
-
-**Query Parameters:** fromDate, toDate, groupBy (partner|paymentMethod)
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "by_partner": [
-      { "partner": "VNPay", "amount": 4500000000, "count": 7200, "percentage": 60 },
-      { "partner": "MoMo", "amount": 2500000000, "count": 3800, "percentage": 33.33 }
-    ],
-    "by_payment_method": [
-      { "method": "VietQR", "amount": 3500000000, "count": 5500, "percentage": 46.67 },
-      { "method": "MoMo QR", "amount": 2500000000, "count": 3800, "percentage": 33.33 }
-    ],
-    "growth": {
-      "current_period": 7500000000,
-      "previous_period": 6800000000,
-      "growth_percentage": 10.29
-    }
-  }
-}
-```
-
-#### `GET /api/admin/reports/reconciliation` - Báo cáo đối soát
-
-**Query Parameters:** fromDate, toDate, partner
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "summary": {
-      "total_runs": 30,
-      "total_matched": 29000,
-      "total_unmatched": 45,
-      "total_discrepancy": 15000000
-    },
-    "daily": [
-      {
-        "date": "2026-06-12",
-        "matched": 2335,
-        "unmatched": 5,
-        "discrepancy": 500000
-      }
-    ]
-  }
-}
-```
-
-#### `POST /api/admin/reports/export` - Xuất báo cáo (PDF/Excel)
-
-**Request:**
-```json
-{
-  "type": "transactions",
-  "format": "xlsx",
-  "filters": {
-    "fromDate": "2026-06-01",
-    "toDate": "2026-06-12"
+    "range": { "from": "2026-11-01", "to": "2026-11-10" },
+    "groupBy": "day",
+    "filters": { "statuses": ["Success", "Refunded", "PartiallyRefunded"] },
+    "summary": { "total": 317, "paid": 317, "failed": 0, "pending": 0, "refunded": 79, "totalAmount": 67773966, "paidAmount": 67773966, "fees": 778056, "successRate": 100 },
+    "buckets": [{ "key": "2026-11-01", "label": "01/11/2026", "total": 30, "paid": 30, "paidAmount": 5978329, "fees": 67527, "successRate": 100 }],
+    "generatedAt": "2026-11-11T16:54:42.000Z"
   }
 }
 ```
@@ -1592,6 +1527,7 @@ Scheduler           Payment Hub              Partner API
 POST /api/admin/transactions/export
 POST /api/admin/reports/export
 GET  /api/internal/reconciliation/{id}/export?format=xlsx|pdf   (P5.4 — tải trực tiếp)
+GET  /api/internal/reports/export?type=&format=xlsx|pdf|csv     (P5.5 — tải trực tiếp)
 GET  /api/admin/export/{taskId}/status
 GET  /api/admin/export/{taskId}/download
 ```

@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-11 (P5.4 — Reconciliation Module: đối soát theo đối tác × ngày bằng tra cứu API từng GD (job 00:00 + chạy tay qua worker) hoặc nhập sao kê CSV/Excel (gồm sao kê ngân hàng cho VietQR); khớp / chỉ có ở Hub / chỉ có ở đối tác / lệch tiền / chưa tra cứu được; xử lý lệch, xuất Excel/PDF, cảnh báo dashboard; 10 000 GD < 5 s. Kế tiếp: P5.5)
+**Cập nhật lần cuối:** 2026-11-11 (P5.5 — Payment Hub Reports: báo cáo giao dịch (lọc thời gian / trạng thái / đối tác / phương thức / merchant, nhóm ngày-tuần-tháng, phí GD ước tính theo biểu phí đối tác), doanh thu (theo đối tác + phương thức, so với kỳ trước / cùng kỳ năm trước, 12 tháng), đối soát (theo ngày, lệch + trạng thái xử lý); xuất Excel / PDF / CSV. Kế tiếp: P5.6)
 
 ---
 
@@ -17,10 +17,10 @@
 | 2 — BizOne Core MVP | 10 | 10 | 0 | 0 |
 | 3 — Payment Hub MVP | 8 | 5 | 3 | 0 |
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
-| 5 — Payment Hub Mở rộng | 6 | 2 | 2 | 2 |
+| 5 — Payment Hub Mở rộng | 6 | 3 | 2 | 1 |
 | 6 — BizOne Nâng cao | 7 | 0 | 0 | 7 |
 | 7 — Payment Hub Nâng cao | 5 | 0 | 0 | 5 |
-| **Tổng** | **53** | **34** | **5** | **14** |
+| **Tổng** | **53** | **35** | **5** | **13** |
 
 ---
 
@@ -55,7 +55,7 @@
 | 24 | Chưa có xác nhận tự động cho thanh toán VietQR: khách chuyển khoản xong, GD vẫn `Pending` đến khi hết hạn. Cần nguồn báo có (webhook ngân hàng/Casso/SePay hoặc sao kê) khớp theo nội dung CK = `txn_code` bỏ `-` **P5.4: nhập sao kê ngân hàng (CSV/XLSX) để đối soát VietQR** — tiền về cho GD `Pending`/`Expired` hiện thành `Unmatched_Partner`, nhưng vẫn không tự xác nhận GD | P3.4 | Connector ngân hàng (Casso/SePay) / #115 |
 | ~~25~~ | ~~`POST /api/v1/transactions` chưa nhận `payment_method: vietqr`; `/pay/{txn}` chưa có VietQR~~ | ~~P3.4~~ | ✅ P3.8 |
 | 26 | Seed tạo partner config ở trạng thái `Active` mà chưa qua test kết nối (VNPay Sandbox với credential placeholder vẫn Active) — từ P3.5 trở đi, UI/API chỉ kích hoạt sau khi test đạt | P3.5 | Khi có credential VNPay thật (#16): test lại trên `/partners/1` |
-| 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng | P3.5 | Task UI / P6.x |
+| 27 | Layout admin Payment Hub (`PHLayout`/`PHSidebar`, P1.8) chưa responsive: ở 375 px sidebar chiếm gần hết màn hình, nút thu gọn không tác dụng (cả `/reconciliation`, `/reports`) | P3.5 | Task UI / P6.x |
 | 28 | Log thay đổi đối tác lấy IP từ `x-forwarded-for` — tin cậy được khi chạy sau reverse proxy ghi đè header này | P3.5 | Khi triển khai (P6.5) |
 | ~~29~~ | ~~Sự kiện `refund.completed` đã khai báo nhưng chưa phát~~ | ~~P3.6~~ | ✅ P5.3 (outbox trên bảng `refunds`, mỗi lần hoàn 1 webhook) |
 | 30 | BizOne `/api/webhooks/payhub`: từ P4.5 áp `payment.success/failed/expired` cho thanh toán thẻ/QR tại POS (`merchant_txn_id = BZ-{tenant}-{intentId}` mang tenant). Còn lại: một bộ `PAYHUB_API_KEY/SECRET` + `PAYHUB_WEBHOOK_SECRET` cho cả app (một merchant Payment Hub cho mọi tenant — chưa map merchant ↔ tenant); đơn hàng online chưa thanh toán qua Payment Hub | P3.6 | P6.1 / onboarding tenant (#20) |
@@ -140,17 +140,21 @@
 | 109 | Chỉ phát webhook `refund.completed` (theo SRS / API-Design; OpenAPI cũ ghi `refund.success`/`refund.failed` — đã sửa). Hoàn tiền bất đồng bộ (ZaloPay) **thất bại sau đó** không có webhook — merchant thấy qua `GET /api/v1/transactions/{id}` (`refunds[]`) | P5.3 | Khi merchant cần (thêm sự kiện `refund.failed`) |
 | 110 | Hoàn tiền / xác nhận thủ công ghi `transaction_logs` + `refunds.requested_by` (username token), chưa vào `audit_logs` (SRS-PH-AUDIT-02-01) — cùng #38. `refunds.processed_by` (FK `users`) không dùng vì user Keycloak không có trong bảng `users`. Chưa tách quyền "hoàn tiền" khỏi `payhub-admin` (SRS: Admin + Operations) | P5.3 | P7.2 Audit Log / phân quyền vận hành |
 | 111 | Chi tiết GD (`/transactions/{id}`) hiện "Tên merchant: —" — `getTransactionById/ByCode` không nạp `merchant` (có từ P3.2) | P5.3 (phát hiện) | Task UI Payment Hub |
-| 112 | Đối soát (P5.4) chỉ đối chiếu **thanh toán**; hoàn tiền (`refunds`) và phí giao dịch chưa đối soát với đối tác — yêu cầu hoàn `Processing` (#108) vẫn xác nhận tay | P5.4 | P5.5 / khi có file đối soát hoàn tiền của đối tác |
+| 112 | Đối soát (P5.4) chỉ đối chiếu **thanh toán**; hoàn tiền (`refunds`) và phí giao dịch chưa đối soát với đối tác — yêu cầu hoàn `Processing` (#108) vẫn xác nhận tay. P5.5: báo cáo doanh thu có cột "đã hoàn" + phí **ước tính** (#117), vẫn chưa đối chiếu với số đối tác | P5.4 | Khi có file đối soát hoàn tiền / phí của đối tác |
 | 113 | Nguồn `Api` = 1 lệnh tra cứu / GD (VNPay `querydr`, MoMo `query`, ZaloPay `query`) — không thấy được tiền đối tác thu cho đơn Hub không biết (chỉ nhập file mới thấy). ZaloPay trả `-101` (không có đơn) cho GD Hub ghi đã trả → `Unverified` thay vì "đối tác thiếu". **Chưa có file đối soát thật** của VNPay / MoMo / ZaloPay / ngân hàng: cột nhận theo tên tiêu đề phổ biến (`statement.ts`), cần kiểm lại với file mẫu thật khi có tài khoản merchant (#16, #100, #104) | P5.4 | Khi có credential / file mẫu đối tác |
 | 114 | Thông báo chênh lệch đối soát (SRS-PH-RECON-01-05) chỉ qua cảnh báo dashboard + sự kiện realtime `recon.completed` + log worker; chưa gửi email / thông báo hệ thống (Payment Hub chưa có dịch vụ email; bảng `notifications` gắn `users` — user Keycloak không có trong bảng) | P5.4 | Module thông báo Payment Hub (P7.x) |
 | 115 | Đối soát không bao giờ đổi trạng thái GD: tiền đối tác đã thu cho GD `Expired`/`Failed`/`Pending` (thanh toán muộn #19, VietQR #24) chỉ được báo + đánh dấu "đã xử lý" bằng ghi chú. Chưa có thao tác "xác nhận thanh toán" / "tạo yêu cầu hoàn" từ dòng lệch, chưa có nút "Tra soát" (P5.6) | P5.4 | P5.6 Tra soát / khi có quyết định nghiệp vụ |
-| 116 | Xuất báo cáo đối soát Excel/PDF tải trực tiếp trong request (10 000 dòng ~0,4 MB, < 2 s), chưa theo mô hình task bất đồng bộ `export/{taskId}` của API-Design §10.1. `npm audit --omit=dev` Payment Hub nay có 2 moderate `exceljs → uuid` (như BizOne, chỉ ảnh hưởng uuid v3/v5/v6 có `buf`) | P5.4 | P5.5 (export báo cáo chung) / khi exceljs cập nhật |
+| 116 | Xuất báo cáo đối soát Excel/PDF tải trực tiếp trong request (10 000 dòng ~0,4 MB, < 2 s), chưa theo mô hình task bất đồng bộ `export/{taskId}` của API-Design §10.1. `npm audit --omit=dev` Payment Hub nay có 2 moderate `exceljs → uuid` (như BizOne, chỉ ảnh hưởng uuid v3/v5/v6 có `buf`) | P5.4 | P5.5: báo cáo chung cũng tải trực tiếp (20 000 GD → Excel 1,3 MB / 1,2 s, CSV 0,2 s; danh sách ≤ 50 000 dòng) — task bất đồng bộ khi dữ liệu lớn hơn (P7.x) / khi exceljs cập nhật |
+| 117 | Phí GD trong báo cáo là **ước tính** = `round(số tiền × fee_percent / 100) + fee_fixed` theo biểu phí **hiện hành** của cấu hình đối tác (P5.5, mặc định 0 → phí 0 tới khi nhập ở `/partners/{id}`): không lưu phí theo từng GD nên đổi biểu phí làm đổi số liệu quá khứ; biểu phí chỉ 1 mức % + cố định / cấu hình (chưa theo phương thức — VNPay thẻ quốc tế khác QR — hay theo bậc); phí thực đối tác thu (file đối soát) chưa đối chiếu | P5.5 | Khi có hợp đồng phí / file đối soát đối tác (#112) |
+| 118 | Báo cáo doanh thu trừ hoàn tiền theo **GD gốc** (`refunded_amount` của GD thanh toán trong kỳ), không theo ngày hoàn → doanh thu thuần kỳ cũ giảm khi có hoàn tiền sau. Các thẻ "Báo cáo hoàn tiền / lỗi / hiệu suất connector" của trang `/reports` cũ (placeholder P1.8) không thuộc P5.5 — chưa làm | P5.5 | Khi kế toán cần doanh thu theo ngày hoàn / P7.1 (hiệu suất connector) |
+| 119 | Báo cáo tổng hợp trực tiếp trên `transactions` mỗi lần gọi (index `created_at`, `paid_at` mới), không cache / không bảng tổng hợp ngày: 20 000 GD / 1 năm < 250 ms; khi lên hàng triệu GD cần bảng tổng hợp theo ngày hoặc cache Redis | P5.5 | P6.x/P7.x (hiệu năng) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
 
 | Ngày | Vấn đề | Cách giải quyết |
 |------|--------|-----------------|
+| 2026-11-11 | Trang `/reports` Payment Hub là 6 thẻ tĩnh, nút xuất không hoạt động; form đối tác điền endpoint mặc định **VNPay** cho cấu hình loại khác chưa có endpoint (vd. ZaloPay tạo ngoài UI) | 3 báo cáo thật + xuất Excel/PDF/CSV (P5.5); form lấy endpoint mặc định theo loại connector của cấu hình |
 | 2026-11-11 | Thanh toán muộn cho GD đã hết hạn (#19) và tiền VietQR về tài khoản (#24) không có cách nào phát hiện ngoài đọc log; trang `/reconciliation` là dữ liệu tĩnh | Đối soát P5.4: tra cứu API cả GD Hub chưa ghi nhận thanh toán + nhập sao kê ngân hàng → dòng `Unmatched_Partner` gắn GD; UI + cảnh báo dashboard (xử lý vẫn thủ công — #115) |
 | 2026-11-10 | Connector đã có `refund()` nhưng không có luồng hoàn tiền (#18), `refund.completed` không phát (#29), hoàn tiền ZaloPay bất đồng bộ không ai hỏi lại (#105); log GD cùng giây hiện ngược thứ tự | `refund.service` + API merchant / admin + UI (P5.3): giữ chỗ số tiền dưới khoá dòng GD, outbox `refund.completed`, worker `syncPendingRefunds`; log sắp theo `created_at, id` |
 | 2026-11-07 | Lần đầu vào BizOne không vào được trang chức năng: `/` là trang tĩnh với nút "Bắt đầu" không dẫn đi đâu; sidebar link tới 5 module chưa có (`/suppliers`, `/omni`, `/marketing`, `/accounting`, `/settings`) → 404; thiếu/ hết hạn `DEV_AUTH_TOKEN` → mọi trang trắng (dashboard `return null`) không giải thích; màn hẹp sidebar che hết nội dung | `/` chuyển về `/dashboard`; mục chưa xây hiện "Sắp có" (không link); `AppLayout` hiện banner "Chưa đăng nhập" (token thiếu/hết hạn, tính mỗi request); sidebar tự thu gọn < 1024 px (`AppShell` tách riêng cho client component). Gốc vẫn là #7 — chưa có đăng nhập Keycloak trên trình duyệt |
@@ -244,7 +248,7 @@
 | P5.2 | ZaloPay Connector | 🟡 | `741106a` | Code + kiểm thử với mock ZaloPay cục bộ xong (e2e 54/54); chờ credential ZaloPay sandbox (#104). Xem [kết quả P5.2](#p52--zalopay-connector) |
 | P5.3 | Refund Module — API & UI | ✅ | `3fd8665` | Hoàn tiền kiểm bằng mock VNPay / MoMo / ZaloPay (e2e 57/58 — 1 kỳ vọng sai trong script); hoàn tiền thật trên sandbox chờ credential (#16, #100, #104). Xem [kết quả P5.3](#p53--refund-module--api--ui) |
 | P5.4 | Reconciliation Module — API & UI | ✅ | `0215457` | Kiểm bằng mock tra cứu VNPay / MoMo / ZaloPay + file sao kê mẫu (e2e 41/41, 10 000 GD: API 4 s, file 1,7 s); file đối soát thật của đối tác chờ credential (#113). Xem [kết quả P5.4](#p54--reconciliation-module--api--ui) |
-| P5.5 | Payment Hub Reports | ⬜ | — | |
+| P5.5 | Payment Hub Reports | ✅ | — | 3 báo cáo + xuất Excel/PDF/CSV; e2e 48/48 trên 20 479 GD test (số liệu khớp tính độc lập). Xem [kết quả P5.5](#p55--payment-hub-reports) |
 | P5.6 | Dispute Module — API & UI | ⬜ | — | |
 
 ## Giai đoạn 6 — BizOne Nâng cao (Tuần 13–16)
@@ -2230,3 +2234,48 @@ Ngoài plan, theo yêu cầu người dùng.
   - Nhận cột theo tên tiêu đề thay vì một mẫu cố định: dùng thẳng file xuất từ cổng đối tác / ngân hàng, không cần chỉnh tay.
 
 - **Vấn đề / lưu ý:** cập nhật #19, #24, #33 (đối soát phát hiện + cảnh báo; xử lý vẫn thủ công); mới #112–#116. #27 (layout Payment Hub ở 375 px) cũng áp dụng cho `/reconciliation`. Khi có tài khoản merchant thật: chạy đối soát API cho VNPay / MoMo / ZaloPay sandbox và nhập file đối soát mẫu của từng đối tác để kiểm cột (#113).
+
+### P5.5 — Payment Hub Reports
+
+- **Hoàn thành:** 2026-11-11 · **Commit:** — · **Vị trí:** `source/payment-hub/` — `lib/report.ts` (thuần), `server/services/report.service.ts`, `server/services/reportExport.ts`, `server/services/pdf.ts` (tách từ `reconciliationExport.ts`), `server/routes/reports.ts` + `app/api/internal/reports/**`, `app/reports/page.tsx`, `components/ph/{ReportsClient,TransactionReport,RevenueReport,ReconciliationReport,ReportControls,ReportBarChart}.tsx` + `report-api.ts`, biểu phí đối tác (`prisma/migrations/7_partner_fees`, `partner.service.ts`, `server/routes/partners.ts`, `PartnerForm.tsx`, `PartnerLogTable.tsx`, `lib/partner-types.ts`), `lib/dev-auth.ts` (`devTokenMerchantId`), `next.config.ts`, `tests/report.test.ts`, `database/schema_paymenthub.sql`, API-Design §6.9 / §10.1
+- **Đã làm:**
+  - **Biểu phí đối tác** (migration `7_partner_fees`): `partner_configs.fee_percent` (DECIMAL 6,4) + `fee_fixed` (₫) — nhập ở form đối tác ("Phí giao dịch (%)", "Phí cố định / GD"), kiểm 0–100 % / ≤ 4 số lẻ / số nguyên ≥ 0, ghi log thay đổi, không làm mất kết quả test kết nối. Phí ước tính mỗi GD thành công = `ROUND(amount × fee_percent / 100) + fee_fixed` (tính trong SQL). Index mới `idx_txn_paid (paid_at)`
+  - **Báo cáo giao dịch** (SRS-PH-RPT-01): GD **tạo** trong khoảng ngày VN; lọc trạng thái (nhóm `paid` / `failed` / `pending` hoặc trạng thái cụ thể), đối tác (loại connector), phương thức, merchant; thông số tổng GD / thành công / thất bại-hết hạn / đang chờ / đã hoàn, tỷ lệ thành công, tổng tiền mọi GD + tiền thành công, phí GD; nhóm theo ngày / tuần (thứ Hai) / tháng (mặc định: ≤ 31 ngày → ngày, ≤ 120 → tuần, còn lại → tháng), đủ mọi kỳ kể cả kỳ trống
+  - **Báo cáo doanh thu** (SRS-PH-RPT-02): GD **thanh toán** trong khoảng (`paid_at`); theo đối tác và theo phương thức: số GD, doanh thu, đã hoàn, phí, doanh thu thuần, tỷ trọng, kỳ so sánh, tăng trưởng; so với **kỳ liền trước cùng số ngày** hoặc **cùng kỳ năm trước** (29/02 → 28/02); biểu đồ tăng trưởng 12 tháng (thuần + hoàn/phí)
+  - **Báo cáo đối soát** (SRS-PH-RPT-03): đợt `Completed` **mới nhất** của mỗi cấu hình đối tác × ngày (đợt chạy lại thay đợt cũ, đợt `Failed` bỏ qua); bảng theo ngày như mockup (GD PH / ĐT, khớp, chỉ ở PH, chỉ ở ĐT, sai tiền, chênh lệch, trạng thái Khớp / Cần xử lý (n) / Đã xử lý / Chưa tra cứu đủ, link tới đợt), tổng hợp + tỷ lệ khớp, biểu đồ khớp/lệch theo ngày, chi tiết từng dòng lệch kèm trạng thái + cách xử lý (lọc, tìm mã, phân trang, link GD)
+  - **API** `/api/internal/reports/{options,transactions,revenue,reconciliation,reconciliation/discrepancies,export}` (admin / viewer). Token gắn merchant: mọi số liệu ép theo merchant đó (`merchant_id` khác → 403), báo cáo đối soát → 403 (tab bị ẩn trên UI)
+  - **Xuất file** `GET /export?type=&format=xlsx|pdf|csv` + bộ lọc: mỗi báo cáo mô tả 1 lần thành `ReportDoc` (tổng hợp + bảng) rồi render — Excel (sheet Tổng hợp + mỗi bảng 1 sheet, định dạng số; báo cáo GD có sheet danh sách GD ≤ 50 000 dòng), PDF A4 ngang Roboto (tổng hợp + bảng tổng hợp ≤ 500 dòng / bảng), CSV UTF-8 BOM (danh sách GD / doanh thu đối tác + phương thức / đối soát theo ngày; chặn công thức `= + - @`)
+  - **UI `/reports`** (mockup "Báo cáo"): 3 tab (`?tab=`), chọn kỳ (hôm nay, 7 / 30 ngày, tháng này, tháng trước, năm nay, tuỳ chọn từ–đến), thẻ số liệu, biểu đồ cột chồng SVG thuần, bảng chi tiết có dòng tổng, nút Excel / PDF / CSV
+  - Sửa kèm: form đối tác điền endpoint mặc định theo loại connector của cấu hình (trước luôn là VNPay); pdfmake nạp chung ở `server/services/pdf.ts`
+  - Test Vitest `tests/report.test.ts` (12): khoảng ngày (mặc định, ngày sai, > 366 ngày), đổi sang UTC, kỳ so sánh (kỳ trước, năm trước, 29/02), preset tháng trước qua năm, nhóm tuần/tháng, 12 tháng qua năm, nhóm trạng thái, phí + tăng trưởng, dựng báo cáo GD (kỳ trống, tỷ lệ), doanh thu (tỷ trọng, đối tác chỉ có ở kỳ so sánh, xu hướng), đối soát (trạng thái ngày, tổng), CSV (ngoặc kép, chặn công thức)
+
+- **Kiểm thử** (`next build` + `next start` :4010 với `AUTH_DEV_BYPASS`; dữ liệu test: merchant `P55TEST`, 4 cấu hình đối tác test (VNPay 1,1 %, MoMo 1,5 %, ZaloPay 1,25 % + 500 ₫, VietQR 1 100 ₫/GD, đều `Inactive`), **20 479 GD** 01/11/2025 → 10/11/2026 sinh bằng script (mọi trạng thái, có hoàn toàn phần / một phần, GD tạo 23:58 thanh toán 00:02 hôm sau qua ranh giới kỳ), 7 đợt đối soát (gồm đợt chạy lại và đợt `Failed`) + 5 dòng lệch; **kết quả kỳ vọng tính độc lập bằng Python** từ cùng dữ liệu; script e2e gọi API; trình duyệt tích hợp):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Lọc + tổng hợp đúng | ✅ Báo cáo GD 01–10/11: 557 GD, 317 thành công, 120 thất bại, 120 chờ, 79 đã hoàn, tiền thành công 67 773 966 ₫, phí 778 056 ₫ — **khớp từng số** với kỳ vọng; lọc VNPay + `paid`, lọc `payment_method=vietqr` (phí = số GD × 1 100 ₫), cả năm theo tháng (13 kỳ), tuần bắt đầu thứ Hai. Doanh thu 01–10/11 theo `paid_at` khớp tổng + từng đối tác (doanh thu, phí, thuần); theo phương thức cộng đúng tổng; tháng 10 trong xu hướng khớp; GD tạo 31/10 thanh toán 01/11 tính vào tháng 11. Đối soát: đợt mới nhất mỗi ngày (bỏ đợt cũ + `Failed`), khớp 179, lệch 3, chênh lệch 355 000 ₫, chưa xử lý 2; dòng lệch chỉ của đợt mới nhất, sắp theo chênh lệch, lọc đã xử lý, tìm mã |
+  | So sánh cùng kỳ | ✅ `compare=previous` → 22/10–31/10, tăng trưởng đúng tới 0,1 %; `compare=year` → 01/11–10/11/2025, doanh thu kỳ so sánh khớp kỳ vọng; UI "Tháng này" → 01–11/11 so với 21–31/10, ↑/↓ từng đối tác / phương thức |
+  | Export file | ✅ 3 báo cáo × 3 định dạng đều 200 + `Content-Disposition` (`bao-cao-doi-soat-2026-11-05_2026-11-11.xlsx`…); Excel đúng sheet + số; PDF tiếng Việt đúng (xem ảnh trang); CSV doanh thu / đối soát đúng cột; xuất cả năm 20 000 GD: Excel 1,3 MB / 1,2 s, CSV 19 913 dòng = số GD / 0,2 s; font Roboto có trong bản standalone (`.nft.json`). Nút Excel / PDF / CSV trên UI tải đúng tên + kiểu file |
+  | Hiệu năng | ✅ báo cáo GD 1 năm / 20 000 GD 55 ms, doanh thu 24 ms (API-Design: xuất < 10 s) |
+  | Phân quyền | ✅ dev user gắn merchant 13: báo cáo GD tự lọc merchant 13, `merchant_id=1` → 403, báo cáo / xuất đối soát → 403, options chỉ còn merchant 13, UI ẩn tab đối soát; token sai → 401 |
+  | Kiểm lỗi | ✅ from > to, > 366 ngày, ngày 30/02, `group_by` / `status` / `payment_method` / `merchant_id` / `partner` / `compare` / trạng thái xử lý / `type` / `format` sai → 400 `VALIDATION_ERROR` |
+  | Biểu phí đối tác | ✅ form: 120 % → báo "0 – 100 %"; 1,5 → lưu, log `fee_percent 1.25 → 1.5`, cấu hình vẫn `Inactive` như trước; API `fee_percent=1.23456` / `fee_fixed=-1` → 400 |
+  | UI | ✅ 3 tab, đổi kỳ / lọc / merchant cập nhật số liệu, số trên UI = API; không lỗi console. 375 px: nội dung dùng được nhưng sidebar chiếm chỗ (#27 có sẵn) |
+  | Script e2e | ✅ 48/48 (lần đầu 39/48: script kiểm header `Content-Disposition` phân biệt hoa thường — file đều đúng) |
+  | format:check / lint / typecheck / test / build / build:jobs | ✅ (Vitest 125/125; 6 route mới + `/reports` đều `ƒ`) |
+  | Dọn dẹp | ✅ dừng :4010; xoá 20 479 GD, 7 đợt đối soát (dòng cascade), 4 cấu hình đối tác test + log, merchant `P55TEST` (DB về 48 GD, 2 cấu hình, 1 merchant); khôi phục `.claude/launch.json`; xoá script / file tạm |
+
+- **Khác biệt so với plan:**
+  - Đường dẫn `/api/internal/reports/*` (không phải `/api/admin/reports/*`), dữ liệu camelCase như dashboard; xuất file `GET /export?type=&format=` tải trực tiếp thay vì `POST /reports/export` + task (#116).
+  - Thêm biểu phí đối tác (`fee_percent`, `fee_fixed`) — DB chưa có nguồn phí nào nên "phí GD" là ước tính (#117).
+  - Báo cáo đối soát xuất cả PDF / CSV (SRS chỉ yêu cầu Excel); doanh thu xuất thêm CSV.
+  - Thêm `ReportsClient`, `ReportControls`, `ReportBarChart`, `report-api.ts`, `lib/report.ts`, `reportExport.ts`, `pdf.ts` ngoài các file PLAN nêu.
+
+- **Quyết định thiết kế:**
+  - Báo cáo GD theo **ngày tạo** (đếm cả GD thất bại / chờ, khớp danh sách GD + dashboard), doanh thu theo **ngày thanh toán** (tiền thực vào, khớp phạm vi đối soát) — ghi rõ trên UI / file.
+  - SQL chỉ gom theo (ngày × trạng thái) hoặc (đối tác × phương thức); chia kỳ, so sánh, tỷ trọng làm trong `lib/report.ts` thuần → test được và UI / file dùng chung.
+  - "So sánh cùng kỳ" cho chọn cả kỳ liền trước (mặc định, luôn có dữ liệu) và cùng kỳ năm trước.
+  - Báo cáo đối soát dùng đợt mới nhất mỗi cấu hình × ngày để không cộng trùng khi chạy lại.
+  - Một mô tả tài liệu (`ReportDoc`) cho cả 3 định dạng → Excel / PDF / CSV luôn cùng số liệu.
+
+- **Vấn đề / lưu ý:** mới #117 (phí ước tính), #118 (hoàn tiền theo GD gốc; báo cáo hoàn tiền / lỗi / hiệu suất chưa có), #119 (tổng hợp trực tiếp, chưa cache); cập nhật #112, #116, #27. Để có phí trong báo cáo cần nhập biểu phí ở từng cấu hình đối tác (`/partners/{id}`).

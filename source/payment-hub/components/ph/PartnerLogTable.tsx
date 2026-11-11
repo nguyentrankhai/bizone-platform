@@ -16,6 +16,8 @@ const FIELD_LABELS: Record<string, string> = {
   webhook_url: "Webhook URL",
   timeout: "Timeout (ms)",
   retry_policy: "Retry policy",
+  fee_percent: "Phí giao dịch (%)",
+  fee_fixed: "Phí cố định / GD",
   status: "Trạng thái",
   test_connection: "Test kết nối",
 };

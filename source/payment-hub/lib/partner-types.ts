@@ -127,6 +127,9 @@ export interface PartnerView {
   webhookUrl: string | null;
   timeout: number;
   retryPolicy: RetryPolicy | null;
+  /** P5.5 fee schedule per successful transaction: amount × feePercent / 100 + feeFixed (VND). */
+  feePercent: number;
+  feeFixed: number;
   testResult: TestResult | null;
   lastTestedAt: string | null;
   createdAt: string;

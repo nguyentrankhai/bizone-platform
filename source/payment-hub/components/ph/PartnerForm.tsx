@@ -46,6 +46,8 @@ interface FormState {
   timeout: string;
   maxRetries: string;
   backoffMs: string;
+  feePercent: string;
+  feeFixed: string;
 }
 
 function fromPartner(p: PartnerView | null, appUrl: string): FormState {
@@ -58,14 +60,18 @@ function fromPartner(p: PartnerView | null, appUrl: string): FormState {
     // Secret values are never sent to the browser: blank = keep. Non-secret ones are prefilled.
     apiKey: p && spec && !spec.apiKey.secret ? p.apiKey : "",
     secretKey: p && spec && !spec.secretKey.secret ? p.secretKey : "",
-    endpointSandbox: p?.endpointSandbox ?? PARTNER_TYPES.VNPay.defaultEndpointSandbox ?? "",
+    // Defaults of the config's own type (a config created outside the UI may have none)
+    endpointSandbox:
+      p?.endpointSandbox ?? (spec ?? PARTNER_TYPES.VNPay).defaultEndpointSandbox ?? "",
     endpointProduction:
-      p?.endpointProduction ?? PARTNER_TYPES.VNPay.defaultEndpointProduction ?? "",
+      p?.endpointProduction ?? (spec ?? PARTNER_TYPES.VNPay).defaultEndpointProduction ?? "",
     callbackUrl: p ? (p.callbackUrl ?? "") : `${appUrl}/pay/vnpay/return`,
     webhookUrl: p ? (p.webhookUrl ?? "") : `${appUrl}/api/ipn/vnpay`,
     timeout: String(p?.timeout ?? 30000),
     maxRetries: String(p?.retryPolicy?.max_retries ?? 3),
     backoffMs: String(p?.retryPolicy?.backoff_ms ?? 1000),
+    feePercent: String(p?.feePercent ?? 0),
+    feeFixed: String(p?.feeFixed ?? 0),
   };
 }
 
@@ -116,6 +122,8 @@ const FIELD_KEYS: Record<string, keyof FormState> = {
   webhook_url: "webhookUrl",
   timeout: "timeout",
   retry_policy: "maxRetries",
+  fee_percent: "feePercent",
+  fee_fixed: "feeFixed",
 };
 
 export function PartnerForm({
@@ -182,6 +190,14 @@ export function PartnerForm({
     if (!Number.isInteger(r) || r < 0 || r > 10) e.maxRetries = "0 – 10";
     const b = Number(form.backoffMs);
     if (!Number.isInteger(b) || b < 0 || b > 600000) e.backoffMs = "0 – 600 000 ms";
+    const fp = Number(form.feePercent.replace(",", "."));
+    if (!form.feePercent.trim() || !Number.isFinite(fp) || fp < 0 || fp > 100)
+      e.feePercent = "0 – 100 %";
+    else if (Math.abs(fp * 10000 - Math.round(fp * 10000)) > 1e-6)
+      e.feePercent = "Tối đa 4 chữ số thập phân";
+    const ff = Number(form.feeFixed);
+    if (!form.feeFixed.trim() || !Number.isInteger(ff) || ff < 0 || ff > 100_000_000)
+      e.feeFixed = "Số nguyên VND ≥ 0";
     setErrors(e);
     return Object.values(e).every((v) => !v);
   }
@@ -238,6 +254,8 @@ export function PartnerForm({
       webhook_url: form.webhookUrl.trim(),
       timeout: Number(form.timeout),
       retry_policy: { max_retries: Number(form.maxRetries), backoff_ms: Number(form.backoffMs) },
+      fee_percent: Number(form.feePercent.replace(",", ".")),
+      fee_fixed: Number(form.feeFixed),
     };
     setSaving(true);
     try {
@@ -546,6 +564,38 @@ export function PartnerForm({
                 className={inputCls}
                 value={form.backoffMs}
                 onChange={(e) => set("backoffMs", e.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Phí giao dịch (%)"
+              htmlFor="feePercent"
+              error={errors.feePercent}
+              hint="Theo hợp đồng với đối tác, trên số tiền mỗi GD thành công — dùng để ước tính phí trong báo cáo"
+            >
+              <input
+                id="feePercent"
+                type="text"
+                inputMode="decimal"
+                className={inputCls}
+                value={form.feePercent}
+                onChange={(e) => set("feePercent", e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Phí cố định / GD (₫)"
+              htmlFor="feeFixed"
+              error={errors.feeFixed}
+              hint="Cộng thêm cho mỗi GD thành công (0 nếu không có)"
+            >
+              <input
+                id="feeFixed"
+                type="number"
+                inputMode="numeric"
+                className={inputCls}
+                value={form.feeFixed}
+                onChange={(e) => set("feeFixed", e.target.value)}
               />
             </Field>
           </div>

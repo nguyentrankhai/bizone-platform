@@ -52,6 +52,22 @@ const partnerSchema = z.object({
       backoff_ms: z.number().int().min(0).max(600_000),
     })
     .default({ max_retries: 3, backoff_ms: 1000 }),
+  // P5.5: contract fee schedule (reports estimate fees from it)
+  fee_percent: z
+    .number()
+    .min(0, "Phí % không âm")
+    .max(100, "Phí % tối đa 100")
+    .refine(
+      (v) => Math.abs(v * 10_000 - Math.round(v * 10_000)) < 1e-6,
+      "Tối đa 4 chữ số thập phân",
+    )
+    .default(0),
+  fee_fixed: z
+    .number()
+    .int("Phí cố định là số nguyên (VND)")
+    .min(0, "Phí cố định không âm")
+    .max(100_000_000, "Phí cố định tối đa 100 000 000 ₫")
+    .default(0),
 });
 
 const statusSchema = z.object({ status: z.enum(["Active", "Inactive"]) });
@@ -125,6 +141,8 @@ function toInput(d: z.infer<typeof partnerSchema>) {
     webhookUrl: d.webhook_url ?? null,
     timeout: d.timeout,
     retryPolicy: d.retry_policy,
+    feePercent: d.fee_percent,
+    feeFixed: d.fee_fixed,
   };
 }
 

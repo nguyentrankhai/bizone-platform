@@ -56,6 +56,9 @@ export interface PartnerInput {
   webhookUrl?: string | null;
   timeout: number;
   retryPolicy: RetryPolicy;
+  /** P5.5 fee schedule: % of the amount + fixed VND per successful transaction. */
+  feePercent: number;
+  feeFixed: number;
 }
 
 /** Fields whose change invalidates the last connection test. */
@@ -103,6 +106,8 @@ export function toView(pc: PartnerConfig): PartnerView {
     webhookUrl: pc.webhookUrl,
     timeout: pc.timeout,
     retryPolicy: (pc.retryPolicy as RetryPolicy | null) ?? null,
+    feePercent: Number(pc.feePercent),
+    feeFixed: Number(pc.feeFixed),
     testResult: (pc.testResult as TestResult | null) ?? null,
     lastTestedAt: pc.lastTestedAt?.toISOString() ?? null,
     createdAt: pc.createdAt.toISOString(),
@@ -238,6 +243,8 @@ export async function createPartner(input: PartnerInput, actor: Actor): Promise<
         webhookUrl: input.webhookUrl || null,
         timeout: input.timeout,
         retryPolicy: input.retryPolicy as unknown as Prisma.InputJsonValue,
+        feePercent: input.feePercent,
+        feeFixed: input.feeFixed,
         status: "Inactive",
       },
     });
@@ -287,6 +294,16 @@ export async function updatePartner(
     plain("webhook_url", "webhookUrl", input.webhookUrl || null);
     plain("timeout", "timeout", input.timeout);
     plain("retry_policy", "retryPolicy", input.retryPolicy);
+    // Decimal columns: compare as numbers (JSON of a Decimal is a string)
+    for (const [field, key] of [
+      ["fee_percent", "feePercent"],
+      ["fee_fixed", "feeFixed"],
+    ] as const) {
+      const prev = Number(current[key]);
+      if (prev === input[key]) continue;
+      data[key] = input[key];
+      logs.push({ field, oldValue: String(prev), newValue: String(input[key]) });
+    }
 
     for (const [field, key, fieldSpec] of [
       ["api_key", "apiKey", spec.apiKey],

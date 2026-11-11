@@ -51,6 +51,8 @@ export interface PartnerPayload {
   webhook_url: string;
   timeout: number;
   retry_policy: { max_retries: number; backoff_ms: number };
+  fee_percent: number;
+  fee_fixed: number;
 }
 
 export const partnerApi = {
