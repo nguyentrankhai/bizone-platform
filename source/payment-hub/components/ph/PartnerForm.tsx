@@ -11,6 +11,7 @@ import {
   type PartnerView,
 } from "@/lib/partner-types";
 import { cn } from "@/lib/utils";
+import { checkEmailList } from "@/lib/dispute";
 import { EnvBadge, PartnerStatusBadge } from "./PartnerStatusBadge";
 import { PartnerLogTable } from "./PartnerLogTable";
 import { TestConnectionButton } from "./TestConnectionButton";
@@ -48,6 +49,7 @@ interface FormState {
   backoffMs: string;
   feePercent: string;
   feeFixed: string;
+  disputeEmail: string;
 }
 
 function fromPartner(p: PartnerView | null, appUrl: string): FormState {
@@ -72,6 +74,7 @@ function fromPartner(p: PartnerView | null, appUrl: string): FormState {
     backoffMs: String(p?.retryPolicy?.backoff_ms ?? 1000),
     feePercent: String(p?.feePercent ?? 0),
     feeFixed: String(p?.feeFixed ?? 0),
+    disputeEmail: p?.disputeEmail ?? "",
   };
 }
 
@@ -124,6 +127,7 @@ const FIELD_KEYS: Record<string, keyof FormState> = {
   retry_policy: "maxRetries",
   fee_percent: "feePercent",
   fee_fixed: "feeFixed",
+  dispute_email: "disputeEmail",
 };
 
 export function PartnerForm({
@@ -198,6 +202,7 @@ export function PartnerForm({
     const ff = Number(form.feeFixed);
     if (!form.feeFixed.trim() || !Number.isInteger(ff) || ff < 0 || ff > 100_000_000)
       e.feeFixed = "Số nguyên VND ≥ 0";
+    e.disputeEmail = checkEmailList(form.disputeEmail) ?? undefined;
     setErrors(e);
     return Object.values(e).every((v) => !v);
   }
@@ -256,6 +261,7 @@ export function PartnerForm({
       retry_policy: { max_retries: Number(form.maxRetries), backoff_ms: Number(form.backoffMs) },
       fee_percent: Number(form.feePercent.replace(",", ".")),
       fee_fixed: Number(form.feeFixed),
+      dispute_email: form.disputeEmail.trim(),
     };
     setSaving(true);
     try {
@@ -599,6 +605,22 @@ export function PartnerForm({
               />
             </Field>
           </div>
+          <Field
+            label="Email tra soát của đối tác"
+            htmlFor="disputeEmail"
+            error={errors.disputeEmail}
+            hint="Yêu cầu tra soát (kèm chứng từ) được gửi email tới địa chỉ này — nhiều địa chỉ phân cách bằng dấu phẩy, tối đa 5. Bỏ trống: ghi nhận gửi thủ công qua cổng đối tác"
+          >
+            <input
+              id="disputeEmail"
+              type="text"
+              inputMode="email"
+              className={inputCls}
+              placeholder="tra-soat@doitac.vn"
+              value={form.disputeEmail}
+              onChange={(e) => set("disputeEmail", e.target.value)}
+            />
+          </Field>
         </section>
       </fieldset>
 

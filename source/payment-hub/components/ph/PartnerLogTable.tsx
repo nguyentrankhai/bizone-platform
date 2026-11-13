@@ -17,6 +17,7 @@ const FIELD_LABELS: Record<string, string> = {
   timeout: "Timeout (ms)",
   retry_policy: "Retry policy",
   fee_percent: "Phí giao dịch (%)",
+  dispute_email: "Email tra soát",
   fee_fixed: "Phí cố định / GD",
   status: "Trạng thái",
   test_connection: "Test kết nối",

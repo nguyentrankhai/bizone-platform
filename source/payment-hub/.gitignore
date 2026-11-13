@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# P5.6: dispute attachments when STORAGE_DRIVER=local (default without S3_ENDPOINT)
+/storage/

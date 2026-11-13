@@ -37,6 +37,12 @@ interface ConnectorDefinition {
   statusSync?: boolean;
   /** Refund support (P5.3) — absent = the PSP has no refund API (refunds are done outside the Hub). */
   refund?: RefundCapability;
+  /**
+   * Dispute API (P5.6): the connector implements submitDispute (+ queryDispute). None of the
+   * current PSPs publishes one — their disputes go by e-mail (partner_configs.dispute_email) or are
+   * recorded manually after using the partner portal.
+   */
+  disputeApi?: boolean;
 }
 
 export interface RefundCapability {
@@ -210,4 +216,9 @@ export function refundCapability(
 /** connector_type values whose Processing refunds the worker may poll (queryRefund). */
 export function asyncRefundConnectorTypes(): string[] {
   return DEFINITIONS.filter((d) => d.refund?.async).map((d) => d.connectorType);
+}
+
+/** Connector type has a dispute API (P5.6) — see ConnectorDefinition.disputeApi. */
+export function disputeApiSupported(connectorType: string | null | undefined): boolean {
+  return !!(connectorType && definitionForConnectorType(connectorType)?.disputeApi);
 }

@@ -7,6 +7,7 @@ export const WEBHOOK_EVENTS = [
   { code: "payment.failed", label: "Thanh toán thất bại" },
   { code: "payment.expired", label: "Giao dịch hết hạn" },
   { code: "refund.completed", label: "Hoàn tiền hoàn tất" },
+  { code: "dispute.resolved", label: "Có kết quả tra soát" },
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]["code"];

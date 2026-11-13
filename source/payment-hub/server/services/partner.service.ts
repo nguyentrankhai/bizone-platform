@@ -1,3 +1,4 @@
+import { parseEmailList } from "@/lib/dispute";
 import { getPrisma } from "@/lib/prisma";
 import { Prisma, type PartnerConfig } from "@/generated/prisma/client";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
@@ -59,6 +60,14 @@ export interface PartnerInput {
   /** P5.5 fee schedule: % of the amount + fixed VND per successful transaction. */
   feePercent: number;
   feeFixed: number;
+  /** P5.6: partner support address(es), comma-separated — disputes are e-mailed there. */
+  disputeEmail?: string | null;
+}
+
+/** "a@x.vn; b@y.vn" → "a@x.vn, b@y.vn" (null when empty). */
+function normEmails(v: string | null | undefined): string | null {
+  const list = parseEmailList(v);
+  return list.length ? list.join(", ") : null;
 }
 
 /** Fields whose change invalidates the last connection test. */
@@ -108,6 +117,7 @@ export function toView(pc: PartnerConfig): PartnerView {
     retryPolicy: (pc.retryPolicy as RetryPolicy | null) ?? null,
     feePercent: Number(pc.feePercent),
     feeFixed: Number(pc.feeFixed),
+    disputeEmail: pc.disputeEmail,
     testResult: (pc.testResult as TestResult | null) ?? null,
     lastTestedAt: pc.lastTestedAt?.toISOString() ?? null,
     createdAt: pc.createdAt.toISOString(),
@@ -245,6 +255,7 @@ export async function createPartner(input: PartnerInput, actor: Actor): Promise<
         retryPolicy: input.retryPolicy as unknown as Prisma.InputJsonValue,
         feePercent: input.feePercent,
         feeFixed: input.feeFixed,
+        disputeEmail: normEmails(input.disputeEmail),
         status: "Inactive",
       },
     });
@@ -294,6 +305,7 @@ export async function updatePartner(
     plain("webhook_url", "webhookUrl", input.webhookUrl || null);
     plain("timeout", "timeout", input.timeout);
     plain("retry_policy", "retryPolicy", input.retryPolicy);
+    plain("dispute_email", "disputeEmail", normEmails(input.disputeEmail));
     // Decimal columns: compare as numbers (JSON of a Decimal is a string)
     for (const [field, key] of [
       ["fee_percent", "feePercent"],

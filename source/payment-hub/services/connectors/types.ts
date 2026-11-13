@@ -135,6 +135,39 @@ export interface ConfigSchemaField {
   description?: string;
 }
 
+/** Dispute (tra soát) sent to a PSP that offers an API for it (P5.6). */
+export interface DisputeSubmitRequest {
+  disputeCode: string;
+  txnCode: string;
+  partnerTxnId: string | null;
+  amount: number;
+  /** Original payment time (null when the transaction never got paid) */
+  paidAt: Date | null;
+  createdAt: Date;
+  reason: string;
+  description: string | null;
+  attachments: { filename: string; content: Buffer; contentType: string }[];
+}
+
+export interface DisputeSubmitResult {
+  /** The PSP accepted the request (false → error kept on the dispute, it can be sent again) */
+  accepted: boolean;
+  /** PSP ticket / case id used to follow the dispute */
+  partnerRef?: string;
+  message?: string;
+  /** PSP already answered (rare) — final outcome */
+  outcome?: { status: "Resolved" | "Rejected"; resolution: string };
+  raw?: unknown;
+}
+
+export interface DisputeQueryResult {
+  /** Still open on the PSP side → `Processing` */
+  status: "Processing" | "Resolved" | "Rejected";
+  resolution?: string;
+  message?: string;
+  raw?: unknown;
+}
+
 export interface PaymentConnector {
   readonly code: string;
   readonly version: string;
@@ -148,6 +181,13 @@ export interface PaymentConnector {
    */
   queryRefund?(partnerRefundRef: string): Promise<RefundResult>;
   getStatus(query: StatusQuery): Promise<StatusResult>;
+  /**
+   * Dispute API (P5.6) — optional: none of VNPay / MoMo / ZaloPay / VietQR publishes one (disputes
+   * go through their merchant portals / support e-mail). A connector that implements submitDispute
+   * makes the Hub send disputes automatically; queryDispute lets an operator ask for the result.
+   */
+  submitDispute?(req: DisputeSubmitRequest): Promise<DisputeSubmitResult>;
+  queryDispute?(partnerRef: string): Promise<DisputeQueryResult>;
   getConfigSchema(): ConfigSchemaField[];
   healthCheck(): Promise<HealthResult>;
 }

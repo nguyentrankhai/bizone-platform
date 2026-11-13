@@ -125,6 +125,12 @@ enum DisputeStatus {
   Rejected
 }
 
+enum DisputeSubmitChannel {
+  Api
+  Email
+  Manual
+}
+
 enum NotificationType {
   Success
   Warning
@@ -224,6 +230,8 @@ model PartnerConfig {
   endpointProduction String?             @map("endpoint_production") @db.VarChar(500)
   callbackUrl        String?             @map("callback_url") @db.VarChar(500)
   webhookUrl         String?             @map("webhook_url") @db.VarChar(500)
+  /// P5.6: partner support address(es), comma-separated, that receive disputes by e-mail
+  disputeEmail       String?             @map("dispute_email") @db.VarChar(500)
   timeout            Int                 @default(30000)
   retryPolicy        Json?               @map("retry_policy")
   /// P5.5: contract fee per successful transaction = amount × fee_percent / 100 + fee_fixed
@@ -536,28 +544,42 @@ model ReconciliationDetail {
 }
 
 model Dispute {
-  id                 Int           @id @default(autoincrement())
-  transactionId      Int           @map("transaction_id")
-  disputeCode        String        @unique @map("dispute_code") @db.VarChar(100)
-  reason             String        @db.Text
-  description        String?       @db.Text
-  status             DisputeStatus @default(Pending)
-  resolution         String?       @db.Text
-  submittedToPartner Boolean       @default(false) @map("submitted_to_partner") @db.TinyInt
-  partnerResponse    Json?         @map("partner_response")
-  createdBy          Int?          @map("created_by")
-  resolvedBy         Int?          @map("resolved_by")
-  resolvedAt         DateTime?     @map("resolved_at") @db.DateTime(0)
-  createdAt          DateTime      @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt          DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+  id                 Int                   @id @default(autoincrement())
+  transactionId      Int                   @map("transaction_id")
+  disputeCode        String                @unique @map("dispute_code") @db.VarChar(100)
+  reason             String                @db.Text
+  description        String?               @db.Text
+  status             DisputeStatus         @default(Pending)
+  resolution         String?               @db.Text
+  submittedToPartner Boolean               @default(false) @map("submitted_to_partner") @db.TinyInt
+  /// P5.6: how the dispute reached the partner + when + the partner's ticket / reference
+  submitChannel      DisputeSubmitChannel? @map("submit_channel")
+  submittedAt        DateTime?             @map("submitted_at") @db.DateTime(0)
+  partnerRef         String?               @map("partner_ref") @db.VarChar(255)
+  partnerResponse    Json?                 @map("partner_response")
+  createdBy          Int?                  @map("created_by")
+  /// P5.6: admin token username (Keycloak users are not rows of `users`) + e-mail for the result
+  createdByName      String?               @map("created_by_name") @db.VarChar(100)
+  notifyEmail        String?               @map("notify_email") @db.VarChar(255)
+  resolvedBy         Int?                  @map("resolved_by")
+  resolvedByName     String?               @map("resolved_by_name") @db.VarChar(100)
+  resolvedAt         DateTime?             @map("resolved_at") @db.DateTime(0)
+  /// P5.6: transactional outbox for the `dispute.resolved` webhook
+  notifyWebhook      Boolean               @default(false) @map("notify_webhook") @db.TinyInt
+  webhookSentAt      DateTime?             @map("webhook_sent_at") @db.DateTime(0)
+  createdAt          DateTime              @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.DateTime(0)
 
   transaction Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade, map: "fk_dispute_txn")
   creator     User?               @relation("DisputeCreator", fields: [createdBy], references: [id], onDelete: SetNull, map: "fk_dispute_creator")
   resolver    User?               @relation("DisputeResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, map: "fk_dispute_resolver")
   attachments DisputeAttachment[]
+  logs        DisputeLog[]
 
   @@index([transactionId], map: "idx_dispute_txn")
   @@index([status], map: "idx_dispute_status")
+  @@index([notifyWebhook, webhookSentAt], map: "idx_dispute_outbox")
+  @@index([createdAt], map: "idx_dispute_created")
   @@map("disputes")
 }
 
@@ -568,12 +590,31 @@ model DisputeAttachment {
   filePath   String   @map("file_path") @db.VarChar(500)
   fileType   String?  @map("file_type") @db.VarChar(50)
   fileSize   Int?     @map("file_size")
+  uploadedBy String?  @map("uploaded_by") @db.VarChar(100)
   uploadedAt DateTime @default(now()) @map("uploaded_at") @db.DateTime(0)
 
   dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade, map: "fk_da_dispute")
 
   @@index([disputeId], map: "idx_da_dispute")
   @@map("dispute_attachments")
+}
+
+/// P5.6: timeline of a dispute (created, submitted, partner response, status change, attachments)
+model DisputeLog {
+  id         BigInt   @id @default(autoincrement())
+  disputeId  Int      @map("dispute_id")
+  action     String   @db.VarChar(50)
+  fromStatus String?  @map("from_status") @db.VarChar(20)
+  toStatus   String?  @map("to_status") @db.VarChar(20)
+  note       String?  @db.Text
+  data       Json?
+  createdBy  String?  @map("created_by") @db.VarChar(100)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade, map: "fk_dlog_dispute")
+
+  @@index([disputeId], map: "idx_dlog_dispute")
+  @@map("dispute_logs")
 }
 
 model AuditLog {

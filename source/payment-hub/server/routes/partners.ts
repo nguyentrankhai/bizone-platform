@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkEmailList } from "@/lib/dispute";
 import type { NextRequest } from "next/server";
 import { ADMIN_WRITE_ROLES, requireAdmin, type AdminContext } from "@/server/middleware/adminAuth";
 import { PARTNER_TYPE_CODES, type PartnerEnv, type PartnerStatus } from "@/lib/partner-types";
@@ -68,6 +69,15 @@ const partnerSchema = z.object({
     .min(0, "Phí cố định không âm")
     .max(100_000_000, "Phí cố định tối đa 100 000 000 ₫")
     .default(0),
+  // P5.6: partner support address(es) receiving disputes by e-mail
+  dispute_email: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => checkEmailList(v) === null, {
+      error: (iss) => checkEmailList(String(iss.input)) ?? "Email không hợp lệ",
+    })
+    .nullish(),
 });
 
 const statusSchema = z.object({ status: z.enum(["Active", "Inactive"]) });
@@ -143,6 +153,7 @@ function toInput(d: z.infer<typeof partnerSchema>) {
     retryPolicy: d.retry_policy,
     feePercent: d.fee_percent,
     feeFixed: d.fee_fixed,
+    disputeEmail: d.dispute_email ?? null,
   };
 }
 

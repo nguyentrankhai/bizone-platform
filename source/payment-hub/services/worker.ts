@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import { getPrisma } from "@/lib/prisma";
 import { describeError } from "@/lib/redis";
 import { queueConnection } from "./queue/connection";
 import { WEBHOOK_QUEUE, webhookBackoff, type WebhookJob } from "./webhook/queue";
@@ -13,6 +14,8 @@ import {
   scheduleDailyReconciliation,
 } from "@/server/jobs/dailyReconciliation";
 import { RECON_QUEUE, type ReconJob } from "./reconciliation/queue";
+import { DISPUTE_QUEUE, type DisputeJob } from "./dispute/queue";
+import { sendDisputeResultNotification } from "@/server/services/dispute.service";
 
 const webhookWorker = new Worker<WebhookJob>(WEBHOOK_QUEUE, processWebhookJob, {
   connection: queueConnection(),
@@ -60,6 +63,36 @@ void scheduleDailyReconciliation()
     console.error("[recon] scheduler:", err instanceof Error ? err.message : err),
   );
 
+// Dispute result notifications (P5.6): e-mail to the creator + DISPUTE_NOTIFY_EMAILS, retried
+// by BullMQ (4 attempts, exponential back-off) on SMTP errors.
+const disputeWorker = new Worker<DisputeJob>(
+  DISPUTE_QUEUE,
+  async (job) => sendDisputeResultNotification(job.data.disputeId),
+  { connection: queueConnection(), concurrency: 2 },
+);
+disputeWorker.on("completed", (job, result) =>
+  console.log(`[dispute] notify #${job.data.disputeId}: ${String(result)}`),
+);
+disputeWorker.on("failed", (job, err) => {
+  console.error(
+    `[dispute] notify #${job?.data.disputeId} attempt ${job?.attemptsMade}: ${err.message}`,
+  );
+  // Last attempt failed → keep a trace on the dispute timeline
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    void getPrisma()
+      .disputeLog.create({
+        data: {
+          disputeId: job.data.disputeId,
+          action: "notify_failed",
+          note: `Không gửi được email kết quả: ${err.message}`.slice(0, 2000),
+          createdBy: "system:notify",
+        },
+      })
+      .catch(() => {});
+  }
+});
+disputeWorker.on("error", (err) => console.error(`[dispute] ${describeError(err)}`));
+
 // Webhook outbox sweeper: dispatch transaction events nobody enqueued (Redis was down, crash…)
 const OUTBOX_INTERVAL_MS = 30_000;
 setInterval(() => {
@@ -101,7 +134,7 @@ async function shutdown(signal: string) {
   console.log(`[worker] ${signal} received, draining…`);
   // close() waits for Redis; exit before Docker's 10s SIGKILL if Redis is unreachable.
   setTimeout(() => process.exit(1), 8000).unref();
-  await Promise.all([webhookWorker.close(), reconWorker.close()]);
+  await Promise.all([webhookWorker.close(), reconWorker.close(), disputeWorker.close()]);
   process.exit(0);
 }
 

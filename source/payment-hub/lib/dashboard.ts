@@ -242,6 +242,8 @@ export const ALERT_RULES = {
   outboxStuckMinutes: 5,
   /** Refunds still Processing after this many minutes (P5.3). */
   refundStuckMinutes: 15,
+  /** Disputes still open (not resolved / rejected) after this many days (P5.6). */
+  disputeOpenDays: 3,
 } as const;
 
 export function failureSpikeAlert(

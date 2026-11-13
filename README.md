@@ -67,6 +67,7 @@ BizOne is a SaaS platform that helps Vietnamese SMEs manage their sales operatio
 | Admin Console | Dashboard, transaction monitoring, PSP config |
 | Webhooks | Inbound PSP callbacks + outbound event notifications |
 | Reports | Payment analytics, success rates, revenue reconciliation |
+| Disputes | Transaction disputes: evidence files (MinIO/S3), sent to the PSP by e-mail or recorded manually, status tracking, result notification (e-mail + `dispute.resolved` webhook) |
 
 ### Technology Stack
 
@@ -191,6 +192,7 @@ Xem sơ đồ bên trên (phần tiếng Anh).
 | Admin Console | Dashboard, theo dõi giao dịch, cấu hình PSP |
 | Webhooks | Nhận callback từ PSP + gửi sự kiện ra ngoài |
 | Báo cáo | Phân tích thanh toán, tỷ lệ thành công, đối soát |
+| Tra soát | Tra soát giao dịch: đính kèm chứng từ (MinIO/S3), gửi đối tác qua email hoặc ghi nhận thủ công, theo dõi trạng thái, thông báo kết quả (email + webhook `dispute.resolved`) |
 
 ### Công nghệ
 

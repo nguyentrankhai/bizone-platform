@@ -60,6 +60,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   requestHeaders.set("x-user-id", user.id);
   requestHeaders.set("x-user-username", user.username);
   requestHeaders.set("x-user-roles", user.roles.join(","));
+  if (user.email) requestHeaders.set("x-user-email", user.email);
   if (user.merchantId) {
     requestHeaders.set("x-merchant-id", user.merchantId);
   }

@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS partner_configs (
   endpoint_production VARCHAR(500),
   callback_url      VARCHAR(500),
   webhook_url       VARCHAR(500),
+  dispute_email     VARCHAR(500) NULL COMMENT 'P5.6: email tra soát của đối tác (phân cách dấu phẩy)',
   timeout           INT NOT NULL DEFAULT 30000 COMMENT 'milliseconds',
   retry_policy      JSON,
   fee_percent       DECIMAL(6,4) NOT NULL DEFAULT 0 COMMENT 'P5.5: phí % trên số tiền GD thành công',
@@ -379,17 +380,27 @@ CREATE TABLE IF NOT EXISTS disputes (
   dispute_code        VARCHAR(100) NOT NULL UNIQUE COMMENT 'DSP-YYYYMMDD-XXXXXX',
   reason              TEXT NOT NULL,
   description         TEXT,
-  status              ENUM('Pending','Processing','Resolved','Rejected') NOT NULL DEFAULT 'Pending',
+  status              ENUM('Pending','Processing','Resolved','Rejected') NOT NULL DEFAULT 'Pending' COMMENT 'Pending = chưa gửi đối tác, Processing = đã gửi / chờ đối tác',
   resolution          TEXT,
   submitted_to_partner TINYINT(1) NOT NULL DEFAULT 0,
+  submit_channel      ENUM('Api','Email','Manual') NULL COMMENT 'P5.6: API connector / email tới partner_configs.dispute_email / ghi nhận thủ công',
+  submitted_at        DATETIME NULL,
+  partner_ref         VARCHAR(255) NULL COMMENT 'Mã phiếu tra soát phía đối tác',
   partner_response    JSON,
   created_by          INT,
+  created_by_name     VARCHAR(100) NULL COMMENT 'P5.6: username token (user Keycloak không có trong users)',
+  notify_email        VARCHAR(255) NULL COMMENT 'Email người tạo — nhận thông báo kết quả',
   resolved_by         INT,
+  resolved_by_name    VARCHAR(100) NULL,
   resolved_at         DATETIME,
+  notify_webhook      TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Outbox webhook dispute.resolved',
+  webhook_sent_at     DATETIME NULL,
   created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_dispute_txn (transaction_id),
   INDEX idx_dispute_status (status),
+  INDEX idx_dispute_outbox (notify_webhook, webhook_sent_at),
+  INDEX idx_dispute_created (created_at),
   CONSTRAINT fk_dispute_txn FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
   CONSTRAINT fk_dispute_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_dispute_resolver FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
@@ -402,12 +413,30 @@ CREATE TABLE IF NOT EXISTS dispute_attachments (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   dispute_id      INT NOT NULL,
   file_name       VARCHAR(255) NOT NULL,
-  file_path       VARCHAR(500) NOT NULL,
+  file_path       VARCHAR(500) NOT NULL COMMENT 'Khoá lưu trữ (MinIO/S3 hoặc thư mục local)',
   file_type       VARCHAR(50),
   file_size       INT,
+  uploaded_by     VARCHAR(100) NULL,
   uploaded_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_da_dispute (dispute_id),
   CONSTRAINT fk_da_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 16b. DISPUTE LOGS (P5.6 — dòng thời gian tra soát)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dispute_logs (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  dispute_id      INT NOT NULL,
+  action          VARCHAR(50) NOT NULL COMMENT 'created, submitted, submit_failed, partner_response, status_changed, note, attachment_added, attachment_removed, notified',
+  from_status     VARCHAR(20) NULL,
+  to_status       VARCHAR(20) NULL,
+  note            TEXT NULL,
+  data            JSON NULL,
+  created_by      VARCHAR(100) NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_dlog_dispute (dispute_id),
+  CONSTRAINT fk_dlog_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ============================================================

@@ -11,7 +11,13 @@ export const ADMIN_READ_ROLES = ["payhub-admin", "payhub-viewer"] as const;
 export const ADMIN_WRITE_ROLES = ["payhub-admin"] as const;
 
 /** Identity headers set by proxy.ts — never trusted when they come from the client. */
-export const IDENTITY_HEADERS = ["x-user-id", "x-user-username", "x-user-roles", "x-merchant-id"];
+export const IDENTITY_HEADERS = [
+  "x-user-id",
+  "x-user-username",
+  "x-user-email",
+  "x-user-roles",
+  "x-merchant-id",
+];
 
 export interface AdminContext {
   userId: string;

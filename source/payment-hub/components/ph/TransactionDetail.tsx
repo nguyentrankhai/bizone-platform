@@ -8,6 +8,9 @@ import { RefundForm, formatVnd } from "@/components/ph/RefundForm";
 import { RefundHistory, RefundSummary } from "@/components/ph/RefundHistory";
 import { TransactionLog, type TxnLogEntry } from "@/components/ph/TransactionLog";
 import { RawDataViewer } from "@/components/ph/RawDataViewer";
+import type { TxnDisputeOverview } from "@/lib/dispute";
+import { DisputeForm } from "@/components/ph/DisputeForm";
+import { DisputeHistory } from "@/components/ph/DisputeHistory";
 
 export interface TxnDetail {
   id: number;
@@ -32,12 +35,16 @@ export interface TxnDetail {
   createdAt: string;
   updatedAt: string;
   merchant?: { id: number; code: string; name: string } | null;
+  partnerConfig?: { name: string; connectorType: string } | null;
   logs: TxnLogEntry[];
 }
 
 interface TransactionDetailProps {
   txn: TxnDetail;
   refund: RefundOverviewDto;
+  dispute: TxnDisputeOverview;
+  /** `?dispute=…` (e.g. from a reconciliation discrepancy): open the form with this reason */
+  openDispute?: string | null;
   authToken: string;
   /** UI hint only (hides write buttons) — the API enforces payhub-admin itself */
   canWrite: boolean;
@@ -98,14 +105,24 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function TransactionDetail({ txn, refund, authToken, canWrite }: TransactionDetailProps) {
+export function TransactionDetail({
+  txn,
+  refund,
+  dispute,
+  openDispute,
+  authToken,
+  canWrite,
+}: TransactionDetailProps) {
   const router = useRouter();
   const [refundOpen, setRefundOpen] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(
+    canWrite && openDispute != null && dispute.eligibility.allowed,
+  );
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const isPaid =
     txn.status === "Success" || txn.status === "PartiallyRefunded" || txn.status === "Refunded";
   const canRefund = canWrite && refund.eligibility.refundable;
-  const canDispute = txn.status === "Failed" || txn.status === "Expired";
+  const canDispute = canWrite && dispute.eligibility.allowed;
 
   return (
     <div className="space-y-6">
@@ -131,7 +148,12 @@ export function TransactionDetail({ txn, refund, authToken, canWrite }: Transact
           {canDispute && (
             <button
               type="button"
-              className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100"
+              onClick={() => setDisputeOpen(true)}
+              className={
+                dispute.eligibility.highlight
+                  ? "min-h-11 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700"
+                  : "min-h-11 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-100"
+              }
             >
               Tra soát
             </button>
@@ -220,6 +242,42 @@ export function TransactionDetail({ txn, refund, authToken, canWrite }: Transact
           authToken={authToken}
           canWrite={canWrite}
           onChanged={() => router.refresh()}
+        />
+      )}
+
+      {dispute.disputes.length > 0 && (
+        <DisputeHistory
+          disputes={dispute.disputes}
+          submitOptions={dispute.submit}
+          authToken={authToken}
+          canWrite={canWrite}
+          onChanged={(n) => {
+            if (n) setNotice(n);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {disputeOpen && (
+        <DisputeForm
+          authToken={authToken}
+          txn={{
+            id: txn.id,
+            txnCode: txn.txnCode,
+            status: txn.status,
+            amount: Number(txn.amount),
+            currency: txn.currency,
+            partnerTxnId: txn.partnerTxnId,
+            partnerName: txn.partnerConfig?.name ?? null,
+          }}
+          submitOptions={dispute.submit}
+          defaultReason={openDispute || undefined}
+          onClose={() => setDisputeOpen(false)}
+          onDone={(n) => {
+            setDisputeOpen(false);
+            setNotice(n);
+            router.refresh();
+          }}
         />
       )}
 

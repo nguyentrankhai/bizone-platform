@@ -130,6 +130,8 @@ export interface PartnerView {
   /** P5.5 fee schedule per successful transaction: amount × feePercent / 100 + feeFixed (VND). */
   feePercent: number;
   feeFixed: number;
+  /** P5.6: partner support e-mail(s) for disputes */
+  disputeEmail: string | null;
   testResult: TestResult | null;
   lastTestedAt: string | null;
   createdAt: string;

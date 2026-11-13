@@ -53,6 +53,7 @@ export interface PartnerPayload {
   retry_policy: { max_retries: number; backoff_ms: number };
   fee_percent: number;
   fee_fixed: number;
+  dispute_email: string;
 }
 
 export const partnerApi = {

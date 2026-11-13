@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  MessageSquareWarning,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/connectors", icon: Puzzle, label: "Connector" },
   { href: "/webhooks", icon: Webhook, label: "Webhook" },
   { href: "/reconciliation", icon: BarChart3, label: "Đối soát" },
+  { href: "/disputes", icon: MessageSquareWarning, label: "Tra soát" },
   { href: "/reports", icon: FileText, label: "Báo cáo", section: "BÁO CÁO" },
   { href: "/audit-log", icon: Shield, label: "Audit Log" },
   { href: "/settings", icon: Settings, label: "Cài đặt", section: "HỆ THỐNG" },

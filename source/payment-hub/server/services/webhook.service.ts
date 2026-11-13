@@ -213,7 +213,7 @@ export function dispatchSoon(transactionId: number): void {
 export async function sweepWebhookOutbox(minAgeMs = 10_000): Promise<number> {
   const before = new Date(Date.now() - minAgeMs);
   const prisma = getPrisma();
-  const [rows, refunds] = await Promise.all([
+  const [rows, refunds, disputes] = await Promise.all([
     prisma.transaction.findMany({
       where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
       select: { id: true },
@@ -224,10 +224,16 @@ export async function sweepWebhookOutbox(minAgeMs = 10_000): Promise<number> {
       select: { id: true },
       take: 200,
     }),
+    prisma.dispute.findMany({
+      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+      select: { id: true },
+      take: 200,
+    }),
   ]);
   let enqueued = 0;
   for (const r of rows) enqueued += await dispatchTransactionWebhook(r.id).catch(() => 0);
   for (const r of refunds) enqueued += await dispatchRefundWebhook(r.id).catch(() => 0);
+  for (const d of disputes) enqueued += await dispatchDisputeWebhook(d.id).catch(() => 0);
   return enqueued;
 }
 
@@ -303,6 +309,76 @@ export function dispatchRefundSoon(refundId: number): void {
   );
 }
 
+// ─── Dispute outbox (P5.6) ────────────────────────────────────────────────────
+
+type DisputeForPayload = Prisma.DisputeGetPayload<{
+  include: {
+    transaction: { include: { partnerConfig: { select: { connectorType: true } } } };
+  };
+}>;
+
+/** dispute.resolved payload (API-Design §7.2): the result of a dispute (Resolved / Rejected). */
+export function buildDisputePayload(d: DisputeForPayload) {
+  const txn = d.transaction;
+  return {
+    event: "dispute.resolved" as const,
+    dispute_code: d.disputeCode,
+    transaction_id: txn.txnCode,
+    merchant_txn_id: txn.merchantTxnId,
+    amount: Number(txn.amount),
+    currency: txn.currency,
+    partner: txn.partnerConfig?.connectorType ?? null,
+    status: d.status,
+    reason: d.reason,
+    resolution: d.resolution,
+    partner_ref: d.partnerRef,
+    created_at: d.createdAt.toISOString(),
+    resolved_at: (d.resolvedAt ?? d.updatedAt).toISOString(),
+    transaction_status: txn.status,
+  };
+}
+
+/** Claim and enqueue the dispute.resolved webhook of a dispute whose outbox flag is set. */
+export async function dispatchDisputeWebhook(disputeId: number): Promise<number> {
+  const prisma = getPrisma();
+  const claimedAt = new Date();
+  const { count } = await prisma.dispute.updateMany({
+    where: { id: disputeId, notifyWebhook: true, webhookSentAt: null },
+    data: { webhookSentAt: claimedAt },
+  });
+  if (count === 0) return 0;
+  try {
+    const dispute = await prisma.dispute.findUnique({
+      where: { id: disputeId },
+      include: {
+        transaction: { include: { partnerConfig: { select: { connectorType: true } } } },
+      },
+    });
+    if (!dispute || (dispute.status !== "Resolved" && dispute.status !== "Rejected")) return 0;
+    const event: WebhookEvent = "dispute.resolved";
+    return await enqueueForTransaction(
+      dispute.transaction,
+      event,
+      deliveryIdFor(dispute.disputeCode, event),
+      JSON.stringify(buildDisputePayload(dispute)),
+    );
+  } catch (e) {
+    await prisma.dispute
+      .updateMany({
+        where: { id: disputeId, webhookSentAt: claimedAt },
+        data: { webhookSentAt: null },
+      })
+      .catch(() => {});
+    throw e;
+  }
+}
+
+export function dispatchDisputeSoon(disputeId: number): void {
+  void dispatchDisputeWebhook(disputeId).catch((e: unknown) =>
+    console.error(`[webhook] dispute #${disputeId} dispatch deferred: ${(e as Error).message}`),
+  );
+}
+
 // ─── Attempt logging ──────────────────────────────────────────────────────────
 
 export interface AttemptContext {
@@ -347,7 +423,9 @@ export async function recordAttempt(ctx: AttemptContext, res: SendResult): Promi
   if (
     res.ok &&
     ctx.transactionId &&
-    (ctx.event.startsWith("payment.") || ctx.event.startsWith("refund."))
+    (ctx.event.startsWith("payment.") ||
+      ctx.event.startsWith("refund.") ||
+      ctx.event.startsWith("dispute."))
   ) {
     await getPrisma()
       .transactionLog.create({

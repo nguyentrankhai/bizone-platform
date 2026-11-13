@@ -357,13 +357,26 @@ export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Pr
                               )}
                             </div>
                           ) : canWrite ? (
-                            <button
-                              type="button"
-                              onClick={() => setResolving(d)}
-                              className="min-h-9 rounded-md border border-amber-300 bg-amber-50 px-2.5 text-amber-800 hover:bg-amber-100"
-                            >
-                              Xử lý
-                            </button>
+                            <div className="flex flex-col items-start gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setResolving(d)}
+                                className="min-h-9 rounded-md border border-amber-300 bg-amber-50 px-2.5 text-amber-800 hover:bg-amber-100"
+                              >
+                                Xử lý
+                              </button>
+                              {d.transaction_id && (
+                                // P5.6: open the dispute form on the transaction, reason prefilled
+                                <Link
+                                  href={`/transactions/${d.transaction_id}?dispute=${encodeURIComponent(
+                                    `Lệch đối soát ${run.partner_name} ngày ${fmtDay(run.run_date)}: ${MATCH[d.match_status]?.label ?? d.match_status}`,
+                                  )}`}
+                                  className="text-orange-700 hover:underline"
+                                >
+                                  Tra soát
+                                </Link>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-amber-700">Chưa xử lý</span>
                           )}

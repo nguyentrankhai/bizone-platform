@@ -4,14 +4,17 @@ import { connection } from "next/server";
 
 export const instant = false;
 import { PHLayout } from "@/components/ph/PHLayout";
+import { getPrisma } from "@/lib/prisma";
 import { TransactionDetail, type TxnDetail } from "@/components/ph/TransactionDetail";
 import { getTransactionByCode, getTransactionById } from "@/server/services/transaction.service";
 import { getRefundOverview } from "@/server/services/refund.service";
+import { getTxnDisputeOverview } from "@/server/services/dispute.service";
 import { toEligibilityDto } from "@/lib/refund";
-import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
+import { devTokenCanWrite, devTokenMerchantId, getDevAuthToken } from "@/lib/dev-auth";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ dispute?: string | string[] }>;
 }
 
 async function fetchTxn(id: string): Promise<TxnDetail | null> {
@@ -24,9 +27,24 @@ async function fetchTxn(id: string): Promise<TxnDetail | null> {
   }
 
   if (!txn) return null;
+  // Names only — never the partner config row itself (it holds encrypted credentials)
+  const [merchant, partnerConfig] = await Promise.all([
+    getPrisma().merchant.findUnique({
+      where: { id: txn.merchantId },
+      select: { id: true, code: true, name: true },
+    }),
+    txn.partnerConfigId
+      ? getPrisma().partnerConfig.findUnique({
+          where: { id: txn.partnerConfigId },
+          select: { name: true, connectorType: true },
+        })
+      : null,
+  ]);
 
   return {
     ...txn,
+    merchant,
+    partnerConfig,
     amount: txn.amount.toString(),
     refundedAmount: txn.refundedAmount.toString(),
     expiredAt: txn.expiredAt?.toISOString() ?? null,
@@ -41,15 +59,21 @@ async function fetchTxn(id: string): Promise<TxnDetail | null> {
   } as TxnDetail;
 }
 
-export default async function TransactionDetailPage({ params }: PageProps) {
+export default async function TransactionDetailPage({ params, searchParams }: PageProps) {
   await connection();
   const { id } = await params;
+  const { dispute: disputeParam } = await searchParams;
   const txn = await fetchTxn(id);
 
   if (!txn) return notFound();
-  const overview = await getRefundOverview(txn.id);
-  if (!overview) return notFound();
   const token = getDevAuthToken();
+  const scope = { merchantId: devTokenMerchantId(token) };
+  const [overview, disputes] = await Promise.all([
+    getRefundOverview(txn.id),
+    getTxnDisputeOverview(txn.id, scope),
+  ]);
+  if (!overview || !disputes) return notFound();
+  const openDispute = typeof disputeParam === "string" ? disputeParam.slice(0, 500) : null;
 
   return (
     <PHLayout>
@@ -67,6 +91,8 @@ export default async function TransactionDetailPage({ params }: PageProps) {
       <TransactionDetail
         txn={txn}
         refund={{ eligibility: toEligibilityDto(overview.eligibility), refunds: overview.refunds }}
+        dispute={disputes}
+        openDispute={openDispute === "1" ? "" : openDispute}
         authToken={token}
         canWrite={devTokenCanWrite(token)}
       />

@@ -1103,56 +1103,22 @@ Tải file trực tiếp (không qua task bất đồng bộ): Excel 3 sheet (T�
 
 ### 6.8. Disputes (Tra soát)
 
-#### `GET /api/admin/disputes` - Danh sách yêu cầu tra soát
+> **Triển khai P5.6**: đường dẫn `/api/internal/disputes/*` (JWT admin qua `proxy.ts`; đọc: `payhub-admin` | `payhub-viewer`, ghi: `payhub-admin`, 60 thao tác ghi / phút / user). Token có claim `merchant_id` chỉ thấy / thao tác GD của merchant đó (khác → `404`). Dữ liệu trả về camelCase như các API `/api/internal` khác. Trạng thái: `Pending` (đang xử lý · chưa gửi đối tác) → `Processing` (đã gửi, chờ đối tác) → `Resolved` / `Rejected` (cuối, không mở lại — tạo yêu cầu mới; một GD có tối đa 20 yêu cầu).
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "dispute_code": "DSP-20260612-XXXXXX",
-      "transaction_id": 1001,
-      "txn_code": "TXN-20260612-A1B2C3",
-      "reason": "Khách hàng khiếu nại chưa nhận được hàng",
-      "status": "Pending",
-      "created_by": "Nguyễn Văn A",
-      "created_at": "2026-06-12T16:00:00+07:00"
-    }
-  ]
-}
-```
+| Method | Endpoint | Body / Query | Mô tả |
+|--------|----------|--------------|-------|
+| GET | `/api/internal/disputes` | `status` (`open` = Pending + Processing, hoặc trạng thái), `search` (mã tra soát / mã GD / mã GD đối tác / mã GD merchant / mã phiếu đối tác), `from`, `to` (ngày tạo, giờ VN), `partner`, `merchant_id`, `page`, `limit` ≤ 100 | Danh sách mới nhất trước; `meta.counts` = số yêu cầu theo trạng thái (cùng bộ lọc, bỏ `status`) |
+| POST | `/api/internal/disputes` | `{ transaction_id (id hoặc txn_code), reason (5–500 ký tự, bắt buộc), description?, submit? }` | `201` + yêu cầu `Pending`. GD `Created` → `400`. `submit: true` gửi đối tác ngay — lỗi gửi không huỷ yêu cầu (`submitError`) |
+| GET | `/api/internal/disputes/{id}` | — | Chi tiết + `attachments[]` + `logs[]` (dòng thời gian) |
+| PUT | `/api/internal/disputes/{id}` | `{ status: Processing \| Resolved \| Rejected, resolution?, note?, from_partner?, partner_ref? }` | `Processing`: ghi phản hồi đối tác / ghi chú (chỉ khi đã gửi). `Resolved` / `Rejected`: bắt buộc `resolution` ≥ 5 ký tự → webhook `dispute.resolved` + email kết quả. Đã đóng → `409` |
+| POST | `/api/internal/disputes/{id}/submit` | `{ mode: auto \| manual, partner_ref?, note? }` | `auto`: API tra soát của connector (chưa đối tác nào có) → email tới `partner_configs.dispute_email` kèm chứng từ; không có kênh → `400`; SMTP / đối tác lỗi → `502 PARTNER_ERROR` (yêu cầu giữ nguyên). `manual`: ghi nhận đã gửi qua cổng đối tác (cần `partner_ref` hoặc `note`) |
+| POST | `/api/internal/disputes/{id}/check` | — | Hỏi kết quả qua API tra soát của đối tác (chỉ yêu cầu gửi bằng API) |
+| POST | `/api/internal/disputes/{id}/attachments` | `multipart/form-data`, trường `file` | Một tệp ≤ 5 MB / request, ≤ 10 tệp / yêu cầu; nhận png, jpg, webp, gif, pdf, txt, csv, xls(x), doc(x), eml (kiểm magic bytes); quá cỡ → `413`. Lưu MinIO / S3 (`S3_*`) hoặc thư mục local |
+| GET | `/api/internal/disputes/{id}/attachments/{attachmentId}` | — | Tải tệp (`Content-Disposition: attachment`, `nosniff`) |
+| DELETE | `/api/internal/disputes/{id}/attachments/{attachmentId}` | — | Xoá tệp khi yêu cầu còn mở |
+| GET | `/api/internal/transactions/{id}/disputes` | — | `eligibility` (được tạo, nổi bật khi GD lỗi), `submit` (kênh gửi: `api`, `email[]`, `emailLogOnly`), `disputes[]` |
 
-#### `POST /api/admin/disputes` - Tạo yêu cầu tra soát
-
-**Request:**
-```json
-{
-  "transaction_id": 1001,
-  "reason": "Khách hàng khiếu nại chưa nhận được hàng",
-  "description": "Khách hàng gọi điện thoại báo chưa nhận được hàng mặc dù đã thanh toán",
-  "attachments": [
-    {
-      "file_name": "bien-ban.png",
-      "file_path": "/uploads/disputes/dsp-001.png",
-      "file_type": "image/png"
-    }
-  ]
-}
-```
-
-#### `PUT /api/admin/disputes/{id}` - Cập nhật trạng thái
-
-**Request:**
-```json
-{
-  "status": "Resolved",
-  "resolution": "Đã kiểm tra, giao dịch hợp lệ. Đã liên hệ khách hàng."
-}
-```
-
-#### `GET /api/admin/disputes/{id}` - Chi tiết yêu cầu tra soát
+**Thông báo kết quả** (SRS-PH-RECON-02-08): khi đóng — webhook `dispute.resolved` tới merchant (§7), email (worker, hàng đợi `payhub-dispute`) tới người tạo + `DISPUTE_NOTIFY_EMAILS`, sự kiện realtime `dispute.updated`. Dashboard cảnh báo yêu cầu mở quá 3 ngày.
 
 ---
 
@@ -1312,6 +1278,7 @@ Nội dung file: **Excel** = sheet "Tổng hợp" + mỗi bảng 1 sheet (GD: th
 | `payment.failed` | Thanh toán thất bại | Đối tác báo GD thất bại |
 | `payment.expired` | Giao dịch hết hạn | GD hết hạn chờ thanh toán |
 | `refund.completed` | Hoàn tiền hoàn tất | Đối tác xác nhận hoàn tiền |
+| `dispute.resolved` | Có kết quả tra soát (P5.6) | Yêu cầu tra soát được đóng `Resolved` / `Rejected` |
 
 ### 7.2. Payload mẫu
 
@@ -1361,6 +1328,26 @@ Nội dung file: **Excel** = sheet "Tổng hợp" + mỗi bảng 1 sheet (GD: th
   "transaction_amount": 1500000,
   "total_refunded": 500000,
   "transaction_status": "PartiallyRefunded"
+}
+```
+
+**dispute.resolved** (P5.6 — một webhook cho mỗi yêu cầu tra soát khi đóng, `X-Webhook-Id` theo `dispute_code`; gửi qua outbox trên bảng `disputes`; endpoint phải chọn sự kiện này):
+```json
+{
+  "event": "dispute.resolved",
+  "dispute_code": "DSP-20260612-XXXXXX",
+  "transaction_id": "TXN-20260612-A1B2C3",
+  "merchant_txn_id": "ORDER-123456",
+  "amount": 1500000,
+  "currency": "VND",
+  "partner": "VNPay",
+  "status": "Resolved",
+  "reason": "Khách hàng đã bị trừ tiền nhưng giao dịch thất bại / hết hạn",
+  "resolution": "VNPay xác nhận giao dịch lỗi, đã hoàn tiền cho khách",
+  "partner_ref": "VNP-CASE-77",
+  "created_at": "2026-06-12T09:00:00.000Z",
+  "resolved_at": "2026-06-13T03:00:00.000Z",
+  "transaction_status": "Failed"
 }
 ```
 
@@ -1573,7 +1560,7 @@ run_date: 2026-06-12
 | Webhooks | 7 | CRUD, test, toggle, history |
 | Webhook Logs | 3 | List, detail, replay |
 | Reconciliation | 6 | List, run, detail, update, export |
-| Disputes | 4 | CRUD, chi tiết |
+| Disputes | 10 | CRUD, gửi đối tác, đính kèm (P5.6: `/api/internal/disputes`) |
 | Reports | 4 | Transactions, revenue, reconciliation, export |
 | Audit Logs | 2 | List, detail |
 | Notifications | 4 | List, read, read-all, unread count |
@@ -1654,7 +1641,7 @@ Xử lý IPN (P3.3, P5.1, P5.2):
 | `webhook_logs` | Webhook Log | `/api/admin/webhook-logs` |
 | `reconciliation_runs` | Reconciliation | `/api/admin/reconciliation` |
 | `reconciliation_details` | Reconciliation Detail | `/api/admin/reconciliation/{id}/details` |
-| `disputes` | Dispute | `/api/admin/disputes` |
+| `disputes` | Dispute | `/api/internal/disputes` (P5.6) |
 | `refunds` | Refund | `/api/v1/transactions/{id}/refund` |
 | `transaction_logs` | Transaction Log | `/api/admin/transactions/{id}` (included) |
 | `transaction_raw_data` | Raw Data | `/api/admin/transactions/{id}` (included) |

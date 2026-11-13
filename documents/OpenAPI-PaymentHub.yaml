@@ -452,6 +452,7 @@ components:
               - transaction.failed
               - transaction.expired
               - refund.completed
+              - dispute.resolved
         active:
           type: boolean
         secret:
@@ -838,6 +839,8 @@ paths:
                       - transaction.failed
                       - transaction.expired
                       - refund.completed
+                      - dispute.resolved
+              - dispute.resolved
                 secret:
                   type: string
                   description: Secret để BizOne verify HMAC-SHA256 trên webhook

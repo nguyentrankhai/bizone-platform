@@ -179,30 +179,32 @@ export async function computeAlerts(
       : Prisma.empty;
 
   const refundStuckBefore = new Date(now.getTime() - ALERT_RULES.refundStuckMinutes * 60_000);
-  const [windowSummary, exhausted, failedAttempts, stuckOutbox, stuckRefunds] = await Promise.all([
-    // Finished in the window = status changed recently; updated_at tracks the last transition.
-    prisma.transaction.groupBy({
-      by: ["status"],
-      where: {
-        updatedAt: { gte: windowFrom },
-        status: { in: [...PAID_STATUSES, ...FAILED_STATUSES] },
-        merchantId: scope.merchantId,
-      },
-      _count: { _all: true },
-    }),
-    // Deliveries whose last attempt failed with no retry left and that never succeeded later.
-    prisma.$queryRaw<
-      {
-        delivery_id: string;
-        event: string;
-        request_url: string | null;
-        txn_code: string | null;
-        attempt: number;
-        created_at: Date;
-        response_status: number | null;
-        error_message: string | null;
-      }[]
-    >(Prisma.sql`
+  const disputeStaleBefore = new Date(now.getTime() - ALERT_RULES.disputeOpenDays * 86400_000);
+  const [windowSummary, exhausted, failedAttempts, stuckOutbox, stuckRefunds, staleDisputes] =
+    await Promise.all([
+      // Finished in the window = status changed recently; updated_at tracks the last transition.
+      prisma.transaction.groupBy({
+        by: ["status"],
+        where: {
+          updatedAt: { gte: windowFrom },
+          status: { in: [...PAID_STATUSES, ...FAILED_STATUSES] },
+          merchantId: scope.merchantId,
+        },
+        _count: { _all: true },
+      }),
+      // Deliveries whose last attempt failed with no retry left and that never succeeded later.
+      prisma.$queryRaw<
+        {
+          delivery_id: string;
+          event: string;
+          request_url: string | null;
+          txn_code: string | null;
+          attempt: number;
+          created_at: Date;
+          response_status: number | null;
+          error_message: string | null;
+        }[]
+      >(Prisma.sql`
       SELECT l.delivery_id, l.event, l.request_url, t.txn_code, l.attempt, l.created_at,
              l.response_status, l.error_message
       FROM webhook_logs l
@@ -221,38 +223,48 @@ export async function computeAlerts(
         )
       ORDER BY l.created_at DESC
       LIMIT 20`),
-    prisma.webhookLog.count({
-      where: {
-        status: "Failed",
-        createdAt: { gte: hourAgo },
-        event: { not: "webhook.ping" },
-        ...(scope.merchantId !== undefined
-          ? { webhookConfig: { merchantId: scope.merchantId } }
-          : {}),
-      },
-    }),
-    prisma.transaction.count({
-      where: {
-        notifyWebhook: true,
-        webhookSentAt: null,
-        updatedAt: { lt: stuckBefore },
-        merchantId: scope.merchantId,
-      },
-    }),
-    // P5.3: refunds the PSP has not confirmed — need polling to catch up or a manual confirmation
-    prisma.refund.findMany({
-      where: {
-        status: "Processing",
-        createdAt: { lt: refundStuckBefore },
-        ...(scope.merchantId !== undefined
-          ? { transaction: { merchantId: scope.merchantId } }
-          : {}),
-      },
-      select: { transaction: { select: { txnCode: true } } },
-      orderBy: { createdAt: "asc" },
-      take: 100,
-    }),
-  ]);
+      prisma.webhookLog.count({
+        where: {
+          status: "Failed",
+          createdAt: { gte: hourAgo },
+          event: { not: "webhook.ping" },
+          ...(scope.merchantId !== undefined
+            ? { webhookConfig: { merchantId: scope.merchantId } }
+            : {}),
+        },
+      }),
+      prisma.transaction.count({
+        where: {
+          notifyWebhook: true,
+          webhookSentAt: null,
+          updatedAt: { lt: stuckBefore },
+          merchantId: scope.merchantId,
+        },
+      }),
+      // P5.3: refunds the PSP has not confirmed — need polling to catch up or a manual confirmation
+      prisma.refund.findMany({
+        where: {
+          status: "Processing",
+          createdAt: { lt: refundStuckBefore },
+          ...(scope.merchantId !== undefined
+            ? { transaction: { merchantId: scope.merchantId } }
+            : {}),
+        },
+        select: { transaction: { select: { txnCode: true } } },
+        orderBy: { createdAt: "asc" },
+        take: 100,
+      }),
+      // P5.6: disputes nobody closed after N days (partner not answering / forgotten)
+      prisma.dispute.count({
+        where: {
+          status: { in: ["Pending", "Processing"] },
+          createdAt: { lt: disputeStaleBefore },
+          ...(scope.merchantId !== undefined
+            ? { transaction: { merchantId: scope.merchantId } }
+            : {}),
+        },
+      }),
+    ]);
 
   const alerts: DashboardAlert[] = [];
   const w = summarize(
@@ -371,6 +383,17 @@ export async function computeAlerts(
       message: `${stuckRefunds.length} yêu cầu hoàn tiền chưa được đối tác xác nhận sau ${ALERT_RULES.refundStuckMinutes} phút (cũ nhất: ${oldest}) — kiểm tra trên cổng đối tác rồi xác nhận trong chi tiết giao dịch`,
       count: stuckRefunds.length,
       href: `/transactions/${encodeURIComponent(oldest)}`,
+      at: now.toISOString(),
+    });
+  }
+  if (staleDisputes > 0) {
+    alerts.push({
+      id: "dispute-open-stale",
+      level: "warning",
+      title: "Tra soát chưa có kết quả",
+      message: `${staleDisputes} yêu cầu tra soát mở quá ${ALERT_RULES.disputeOpenDays} ngày — nhắc đối tác hoặc cập nhật kết quả`,
+      count: staleDisputes,
+      href: "/disputes?status=open",
       at: now.toISOString(),
     });
   }
