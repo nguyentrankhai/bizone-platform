@@ -193,6 +193,9 @@ Merchant có thể cấu hình IP whitelist trong merchant settings. Request t�
 | REFUND_IN_PROGRESS | 409 | Số tiền còn lại đang nằm trong yêu cầu hoàn chờ đối tác |
 | TRANSACTION_NOT_REFUNDABLE | 409 | GD không ở trạng thái đã thanh toán / đã hoàn toàn bộ |
 | TRANSACTION_EXPIRED | 400 | Giao dịch đã hết hạn |
+| SOURCE_UNSUPPORTED | 400 | Đối soát nguồn API cho đối tác không có API tra cứu (VietQR) — P5.4 |
+| PAYLOAD_TOO_LARGE | 413 | Tệp đính kèm tra soát vượt 5 MB — P5.6 |
+| STORAGE_ERROR | 503 | Kho lưu trữ tệp (MinIO / S3) không khả dụng — P5.6 |
 | INTERNAL_ERROR | 500 | Lỗi máy chủ |
 
 ### 3.3. Rate Limiting Headers
