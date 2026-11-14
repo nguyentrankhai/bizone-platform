@@ -2340,7 +2340,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-4 — Rà soát cuối Giai đoạn 4 + 5 (2026-11-14)
 
-- **Hoàn thành:** 2026-11-14 · **Commit:** `(điền sau)` · **Vị trí:** `PROGRESS.md`, `documents/API-Design-PaymentHub.md` (bảng mã lỗi), `source/payment-hub/.env.example` (chỉ tài liệu — chưa sửa code)
+- **Hoàn thành:** 2026-11-14 · **Commit:** `c8f3f46` · **Vị trí:** `PROGRESS.md`, `documents/API-Design-PaymentHub.md` (bảng mã lỗi), `source/payment-hub/.env.example` (chỉ tài liệu — chưa sửa code)
 - **Bối cảnh:** bước B6 — GĐ 4 xong 9/9 (đã rà ở QA-3), GĐ 5 không còn task ⬜ (P5.1, P5.2 🟡 chờ credential sandbox). Mốc chuyển sang GĐ 6 + 7. Người dùng chọn rà soát trước P6.1.
 - **Cách làm:** build production 2 app; Payment Hub `next start :4010` + worker `dist/worker.mjs` trên **Redis DB 1 riêng** (không lẫn hàng đợi với tiến trình dev), MoMo giả cục bộ (ký HMAC-SHA256 như MoMo, chế độ mất IPN / IPN sai chữ ký / thất bại / báo lệch số tiền), SMTP giả, máy nhận webhook; BizOne `next start :3001` (Redis DB 2) trỏ tới Payment Hub test với API key + webhook tạm cho merchant `BIZONE`, `PAYHUB_QR_METHOD=momo_qr`; Docker compose Payment Hub; một subagent đọc toàn bộ code GĐ 5 (`69b4d85..HEAD`) tìm lỗi phân quyền / bảo mật / quy ước, mọi phát hiện được kiểm lại trong code. Trước khi chạy: Docker Desktop đang tắt (máy khởi động lại) → mở lại, khởi động lại 2 container `redis`, `minio` (không có restart policy; dữ liệu giữ nguyên).
 
