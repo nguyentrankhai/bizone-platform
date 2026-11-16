@@ -1,3 +1,4 @@
+import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { ADMIN_WRITE_ROLES, requireAdmin, type AdminContext } from "@/server/middleware/adminAuth";
@@ -282,6 +283,9 @@ export async function handleUpdateDetail(
 export async function handleExport(req: NextRequest, id: string): Promise<Response> {
   const a = auth(req);
   if (a instanceof Response) return a;
+  // Builds the workbook / PDF in the request — bounded per user (QA-4 #125)
+  const rl = await rateLimit(`rl:payhub:recon-export:${a.userId}`, 10, 60);
+  if (!rl.allowed) return err("RATE_LIMITED", "Xuất file quá nhiều lần, thử lại sau 1 phút", 429);
   const n = runId(id);
   if (!n) return err("NOT_FOUND", "Không tìm thấy đợt đối soát", 404);
   const format = new URL(req.url).searchParams.get("format") ?? "xlsx";

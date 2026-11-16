@@ -1,3 +1,4 @@
+import { rateLimit } from "@/lib/rate-limit";
 import type { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
@@ -6,6 +7,8 @@ import { renderPayPage } from "@/server/routes/pay-page";
 
 /** Upper bound for the status query made while the customer waits on the redirect. */
 const SYNC_TIMEOUT_MS = 5_000;
+/** Recorded / PSP-queried hits of the return page per transaction per minute. */
+const RETURN_HITS_PER_MINUTE = 5;
 
 export interface WalletRedirectSpec {
   /** connectors.code — "momo", "zalopay" */
@@ -55,17 +58,25 @@ export async function handleWalletRedirect(
   }
   if (!txn) return renderPayPage({ title: "Không tìm thấy giao dịch", tone: "error" }, 404);
 
-  await prisma.transactionRawData.create({
-    data: {
-      transactionId: txn.id,
-      direction: "Request",
-      source: "Partner",
-      endpoint: `/pay/${spec.code}/return`,
-      body: params as Prisma.InputJsonValue,
-    },
-  });
+  // A signed return URL stays valid: reloading / replaying it must not grow transaction_raw_data
+  // or hammer the PSP (QA-4 #125) — beyond a few hits per minute only the page is rendered.
+  const fresh = (
+    await rateLimit(`rl:payhub:return:${txn.id}`, RETURN_HITS_PER_MINUTE, 60).catch(() => ({
+      allowed: true,
+    }))
+  ).allowed;
+  if (fresh)
+    await prisma.transactionRawData.create({
+      data: {
+        transactionId: txn.id,
+        direction: "Request",
+        source: "Partner",
+        endpoint: `/pay/${spec.code}/return`,
+        body: params as Prisma.InputJsonValue,
+      },
+    });
 
-  if (txn.status === "Pending") {
+  if (fresh && txn.status === "Pending") {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([

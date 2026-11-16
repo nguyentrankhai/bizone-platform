@@ -60,6 +60,8 @@ export function RefundForm({ authToken, txn, eligibility: e, onDone, onClose }: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  // One key per form opening: a double submit or a retried request returns the same refund
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const partialAmount = Number(amountText.replace(/\D/g, "")) || 0;
   const amount = type === "full" ? e.refundableAmount : partialAmount;
@@ -82,11 +84,16 @@ export function RefundForm({ authToken, txn, eligibility: e, onDone, onClose }: 
     setBusy(true);
     setError(null);
     try {
-      const outcome = await refundApi.create(authToken, txn.id, {
-        amount: type === "full" ? null : partialAmount,
-        reason: reason.trim(),
-        note: note.trim() || undefined,
-      });
+      const outcome = await refundApi.create(
+        authToken,
+        txn.id,
+        {
+          amount: type === "full" ? null : partialAmount,
+          reason: reason.trim(),
+          note: note.trim() || undefined,
+        },
+        idempotencyKey,
+      );
       onDone(outcome);
     } catch (err) {
       if (err instanceof RefundApiError && err.outcome) {

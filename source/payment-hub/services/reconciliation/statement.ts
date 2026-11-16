@@ -20,6 +20,36 @@ export class StatementError extends Error {
 
 export const STATEMENT_MAX_BYTES = 10 * 1024 * 1024;
 export const STATEMENT_MAX_ROWS = 50_000;
+/** XLSX is a zip: total uncompressed size allowed before exceljs inflates it (QA-4 #125). */
+export const XLSX_MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Sum of the entries' uncompressed sizes from the zip central directory (no inflating), or null
+ * when the file is not a readable zip. Zip64 entries (size 0xFFFFFFFF) count as "too large".
+ */
+export function zipUncompressedSize(buf: Buffer): number | null {
+  // End Of Central Directory: signature 0x06054b50, within the last 64 KiB + 22 bytes
+  const min = Math.max(0, buf.length - 0xffff - 22);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= min; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return null;
+  const entries = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  let total = 0;
+  for (let n = 0; n < entries; n++) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) return null;
+    const size = buf.readUInt32LE(p + 24);
+    if (size === 0xffffffff) return Number.POSITIVE_INFINITY;
+    total += size;
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  return total;
+}
 
 type Field = "ref" | "partnerTxnId" | "amount" | "status" | "time";
 
@@ -253,8 +283,18 @@ export async function parseStatement(fileName: string, buf: Buffer): Promise<Par
   if (buf.length > STATEMENT_MAX_BYTES) throw new StatementError("File vượt quá 10 MB");
   const lower = fileName.toLowerCase();
   let table: unknown[][];
-  if (lower.endsWith(".xlsx")) table = await readXlsx(buf);
-  else if (lower.endsWith(".csv") || lower.endsWith(".txt")) table = parseCsv(buf.toString("utf8"));
+  if (lower.endsWith(".xlsx")) {
+    const inflated = zipUncompressedSize(buf);
+    if (inflated === null)
+      throw new StatementError("File .xlsx không đọc được (không phải file Excel)");
+    if (inflated > XLSX_MAX_UNCOMPRESSED_BYTES) {
+      throw new StatementError(
+        "File .xlsx sau giải nén quá lớn (> 100 MB) — xuất lại sao kê theo ngày",
+      );
+    }
+    table = await readXlsx(buf);
+  } else if (lower.endsWith(".csv") || lower.endsWith(".txt"))
+    table = parseCsv(buf.toString("utf8"));
   else throw new StatementError("Chỉ nhận file .csv hoặc .xlsx");
 
   // Header = first row naming an amount column (bank exports often start with title lines)

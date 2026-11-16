@@ -1,3 +1,4 @@
+import { clientIp as trustedClientIp } from "@/lib/client-ip";
 import type { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { PaymentError, initiatePayment } from "@/server/services/payment.service";
@@ -51,11 +52,7 @@ ${links}
 }
 
 export function clientIp(req: NextRequest): string | undefined {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    undefined
-  );
+  return trustedClientIp(req.headers);
 }
 
 const vnd = (n: number | string) => `${Number(n).toLocaleString("vi-VN")} ₫`;

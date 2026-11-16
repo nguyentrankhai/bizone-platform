@@ -20,6 +20,7 @@ const FIELD_LABELS: Record<string, string> = {
   dispute_email: "Email tra soát",
   fee_fixed: "Phí cố định / GD",
   status: "Trạng thái",
+  connector_enabled: "Bật connector",
   test_connection: "Test kết nối",
 };
 

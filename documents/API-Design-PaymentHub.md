@@ -73,7 +73,7 @@ Tất cả request đến Payment Hub Merchant API phải có chữ ký HMAC-SHA
 | `X-Api-Key` | API Key của merchant | Có |
 | `X-Signature` | hex(HMAC-SHA256) — xem bên dưới | Có |
 | `X-Timestamp` | Unix timestamp (**giây**), lệch tối đa ±300s | Có |
-| `Idempotency-Key` | UUID chống trùng lặp | Không (khuyến nghị) |
+| `Idempotency-Key` | UUID chống trùng lặp | Khuyến nghị; **bắt buộc** cho hoàn tiền (QA-4) |
 
 **Cách tạo signature** (khớp `OpenAPI-PaymentHub.yaml` → `MerchantHMAC`; cài đặt: `source/payment-hub/lib/hmac.ts`):
 
@@ -245,6 +245,8 @@ Header: Idempotency-Key: <UUID v4>
 - Đảm bảo không tạo trùng giao dịch
 - Request cùng key gửi đồng thời khi request đầu chưa xong → `409 CONFLICT` (retry sau); cùng key nhưng body khác → `409 CONFLICT`; response lặp lại có header `Idempotent-Replayed: true`
 - Header cũ `X-Idempotency-Key` vẫn được chấp nhận (tương thích ngược)
+- **Hoàn tiền bắt buộc có key** (thiếu → `400 VALIDATION_ERROR`, QA-4 #123): hoàn tiền không có mã duy nhất phía merchant, gửi lại không key = hoàn 2 lần. Tạo giao dịch đã có `merchant_txn_id` duy nhất nên key là tuỳ chọn
+- Hoàn tiền đã giữ chỗ (có thể đã gọi đối tác) nhưng lỗi khi ghi kết quả → `202 Processing`, key **không** được nhả (gửi lại trả đúng câu trả lời đó); key chỉ được nhả khi chưa giữ chỗ hoặc đối tác từ chối (`502`)
 - Các endpoint hỗ trợ: tạo giao dịch, refund, sinh QR (sinh QR vốn idempotent theo tài nguyên: cùng giao dịch + loại + kích thước luôn trả QR hiện hành)
 
 ---
@@ -385,7 +387,7 @@ Giống response trên, tra cứu dựa trên `merchant_txn_id + merchant_id` (t
 
 #### `POST /api/v1/transactions/{transaction_id}/refund` - Yêu cầu hoàn tiền
 
-`transaction_id` = `txn_code` hoặc id số. Header `Idempotency-Key` (khuyến nghị) như §4. Giới hạn 30 request/phút/API key.
+`transaction_id` = `txn_code` hoặc id số. Header `Idempotency-Key` **bắt buộc** (QA-4 — thiếu → `400`) như §4. Giới hạn 30 request/phút/API key.
 
 **Request:**
 ```json

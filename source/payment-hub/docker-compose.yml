@@ -3,6 +3,11 @@ name: bizone-payhub
 x-app-env: &app-env
   DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/paymentdb
   REDIS_URL: redis://:${REDIS_PASSWORD:-123456}@cache:6379
+  # QA-4 #128: `.env.local` is a dev file — never let its login bypass into containers
+  AUTH_DEV_BYPASS: "false"
+  # Dispute evidence: the dev MinIO (`S3_ENDPOINT=http://localhost:9000` in .env.local) is not
+  # reachable from a container → local volume unless S3_ENDPOINT is given for compose
+  S3_ENDPOINT: ${COMPOSE_S3_ENDPOINT:-}
 
 x-depends: &depends
   db:
@@ -11,6 +16,21 @@ x-depends: &depends
     condition: service_healthy
 
 services:
+  # QA-4 #128: apply Prisma migrations before the app starts (the runtime image has no Prisma CLI)
+  migrate:
+    build:
+      context: .
+      target: builder
+    image: bizone-payhub-migrate
+    container_name: payhub-migrate
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/paymentdb
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   app:
     build: .
     image: bizone-payhub
@@ -21,7 +41,12 @@ services:
       - path: .env.local
         required: false
     environment: *app-env
-    depends_on: *depends
+    depends_on:
+      <<: *depends
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - storage:/app/storage
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
       interval: 30s
@@ -107,3 +132,4 @@ services:
 volumes:
   db-data:
   cache-data:
+  storage:

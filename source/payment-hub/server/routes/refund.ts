@@ -11,9 +11,11 @@ import {
   requestFingerprint,
 } from "@/server/middleware/idempotency";
 import { rateLimit } from "@/lib/rate-limit";
+import { clientIp as trustedClientIp } from "@/lib/client-ip";
 import { REFUND_ERROR_STATUS, REFUND_REASON_MAX, REFUND_REASON_MIN } from "@/lib/refund";
 import {
   RefundError,
+  RefundReservedError,
   checkRefundStatus,
   getRefundOverview,
   requestRefund,
@@ -31,6 +33,12 @@ import {
  *
  * Response: 200 Completed · 202 Processing (PSP still processing / no trustworthy answer — final
  * result via webhook refund.completed or GET transaction) · 502 PARTNER_ERROR when the PSP refused.
+ *
+ * Idempotency (QA-4 #123): the merchant API requires `Idempotency-Key` (a refund has no
+ * merchant-side unique id, so a blind retry would refund twice); the admin UI sends one per form.
+ * The key is released only when nothing was reserved (RefundError / failure before the reservation)
+ * or the PSP refused. Once a refund is reserved the claim is kept, even if recording the PSP answer
+ * failed (RefundReservedError → 202 Processing, replayed for 24 h).
  */
 
 /** Refund API: 30 requests / minute (API-Design §3.3) — per API key / admin user. */
@@ -76,11 +84,7 @@ function refundErrorResponse(e: RefundError): Response {
 }
 
 function clientIp(req: NextRequest): string | undefined {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    undefined
-  );
+  return trustedClientIp(req.headers);
 }
 
 /** HTTP status for a refund outcome; Failed → 502 PARTNER_ERROR (body still carries the refund). */
@@ -103,6 +107,21 @@ function outcomeResponse(o: RefundOutcomeView, headers?: HeadersInit): Response 
     );
   }
   return ok(o, status, headers);
+}
+
+/** 202 body for a reserved refund whose result could not be recorded (no DB read needed). */
+function reservedOutcome(e: RefundReservedError): RefundOutcomeView {
+  return {
+    refund: {
+      id: e.refund.id,
+      refund_code: e.refund.refundCode,
+      transaction_id: e.txnCode,
+      amount: e.refund.amount,
+      status: "Processing",
+      message: "Đang chờ xác nhận kết quả — kết quả cuối qua webhook refund.completed",
+    },
+    transaction: { transaction_id: e.txnCode },
+  } as unknown as RefundOutcomeView;
 }
 
 async function parseJson(raw: string): Promise<{ ok: true; value: unknown } | { ok: false }> {
@@ -140,7 +159,10 @@ export async function handleMerchantRefund(req: NextRequest, id: string): Promis
   if (!parsed.success) return validationError(parsed.error);
 
   const key = idempotencyKeyOf(req);
-  if (key && key.length > IDEMPOTENCY_KEY_MAX) {
+  if (!key) {
+    return err("VALIDATION_ERROR", "Idempotency-Key header is required for refunds", 400);
+  }
+  if (key.length > IDEMPOTENCY_KEY_MAX) {
     return err(
       "VALIDATION_ERROR",
       `Idempotency-Key must be at most ${IDEMPOTENCY_KEY_MAX} characters`,
@@ -149,7 +171,7 @@ export async function handleMerchantRefund(req: NextRequest, id: string): Promis
   }
   const url = new URL(req.url);
   const fp = requestFingerprint("POST", url.pathname + url.search, rawBody);
-  if (key) {
+  {
     const claim = await claimIdempotency("refund", merchant.merchantId, key, fp);
     if (claim.kind === "replay") {
       return outcomeResponse(claim.response as RefundOutcomeView, {
@@ -173,24 +195,28 @@ export async function handleMerchantRefund(req: NextRequest, id: string): Promis
         ipAddress: clientIp(req),
       },
     );
-    if (key) {
-      // A refused refund moved no money — the merchant may retry with the same key.
-      if (outcome.refund.status === "Failed") {
-        await releaseIdempotency("refund", merchant.merchantId, key);
-      } else {
-        await completeIdempotency(
-          "refund",
-          merchant.merchantId,
-          key,
-          fp,
-          outcomeStatus(outcome),
-          outcome,
-        );
-      }
+    // A refused refund moved no money — the merchant may retry with the same key.
+    if (outcome.refund.status === "Failed") {
+      await releaseIdempotency("refund", merchant.merchantId, key);
+    } else {
+      await completeIdempotency(
+        "refund",
+        merchant.merchantId,
+        key,
+        fp,
+        outcomeStatus(outcome),
+        outcome,
+      );
     }
     return outcomeResponse(outcome);
   } catch (e) {
-    if (key) await releaseIdempotency("refund", merchant.merchantId, key);
+    if (e instanceof RefundReservedError) {
+      // Money may have moved: keep the key so a retry replays this answer instead of refunding again
+      const view = reservedOutcome(e);
+      await completeIdempotency("refund", merchant.merchantId, key, fp, 202, view).catch(() => {});
+      return outcomeResponse(view);
+    }
+    await releaseIdempotency("refund", merchant.merchantId, key);
     if (e instanceof RefundError) return refundErrorResponse(e);
     throw e;
   }
@@ -208,10 +234,35 @@ export async function handleAdminRefund(req: NextRequest, id: string): Promise<R
   const rl = await rateLimit(`rl:payhub:refund:user:${auth.userId}`, REFUND_RATE_LIMIT, 60);
   if (!rl.allowed) return err("RATE_LIMITED", "Quá nhiều yêu cầu hoàn tiền, thử lại sau", 429);
 
-  const body = await parseJson(await req.text());
+  const rawBody = await req.text();
+  const body = await parseJson(rawBody);
   if (!body.ok) return err("VALIDATION_ERROR", "Invalid JSON body", 400);
   const parsed = adminRefundSchema.safeParse(body.value);
   if (!parsed.success) return validationError(parsed.error);
+
+  // The refund form sends one key per opening (double submit / proxy retry → same refund)
+  const rawKey = idempotencyKeyOf(req);
+  if (rawKey && rawKey.length > IDEMPOTENCY_KEY_MAX) {
+    return err(
+      "VALIDATION_ERROR",
+      `Idempotency-Key must be at most ${IDEMPOTENCY_KEY_MAX} characters`,
+      400,
+    );
+  }
+  const key = rawKey ? `${auth.userId}:${rawKey}` : null;
+  const fp = requestFingerprint("POST", new URL(req.url).pathname, rawBody);
+  if (key) {
+    const claim = await claimIdempotency("refund-admin", 0, key, fp);
+    if (claim.kind === "replay") {
+      return outcomeResponse(claim.response as RefundOutcomeView, {
+        "Idempotent-Replayed": "true",
+      });
+    }
+    if (claim.kind === "in_progress")
+      return err("CONFLICT", "Yêu cầu hoàn tiền này đang được xử lý", 409);
+    if (claim.kind === "mismatch")
+      return err("CONFLICT", "Idempotency-Key đã dùng cho yêu cầu khác", 409);
+  }
 
   try {
     const outcome = await requestRefund(
@@ -224,8 +275,18 @@ export async function handleAdminRefund(req: NextRequest, id: string): Promise<R
         ipAddress: clientIp(req),
       },
     );
+    if (key) {
+      if (outcome.refund.status === "Failed") await releaseIdempotency("refund-admin", 0, key);
+      else await completeIdempotency("refund-admin", 0, key, fp, outcomeStatus(outcome), outcome);
+    }
     return outcomeResponse(outcome);
   } catch (e) {
+    if (e instanceof RefundReservedError) {
+      const view = reservedOutcome(e);
+      if (key) await completeIdempotency("refund-admin", 0, key, fp, 202, view).catch(() => {});
+      return outcomeResponse(view);
+    }
+    if (key) await releaseIdempotency("refund-admin", 0, key);
     if (e instanceof RefundError) return refundErrorResponse(e);
     throw e;
   }

@@ -20,12 +20,18 @@ interface Envelope {
   error?: { code?: string; message?: string };
 }
 
-async function post(token: string, path: string, body: unknown): Promise<RefundOutcomeView> {
+async function post(
+  token: string,
+  path: string,
+  body: unknown,
+  idempotencyKey?: string,
+): Promise<RefundOutcomeView> {
   const res = await fetch(`/api/internal${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -42,11 +48,13 @@ async function post(token: string, path: string, body: unknown): Promise<RefundO
 
 export const refundApi = {
   /** 200 Completed · 202 Processing · throws RefundApiError (502 = PSP refused, with outcome) */
+  /** `idempotencyKey`: one per form opening — a double submit / retry returns the same refund */
   create: (
     token: string,
     txnId: number,
     body: { amount: number | null; reason: string; note?: string },
-  ) => post(token, `/transactions/${txnId}/refund`, body),
+    idempotencyKey?: string,
+  ) => post(token, `/transactions/${txnId}/refund`, body, idempotencyKey),
   check: (token: string, refundId: number) => post(token, `/refunds/${refundId}/check`, {}),
   resolve: (
     token: string,

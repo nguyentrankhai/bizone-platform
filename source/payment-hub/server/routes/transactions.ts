@@ -1,3 +1,4 @@
+import { clientIp } from "@/lib/client-ip";
 import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { verifyApiRequest, ApiAuthError } from "@/server/middleware/apiAuth";
@@ -81,11 +82,7 @@ function err(code: string, message: string, status: number, details?: unknown): 
 }
 
 function getClientIp(req: NextRequest): string | undefined {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    undefined
-  );
+  return clientIp(req.headers);
 }
 
 async function readBody(req: NextRequest): Promise<string> {

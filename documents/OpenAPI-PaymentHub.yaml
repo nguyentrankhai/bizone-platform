@@ -647,7 +647,13 @@ paths:
       parameters:
         - $ref: "#/components/parameters/HMACSignature"
         - $ref: "#/components/parameters/HMACTimestamp"
-        - $ref: "#/components/parameters/IdempotencyKey"
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Bắt buộc cho hoàn tiền (QA-4) — thiếu → 400 VALIDATION_ERROR; cùng key trong 24h trả lại kết quả cũ
         - in: path
           name: id
           required: true

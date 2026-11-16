@@ -383,12 +383,21 @@ export async function setPartnerStatus(
       data: { status },
     });
     if (count === 0) throw new PartnerError("CONFLICT", "Cấu hình vừa bị thay đổi, hãy tải lại");
-    await writeLogs(
-      tx,
-      id,
-      [{ field: "status", oldValue: current.status, newValue: status }],
-      actor,
-    );
+    const logs: LogRow[] = [{ field: "status", oldValue: current.status, newValue: status }];
+    if (status === "Active") {
+      // An activated partner must be routable (QA-4 #127): the connector row is only switched on
+      // by the seed when its env vars are set, and there is no connector screen yet (P7.1).
+      const code = current.connectorType.toLowerCase();
+      const conn = await tx.connector.findUnique({ where: { code } });
+      if (conn && !conn.isActive) {
+        await tx.connector.update({
+          where: { code },
+          data: { isActive: true, status: "Installed" },
+        });
+        logs.push({ field: "connector_enabled", oldValue: code, newValue: "is_active=1" });
+      }
+    }
+    await writeLogs(tx, id, logs, actor);
     return { ...current, status };
   });
   return toView(updated);

@@ -1,3 +1,4 @@
+import { rateLimit } from "@/lib/rate-limit";
 import type { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { requireAdmin, type AdminContext } from "@/server/middleware/adminAuth";
@@ -268,9 +269,22 @@ async function filterText(parts: {
   return out.length ? out.join("; ") : "Tất cả";
 }
 
+/** Exports build up to 50 000 rows in the request — bounded per user (QA-4 #125). */
+const EXPORT_RATE_LIMIT = 10;
+
 export async function handleExport(req: NextRequest): Promise<Response> {
   const a = requireAdmin(req);
   if (a instanceof Response) return a;
+  const rl = await rateLimit(`rl:payhub:report-export:${a.userId}`, EXPORT_RATE_LIMIT, 60);
+  if (!rl.allowed) {
+    return Response.json(
+      {
+        success: false,
+        error: { code: "RATE_LIMITED", message: "Xuất báo cáo quá nhiều lần, thử lại sau 1 phút" },
+      },
+      { status: 429 },
+    );
+  }
   const q = query(req);
   const type = q.get("type") as ReportType | null;
   const format = (q.get("format") ?? "xlsx") as ReportFormat;

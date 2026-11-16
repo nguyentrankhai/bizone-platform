@@ -51,6 +51,24 @@ export class RefundError extends Error {
   }
 }
 
+/**
+ * A refund was reserved (and the PSP possibly called) but recording the answer failed (DB error).
+ * The refund stays `Processing` — the API must not let the merchant retry it as a new request:
+ * the route keeps the Idempotency-Key claim and answers 202 (QA-4 #123).
+ */
+export class RefundReservedError extends Error {
+  constructor(
+    public readonly refund: { id: number; refundCode: string; amount: number },
+    public readonly txnCode: string,
+    cause: unknown,
+  ) {
+    super(
+      `Refund ${refund.refundCode} reserved but its result was not recorded: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
+    this.name = "RefundReservedError";
+  }
+}
+
 const INFLIGHT: Refund["status"][] = ["Pending", "Processing"];
 const OUTBOX_PENDING = { notifyWebhook: true, webhookSentAt: null } as const;
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -98,7 +116,11 @@ export function toRefundView(
     reason: r.reason,
     partner_refund_id: r.partnerRefundId,
     response_code: r.responseCode,
-    message: r.errorMessage,
+    // NO_RESPONSE carries the raw network error (host, timeout…) — admins only (QA-4 #124)
+    message:
+      !opts.admin && r.responseCode === "NO_RESPONSE" && r.status === "Processing"
+        ? "Chưa nhận được kết quả từ đối tác — kết quả cuối qua webhook refund.completed"
+        : r.errorMessage,
     channel: r.channel,
     processed_at: r.processedAt?.toISOString() ?? null,
     created_at: r.createdAt.toISOString(),
@@ -288,12 +310,21 @@ export async function requestRefund(
     thrown = e;
   }
 
-  await applyRefundOutcome(refund.id, outcomeOf(result, thrown, pc.connectorType), {
-    createdBy: `system:refund`,
-    rawRequest: result?.partnerRequest,
-    first: true,
-  });
-  return refundOutcome(refund.id);
+  try {
+    await applyRefundOutcome(refund.id, outcomeOf(result, thrown, pc.connectorType), {
+      createdBy: `system:refund`,
+      rawRequest: result?.partnerRequest,
+      first: true,
+    });
+    return await refundOutcome(refund.id);
+  } catch (e) {
+    console.error(`[refund] ${refund.refundCode}: outcome not recorded — ${(e as Error).message}`);
+    throw new RefundReservedError(
+      { id: refund.id, refundCode: refund.refundCode, amount: Number(refund.amount) },
+      txn.txnCode,
+      e,
+    );
+  }
 }
 
 // ─── Outcome ──────────────────────────────────────────────────────────────────
@@ -382,8 +413,9 @@ export async function applyRefundOutcome(
   };
 
   if (outcome.kind === "processing") {
-    await prisma.refund.update({
-      where: { id: refundId },
+    // Conditional: the poller and a manual resolution may race (QA-4 #124)
+    const { count } = await prisma.refund.updateMany({
+      where: { id: refundId, status: "Processing" },
       data: {
         ...common,
         errorMessage: outcome.message,
@@ -391,6 +423,7 @@ export async function applyRefundOutcome(
         partnerRefundId: outcome.partnerRefundId ?? base.partnerRefundId,
       },
     });
+    if (count === 0) return "unchanged";
     if (opts.first) {
       await prisma.transactionLog.create({
         data: {

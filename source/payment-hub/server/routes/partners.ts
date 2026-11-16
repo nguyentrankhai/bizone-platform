@@ -1,3 +1,4 @@
+import { clientIp } from "@/lib/client-ip";
 import { z } from "zod";
 import { checkEmailList } from "@/lib/dispute";
 import type { NextRequest } from "next/server";
@@ -108,10 +109,7 @@ function authorize(req: NextRequest, write: boolean): AdminContext | Response {
 function actorOf(req: NextRequest): Actor {
   return {
     username: req.headers.get("x-user-username") || req.headers.get("x-user-id") || "unknown",
-    ipAddress:
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      req.headers.get("x-real-ip") ??
-      undefined,
+    ipAddress: clientIp(req.headers),
   };
 }
 

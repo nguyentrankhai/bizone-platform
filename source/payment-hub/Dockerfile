@@ -29,6 +29,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
+# Dispute evidence when no S3 endpoint is configured (STORAGE_LOCAL_DIR default ./storage)
+RUN mkdir -p /app/storage && chown nextjs:nodejs /app/storage
 
 USER nextjs
 EXPOSE 4000 4001

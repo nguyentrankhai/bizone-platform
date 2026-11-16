@@ -30,6 +30,7 @@ import {
 } from "@/lib/dispute-mail";
 import { mailProvider, sendMail } from "@/lib/mail";
 import { getStorage } from "@/lib/storage";
+import { getRedis } from "@/lib/redis";
 import { vnRangeUtc } from "@/lib/report";
 import { connectorFromPartnerConfig, disputeApiSupported } from "@/services/connectors/registry";
 import { enqueueDisputeNotify } from "@/services/dispute/queue";
@@ -496,7 +497,42 @@ async function logSubmitFailure(d: WorkDispute, channel: string, message: string
     .catch(() => {});
 }
 
+const SUBMIT_LOCK_SECONDS = 120;
+
+/**
+ * One submission at a time per dispute (QA-4 #126): the e-mail / API call happens before the
+ * conditional status update, so without this two operators clicking together would both reach the
+ * partner. The lock outlives any SMTP / API timeout (20 s) and is released by its owner only.
+ */
 export async function submitDispute(
+  id: number,
+  input: SubmitInput,
+  actor: DisputeActor,
+): Promise<{ dispute: DisputeDetail; submit: SubmitReport }> {
+  const lockKey = `payhub:dispute:submit:${id}`;
+  const token = randomUUID();
+  const redis = getRedis();
+  if ((await redis.set(lockKey, token, "EX", SUBMIT_LOCK_SECONDS, "NX")) !== "OK") {
+    throw new DisputeError(
+      "CONFLICT",
+      "Yêu cầu tra soát này đang được gửi tới đối tác — chờ giây lát rồi tải lại",
+    );
+  }
+  try {
+    return await submitDisputeLocked(id, input, actor);
+  } finally {
+    await redis
+      .eval(
+        'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0',
+        1,
+        lockKey,
+        token,
+      )
+      .catch(() => {});
+  }
+}
+
+async function submitDisputeLocked(
   id: number,
   input: SubmitInput,
   actor: DisputeActor,
@@ -864,6 +900,19 @@ export async function addAttachment(
   await getStorage().put(key, file.data, check.contentType);
   try {
     const row = await getPrisma().$transaction(async (tx) => {
+      // Re-check under a row lock: concurrent uploads must not exceed the limit (QA-4 #126)
+      const [locked] = await tx.$queryRaw<{ status: string }[]>`
+        SELECT status FROM disputes WHERE id = ${id} FOR UPDATE`;
+      if (!locked || !isOpen(locked.status as DisputeStatus)) {
+        throw new DisputeError("CONFLICT", "Yêu cầu tra soát đã đóng — không thêm chứng từ");
+      }
+      const count = await tx.disputeAttachment.count({ where: { disputeId: id } });
+      if (count >= ATTACHMENTS_PER_DISPUTE) {
+        throw new DisputeError(
+          "VALIDATION_ERROR",
+          `Tối đa ${ATTACHMENTS_PER_DISPUTE} tệp đính kèm cho một yêu cầu`,
+        );
+      }
       const a = await tx.disputeAttachment.create({
         data: {
           disputeId: id,
