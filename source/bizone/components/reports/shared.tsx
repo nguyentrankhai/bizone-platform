@@ -258,4 +258,7 @@ export const METHOD_LABEL: Record<string, string> = {
   card: "Thẻ",
   wallet: "Ví điện tử",
   qr: "QR",
+  // P6.1: completed online orders
+  online: "Online (Payment Hub)",
+  cod: "COD (thu khi giao)",
 };

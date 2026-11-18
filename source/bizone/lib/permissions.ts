@@ -118,9 +118,19 @@ export const PERMISSION_CATALOG: CatalogPermission[] = [
     name: "Quản lý đơn nhập",
     grants: "supplier:manage_po",
   },
-  { module: "omni", action: "manage_connection", name: "Quản lý kết nối kênh", grants: null },
-  { module: "omni", action: "manage_product_sync", name: "Đồng bộ sản phẩm", grants: null },
-  { module: "omni", action: "manage_order_sync", name: "Đồng bộ đơn hàng", grants: null },
+  {
+    module: "omni",
+    action: "manage_connection",
+    name: "Quản lý kết nối kênh",
+    grants: "omni:manage",
+  },
+  {
+    module: "omni",
+    action: "manage_product_sync",
+    name: "Đồng bộ sản phẩm",
+    grants: "omni:manage",
+  },
+  { module: "omni", action: "manage_order_sync", name: "Đồng bộ đơn hàng", grants: "omni:manage" },
   {
     module: "marketing",
     action: "manage_coupon",

@@ -124,14 +124,16 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 ├── mockups-bizone/                  # 8 màn hình HTML BizOne
 ├── mockups-paymenthub/              # mockup HTML Payment Hub Admin
 ├── graphify-out/                    # knowledge graph (graph.html, graph.json, GRAPH_REPORT.md)
-├── .github/workflows/ci.yml          # CI: format, lint, typecheck, test, build, build:jobs cho 2 app
+├── .github/workflows/ci.yml          # CI: format, lint, typecheck, test, build, build:jobs cho 2 app + storefront (không build:jobs)
 ├── .agents/skills/                  # skills: software-architecture-design, frontend-design
 └── source/                          # MÃ NGUỒN ỨNG DỤNG
     ├── bizone/                      # P1.1 — BizOne Core (NextJS 16)
     │   ├── app/                     # App Router: pages, layouts, route handlers
     │   │   ├── api/health/route.ts  # GET /api/health (Docker healthcheck)
     │   │   ├── api/inventory/alerts/route.ts  # P2.4 — SSE cảnh báo tồn thấp (relay Redis "bizone:low-stock")
-    │   │   ├── api/webhooks/payhub/route.ts  # P3.6 — nhận webhook Payment Hub (HMAC + chống trùng X-Webhook-Id); P4.5 áp payment.* cho thanh toán POS
+    │   │   ├── api/webhooks/payhub/route.ts  # P3.6 — nhận webhook Payment Hub (HMAC + chống trùng X-Webhook-Id); P4.5 áp payment.* cho thanh toán POS; P6.1 cho thanh toán đơn website (WEB-…)
+    │   │   ├── api/store/v1/[...path]/route.ts # P6.1 — Store API cho website (X-Store-Key; handler server/store/api.ts)
+    │   │   ├── omni/                # P6.1 — /omni: kênh Website (cấu hình, khoá kết nối, lịch sử đồng bộ)
     │   │   ├── api/pos/pair/route.ts  # P4.5 — public: POST đổi PIN → token màn hình khách, GET kiểm token
     │   │   ├── products/            # P2.2 — UI sản phẩm
     │   │   ├── warehouse/           # P2.4 — kho: tồn, phiếu nhập/xuất (transactions/new), stock-take, transfer
@@ -155,10 +157,12 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── components/branch/       # P4.6 — BranchSwitcher (thanh trên), BranchList, BranchForm
     │   ├── components/marketing/    # P4.4 — CouponList, CouponForm, VoucherList, FlashSaleList, FlashSaleForm, PromotionList, MarketingReport; P4.7 — CampaignList, CampaignForm
     │   ├── components/accounting/   # P4.8 — AccountingOverview, RecordList + RecordForm, CashFundsClient, CashFundForm (+ chuyển / kiểm quỹ), LedgerTable, DebtSummary, FinanceReports, Reconciliation, CategoryManager; shared.tsx (FundSelect, MoneyInput, PeriodPicker — dùng cả ở thanh toán NCC / thu nợ CRM)
+    │   ├── components/omni/         # P6.1 — WebsiteChannel (cấu hình kênh website, khoá, sync log)
     │   ├── components/notifications/ # P4.7 — NotificationBell (thanh trên), NotificationCenter, NotificationPreferences, NotificationSettings, TemplateList, TemplateForm, DeliveryLog
     │   ├── components/suppliers/    # P4.3 — SupplierTable, SupplierForm, SupplierDetail, PurchaseOrderList, POForm, PurchaseOrderDetail, PaymentModal, PriceComparison
     │   ├── hooks/                   # useLowStockAlerts (SSE), usePosWebSocket (giỏ POS: WS + fallback cục bộ), useBarcodeScan, useNotifications (P4.7: WS + poll 30 s)
     │   ├── lib/accounting/calc.ts   # P4.8 — quy tắc thuần: biến động quỹ, mã PT/PC, cây danh mục, danh mục ngoài lời lỗ, tuổi nợ, lời lỗ
+    │   ├── lib/omni/                # P6.1 — website.ts (cấu hình kênh, SĐT, slug SP, mã GD WEB-, doanh thu đơn — dùng được ở client), secrets.ts (store key, scrypt, OTP, token — chỉ server)
     │   ├── lib/notifications/       # P4.7 — events.ts (danh mục sự kiện, audience, isVisibleTo), template.ts ({{biến}}, email HTML, SMS không dấu), schedule.ts
     │   ├── lib/                     # tiện ích dùng chung (utils.ts: cn(), prisma.ts: getPrisma(), tenant.ts: DB theo tenant, trpc.ts, dev-auth.ts)
     │   │   ├── pos/                 # P2.5 — cart.ts (tính tiền dùng chung), promotions.ts (P4.4 — flash sale / combo / mua X tặng Y), protocol.ts (sự kiện WS), sync-client.ts (WS + BroadcastChannel), vietqr.ts (P2.6), held.ts (P4.5 — tách/gộp dòng)
@@ -178,6 +182,9 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   │   ├── routers/supplier.ts + purchaseOrder.ts # P4.3 — NCC, công nợ, thanh toán, lịch sử, so sánh giá; đơn nhập (create/update/receive/cancel)
     │   │   ├── services/            # cashSession, invoice, payment, pricing, posCart, posEvents…; P4.5 — payhubPayment (intent thẻ/QR), preorder, posPairing, payment/paymentHubClient.ts (HMAC merchant API); P4.7 — notification (notify, viewer, cài đặt), notificationDelivery (gửi + log), notificationTemplate, notificationScan (nhắc ca, công nợ, đơn đặt), campaign, email (SMTP), sms (gateway HTTP), push (VAPID), reportMail (chỉ worker); P4.8 — cashFund (quỹ, `postMovement`, sổ quỹ, nộp tiền ca), ledger (danh mục, phiếu thu chi, `postAutoRecord`), accountingReport (lời lỗ, dòng tiền, công nợ tổng hợp, đối soát)
     │   │   ├── queue/notification.ts + notificationWorker.ts # P4.7 — BullMQ "bizone-notification": deliver, campaign, report-email + lịch scan 5', daily 08:00, report 07:00, cleanup 02:15
+    │   │   ├── services/omni/       # P6.1 — websiteChannel (kênh, khoá, sync log, sync_failed), storeCatalog (SP + tồn kho kênh), storeCustomer (OTP, đăng ký, đăng nhập, khoá 5 lần, phiên, điểm), storeOrder (báo giá, đặt đơn, Payment Hub, webhook, hết hạn), orderFulfillment (giữ / nhả tồn, hoá đơn online khi hoàn thành)
+    │   │   ├── store/api.ts         # P6.1 — router Store API /api/store/v1/* (xác thực key, rate limit, định dạng lỗi)
+    │   │   ├── queue/omni.ts        # P6.1 — BullMQ "bizone-omni": huỷ đơn website quá hạn thanh toán (mỗi phút, mọi tenant)
     │   │   ├── queue/inventory.ts   # P2.5 — BullMQ "bizone-inventory" (cảnh báo tồn sau bán/trả)
     │   │   ├── queue/commission.ts  # P4.1 — BullMQ "bizone-commission" (tính lại sau HĐ + chốt 00:30 ngày 1)
     │   │   ├── queue/reportExport*.ts # P4.2 — BullMQ "bizone-report-export" (worker dựng PDF/Excel, file Redis 30 phút)
@@ -192,6 +199,12 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
     │   ├── .env.example             # template env của app
     │   ├── .prettierrc / eslint.config.mjs / tsconfig.json / components.json
     │   └── AGENTS.md                # do `next dev` tự sinh — đọc docs trong node_modules/next/dist/docs
+    ├── storefront/                  # P6.1 — website bán hàng [store].bizone.vn (NextJS 16, :3100, không DB)
+    │   ├── app/                     # / (danh mục + tìm kiếm), products/[slug], cart, checkout (+ result = return_url Payment Hub), orders (+ [code]), login, register, account; actions.ts (server actions)
+    │   ├── lib/bizone-sync.ts       # client Store API BizOne (server-only, X-Store-Key)
+    │   ├── lib/paymentHubClient.ts  # luồng thanh toán phía website (link Payment Hub qua BizOne, return URL) — không giữ secret Payment Hub
+    │   ├── lib/store.ts, session.ts, cart.ts # chọn cửa hàng theo sub-domain (STORE_KEYS), cookie phiên / giỏ / đơn khách vãng lai
+    │   └── components/              # AddToCart, CheckoutForm, QuoteSummary, AuthForms, OrderLookup, AutoRefresh, ui.tsx
     └── payment-hub/                 # P1.2 — Payment Hub (NextJS 16 + BullMQ + WebSocket)
         ├── app/                     # App Router; api/health/route.ts kiểm tra MariaDB + Redis
         ├── components/ui/           # shadcn/ui
@@ -275,6 +288,17 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý Prisma 7**: model PascalCase + `@@map` về tên bảng snake_case của `database/schema.sql`. Dùng `getPrisma()` từ `lib/prisma.ts`; import type từ `@/generated/prisma/client`. Đổi schema → tạo migration mới trong `prisma/migrations/`. Sau `prisma generate` phải khởi động lại `npm run dev` / `dev:realtime` / `dev:worker` đang chạy — tiến trình cũ giữ Prisma client cũ (lỗi `Unknown argument` với cột mới, QA-3). Ghi đè DB đích bằng biến shell: `DATABASE_URL=... npx prisma ...`.
 
+**Lưu ý Omni — website (P6.1)**: website là app riêng `source/storefront` (:3100), **không có DB** — mọi dữ liệu đọc / ghi qua Store API BizOne `/api/store/v1/*` (`server/store/api.ts`, public trong `proxy.ts`). Xác thực bằng store key `bzs.{tenant}.{secret}` (header `X-Store-Key`; tạo ở `/omni`, hiện 1 lần, DB chỉ lưu SHA-256 trong `channel_connections.access_token`, `channel_code='website'`, cấu hình JSON `WebsiteConfig` ở `config`); website map sub-domain → key bằng `STORE_KEYS`. Khách: `X-Customer-Token` `cst_…` (Redis `store:sess:{tenant}:{sha256}`, 30 ngày); tài khoản = `customer_accounts` gắn khách CRM theo SĐT (đăng ký cần OTP SMS — `STORE_OTP_DEV_ECHO=true` chỉ dev, trả mã khi `SMS_PROVIDER=log`), sai mật khẩu 5 lần → khoá 15 phút. Giá luôn qua `quoteCart(…, "website", { fee })` — mã có `applicable_channels` phải chứa `website`/`online`, `free_shipping` giảm phí ship; ưu đãi hạng chỉ khi đăng nhập (khách vãng lai giá thường, đơn vẫn gắn khách CRM theo SĐT). Đặt đơn (`storeOrder.service`, `Idempotency-Key` bắt buộc): đơn `channel='website'`, chi nhánh = chi nhánh của kênh (#82), **trừ tồn ngay** ở kho đầu tiên của chi nhánh (`orders.stock_warehouse_id`), giữ mã / KM bằng `coupon_usage.order_id` / `promotion_usage.order_id` (`invoice_id` NULL). Huỷ / hoàn trả đơn → `releaseOrderHoldings` (trả tồn, nhả mã + KM, 1 lần). **Hoàn thành** đơn (`order.updateStatus completed`) → `writeOrderInvoice`: hoá đơn `invoice_type='online'`, không ca, doanh thu = `total − shipping_fee` (#61 — báo cáo / dashboard / lời lỗ tự cộng), tích điểm, đơn chưa trừ tồn thì trừ lúc này, COD → `paid`. Thanh toán online: `order_payments` (`merchant_txn_id = WEB-{tenant}-{id}`), Payment Hub không chỉ định phương thức (khách chọn trên `/pay/{txn}`), `return_url` phải cùng origin `storefrontUrl` của kênh; webhook `/api/webhooks/payhub` hoặc hỏi lại Payment Hub khi xem đơn → `paid`; quá `paymentMinutes` chưa trả → worker `bizone-omni` huỷ đơn. Trả tiền cho đơn đã huỷ / lệch số tiền → `reportSyncFailure` (sync_logs `failed` + thông báo `sync_failed`, #87). Merchant Payment Hub vẫn dùng chung cho mọi tenant (#30).
+
+### Chạy website bán hàng (`source/storefront`)
+
+| Lệnh | Mô tả |
+|------|-------|
+| `npm run dev` / `npm run build` / `npm start` | Dev / build / chạy port 3100 |
+| `npm run lint` / `typecheck` / `format:check` / `test` | ESLint / tsc / Prettier / Vitest |
+
+Env (`.env.example`): `BIZONE_API_URL` (Store API), `STORE_KEYS="slug=bzs.…"`, `DEFAULT_STORE` (host không có sub-domain), `STOREFRONT_URL` (phải khớp "Địa chỉ website" ở `/omni`), `STORE_ROOT_DOMAIN`. Cần BizOne (+ `dev:worker` cho hạn thanh toán) và Payment Hub (thanh toán online, webhook về BizOne).
+
 ### Chạy Payment Hub (`source/payment-hub`)
 
 | Lệnh | Mô tả |
@@ -319,7 +343,7 @@ bizone/                              # repo root (git: nguyentrankhai/bizone-pla
 
 **Lưu ý NextJS 16**: API và convention khác bản cũ — đọc `source/bizone/node_modules/next/dist/docs/` trước khi viết code. `cacheComponents: true` đang bật: route/page cần dữ liệu theo request phải dùng `await connection()` hoặc Request-time APIs.
 
-**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3002 (BizOne POS WebSocket), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
+**Lưu ý Docker**: container Keycloak thuộc compose project `bizone` (repo root). Không chạy `docker compose down --remove-orphans` trong project khác trùng tên. Host port đã dùng: 3000 (BizOne), 3002 (BizOne POS WebSocket), 3100 (website storefront), 3306/6379 (MariaDB/Redis local), 3307/6380 (`bizone-core`), 3308/6381 (`bizone-payhub`), 4000/4001 (Payment Hub), 8080 (Keycloak), 9000/9001 (MinIO).
 
 **Metabase**: không thuộc dự án (không có trong BRD/SRS/PLAN). Báo cáo được xây trong app (P2.9, P4.2, P5.5). Container `metabase` trên máy đã dừng — không khởi động lại, không phụ thuộc vào nó.
 

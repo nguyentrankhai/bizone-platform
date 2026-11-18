@@ -52,7 +52,7 @@ const NAV_ITEMS: NavItem[] = [
     section: "TIỆN ÍCH",
     also: ["/purchase-orders"],
   },
-  { label: "Omni Channel", href: "/omni", icon: Globe, soon: "P6.1" },
+  { label: "Omni Channel", href: "/omni", icon: Globe },
   { label: "Marketing", href: "/marketing", icon: Megaphone },
   { label: "Kế toán", href: "/accounting", icon: Calculator },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },

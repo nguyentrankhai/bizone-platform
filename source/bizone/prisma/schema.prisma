@@ -222,6 +222,8 @@ model CouponUsage {
   id             Int       @id @default(autoincrement())
   couponId       Int       @map("coupon_id")
   invoiceId      Int?      @map("invoice_id")
+  /// P6.1: online order that reserved the coupon (invoice set when it completes)
+  orderId        Int?      @map("order_id")
   customerId     Int?      @map("customer_id")
   discountAmount Decimal   @map("discount_amount") @db.Decimal(15, 2)
   /// P4.4: personal voucher code used (coupon = its template); null for a plain coupon code
@@ -231,11 +233,13 @@ model CouponUsage {
   voucher        Voucher?  @relation(fields: [voucherId], references: [id], onUpdate: Restrict, map: "fk_cu_voucher")
   customer       Customer? @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_cu_customer")
   invoice        Invoice?  @relation(fields: [invoiceId], references: [id], onUpdate: Restrict, map: "fk_cu_invoice")
+  order          Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cu_order")
 
   @@index([customerId], map: "fk_cu_customer")
   @@index([invoiceId], map: "fk_cu_invoice")
   @@index([couponId], map: "idx_cu_coupon")
   @@index([voucherId], map: "fk_cu_voucher")
+  @@index([orderId], map: "idx_cu_order")
   @@map("coupon_usage")
 }
 
@@ -356,6 +360,7 @@ model Customer {
   customerAddresses     CustomerAddress[]
   customerDebts         CustomerDebt[]
   customerLoyaltyPoints CustomerLoyaltyPoint[]
+  account               CustomerAccount?
   createdByUser         User?                  @relation(fields: [createdBy], references: [id], onUpdate: Restrict, map: "fk_cust_created")
   group                 CustomerGroup?         @relation(fields: [groupId], references: [id], onUpdate: Restrict, map: "fk_cust_group")
   invoices              Invoice[]
@@ -634,6 +639,7 @@ model Invoice {
   invoiceItems    InvoiceItem[]
   invoicePayments InvoicePayment[]
   invoiceRefunds  InvoiceRefund[]
+  order           Order?
   branch          Branch             @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_inv_branch")
   customer        Customer?          @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_inv_customer")
   cashSession     CashSession?       @relation(fields: [cashSessionId], references: [id], onUpdate: Restrict, map: "fk_inv_session")
@@ -753,15 +759,24 @@ model Order {
   id                  Int                   @id @default(autoincrement())
   orderCode           String                @unique(map: "order_code") @map("order_code") @db.VarChar(50)
   customerId          Int?                  @map("customer_id")
+  /// P6.1: receiver contact of a delivery order (may differ from the buyer)
+  contactName         String?               @map("contact_name") @db.VarChar(255)
+  contactPhone        String?               @map("contact_phone") @db.VarChar(20)
   channel             String?               @db.VarChar(50)
   channelOrderId      String?               @map("channel_order_id") @db.VarChar(100)
   branchId            Int?                  @map("branch_id")
+  /// P6.1: warehouse the order's stock was taken from (null = not taken yet)
+  stockWarehouseId    Int?                  @map("stock_warehouse_id")
+  /// P6.1: invoice written when the order is completed (revenue, loyalty)
+  invoiceId           Int?                  @unique(map: "uq_ord_invoice") @map("invoice_id")
   subtotal            Decimal               @default(0.00) @db.Decimal(15, 2)
   shippingFee         Decimal               @default(0.00) @map("shipping_fee") @db.Decimal(15, 2)
   discountAmount      Decimal               @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
   totalAmount         Decimal               @default(0.00) @map("total_amount") @db.Decimal(15, 2)
   paymentMethod       String?               @map("payment_method") @db.VarChar(50)
   paymentStatus       OrderPaymentStatus    @default(unpaid) @map("payment_status")
+  /// P6.1: unpaid online-payment orders are cancelled after this instant
+  paymentDueAt        DateTime?             @map("payment_due_at") @db.DateTime(0)
   status              OrderStatus           @default(pending)
   shippingAddress     String?               @map("shipping_address") @db.Text
   shippingProvider    String?               @map("shipping_provider") @db.VarChar(100)
@@ -774,6 +789,11 @@ model Order {
   orderItems          OrderItem[]
   orderRefunds        OrderRefund[]
   orderTracking       OrderTracking[]
+  payments            OrderPayment[]
+  couponUsage         CouponUsage[]
+  promotionUsage      PromotionUsage[]
+  stockWarehouse      Warehouse?            @relation(fields: [stockWarehouseId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_ord_stock_wh")
+  invoice             Invoice?              @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_ord_invoice")
   branch              Branch?               @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_ord_branch")
   createdByUser       User?                 @relation(fields: [createdBy], references: [id], onUpdate: Restrict, map: "fk_ord_created")
   customer            Customer?             @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_ord_customer")
@@ -785,6 +805,8 @@ model Order {
   @@index([createdAt], map: "idx_ord_created")
   @@index([customerId], map: "idx_ord_customer")
   @@index([status], map: "idx_ord_status")
+  @@index([status, paymentDueAt], map: "idx_ord_payment_due")
+  @@index([stockWarehouseId], map: "fk_ord_stock_wh")
   @@map("orders")
 }
 
@@ -1467,6 +1489,7 @@ model Warehouse {
   purchaseOrders                            PurchaseOrder[]
   stockTakeNotes                            StockTakeNote[]
   branch                                    Branch?                @relation(fields: [branchId], references: [id], onUpdate: Restrict, map: "fk_wh_branch")
+  ordersStockTaken                          Order[]
 
   @@index([branchId], map: "fk_wh_branch")
   @@map("warehouses")
@@ -1678,20 +1701,24 @@ model PromotionUsage {
   promotionId    Int                @map("promotion_id")
   /// flash_sale_products.id for a flash sale line
   itemRefId      Int?               @map("item_ref_id")
-  invoiceId      Int                @map("invoice_id")
+  /// null while an online order holds the promotion (P6.1) — set when the order completes
+  invoiceId      Int?               @map("invoice_id")
+  orderId        Int?               @map("order_id")
   customerId     Int?               @map("customer_id")
   productId      Int?               @map("product_id")
   /// units at flash price / gift units / combo sets
   quantity       Int
   discountAmount Decimal            @map("discount_amount") @db.Decimal(15, 2)
   usedAt         DateTime           @default(now()) @map("used_at") @db.DateTime(0)
-  invoice        Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pu_invoice")
+  invoice        Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pu_invoice")
+  order          Order?             @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_pu_order")
   customer       Customer?          @relation(fields: [customerId], references: [id], onUpdate: Restrict, map: "fk_pu_customer")
 
   @@index([promotionType, promotionId], map: "idx_pu_promotion")
   @@index([invoiceId], map: "idx_pu_invoice")
   @@index([customerId], map: "fk_pu_customer")
   @@index([usedAt], map: "idx_pu_used")
+  @@index([orderId], map: "idx_pu_order")
   @@map("promotion_usage")
 }
 
@@ -1967,4 +1994,50 @@ model NotificationDelivery {
   @@index([campaignId, status], map: "idx_nd_campaign")
   @@index([status], map: "idx_nd_status")
   @@map("notification_deliveries")
+}
+
+/// P6.1: website login of a CRM customer (phone + password, scrypt hash)
+model CustomerAccount {
+  id             Int       @id @default(autoincrement())
+  customerId     Int       @unique(map: "uq_cacc_customer") @map("customer_id")
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until") @db.DateTime(0)
+  lastLoginAt    DateTime? @map("last_login_at") @db.DateTime(0)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  customer       Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_cacc_customer")
+
+  @@map("customer_accounts")
+}
+
+enum OnlinePaymentStatus {
+  pending
+  success
+  failed
+  expired
+  cancelled
+}
+
+/// P6.1: online payment of an order through Payment Hub (merchant_txn_id = WEB-{tenant}-{id})
+model OrderPayment {
+  id            Int                 @id @default(autoincrement())
+  orderId       Int                 @map("order_id")
+  merchantTxnId String              @unique(map: "uq_op_merchant_txn") @map("merchant_txn_id") @db.VarChar(100)
+  amount        Decimal             @db.Decimal(15, 2)
+  status        OnlinePaymentStatus @default(pending)
+  payhubTxnCode String?             @map("payhub_txn_code") @db.VarChar(50)
+  payhubMethod  String?             @map("payhub_method") @db.VarChar(50)
+  paymentUrl    String?             @map("payment_url") @db.Text
+  partnerTxnId  String?             @map("partner_txn_id") @db.VarChar(100)
+  paidAt        DateTime?           @map("paid_at") @db.DateTime(0)
+  expiresAt     DateTime?           @map("expires_at") @db.DateTime(0)
+  failureReason String?             @map("failure_reason") @db.VarChar(500)
+  lastCheckedAt DateTime?           @map("last_checked_at") @db.DateTime(0)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_op_order")
+
+  @@index([orderId], map: "idx_op_order")
+  @@map("order_payments")
 }

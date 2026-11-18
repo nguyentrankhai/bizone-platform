@@ -16,7 +16,7 @@ import type {
 const conflict = (msg: string) => bizoneError("CONFLICT", msg);
 const notFound = (msg: string) => bizoneError("NOT_FOUND", msg);
 
-function generateCustomerCode(): string {
+export function generateCustomerCode(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, "");
   const rand = Math.floor(Math.random() * 100000)

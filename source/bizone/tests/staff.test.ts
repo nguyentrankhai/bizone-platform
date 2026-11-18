@@ -30,7 +30,8 @@ describe("permissions", () => {
       "omni.manage_connection",
       "nope",
     ]);
-    expect([...caps].sort()).toEqual(["product:write", "staff:manage_shift"]);
+    // P6.1: omni.* now grants omni:manage
+    expect([...caps].sort()).toEqual(["omni:manage", "product:write", "staff:manage_shift"]);
     const seller = user(["bizone-seller"]);
     expect(hasPermission(seller, "staff:manage_shift")).toBe(false);
     expect(hasPermission(seller, "staff:manage_shift", caps)).toBe(true);

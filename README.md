@@ -134,6 +134,7 @@ npm run dev
 - BizOne: http://localhost:3000 (POS + notification WebSocket `ws://localhost:3002/ws/pos/{sessionId}`, `/ws/notifications` — `npm run dev:realtime`; BullMQ worker incl. email/SMS/push and scheduled reminders — `npm run dev:worker`). Email (`SMTP_*`), SMS gateway (`SMS_*`) and Web Push (`VAPID_*`) default to log / off when not configured. One database per tenant: set `TENANT_DATABASES` (e.g. `tenant_demo=bizonedb`).
 - Checks (same as CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
+- Online store (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — `{store}.bizone.vn` in production. In BizOne go to **Omni Channel → Website**, save the settings and create a store key, then put it in the storefront's `.env.local` (`STORE_KEYS="demo=bzs.…"`, see `.env.example`). Online payment goes through Payment Hub with BizOne's merchant key (`PAYHUB_*`).
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
@@ -262,6 +263,7 @@ npm run dev
 - BizOne: http://localhost:3000 (POS WebSocket `ws://localhost:3002/ws/pos/{sessionId}` — `npm run dev:realtime`; worker BullMQ — `npm run dev:worker`). Mỗi tenant một database: khai báo `TENANT_DATABASES` (vd. `tenant_demo=bizonedb`).
 - Kiểm tra (giống CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
+- Website bán hàng (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — production là `{cửa-hàng}.bizone.vn`. Trong BizOne vào **Omni Channel → Website**, lưu cấu hình và tạo khoá kết nối, rồi đặt vào `.env.local` của storefront (`STORE_KEYS="demo=bzs.…"`, xem `.env.example`). Thanh toán online đi qua Payment Hub bằng merchant key của BizOne (`PAYHUB_*`).
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).
@@ -299,12 +301,13 @@ bizone/
 │   ├── bizone/                         # BizOne Core — NextJS 16 (P1.1)
 │   │   ├── app/                        # App Router (pages, layouts, /api/*)
 │   │   ├── components/ui/              # shadcn/ui components
-│   │   ├── prisma/                     # Prisma schema (70 models), migrations, seed
+│   │   ├── prisma/                     # Prisma schema, migrations (0_init … 7_omni_website), seed
 │   │   ├── hooks/  lib/  server/  types/
 │   │   ├── server/ws/pos.ts            # POS 2-screen + notifications WebSocket (:3002/ws/pos/{sessionId}, /ws/notifications)
 │   │   ├── server/worker.ts            # BullMQ worker (inventory, commissions, report exports, notifications)
 │   │   ├── Dockerfile                  # Standalone production image
 │   │   └── docker-compose.yml          # app + MariaDB 10.11 + Redis 7
+│   ├── storefront/                     # P6.1 — online store [store].bizone.vn, NextJS 16 (:3100), calls BizOne /api/store/v1
 │   └── payment-hub/                    # Payment Hub — NextJS 16 (P1.2)
 │       ├── app/  components/  lib/     # App Router UI + REST API
 │       ├── services/queue|webhook/     # BullMQ queues, webhook delivery

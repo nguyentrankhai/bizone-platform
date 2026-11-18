@@ -140,8 +140,11 @@ export interface CreatePayhubTxn {
   merchantTxnId: string;
   amount: number;
   description: string;
-  /** Payment Hub route method: `vietqr`, `vnpay_card`, `vnpay_atm`, … */
-  paymentMethod: string;
+  /** Payment Hub route method: `vietqr`, `vnpay_card`, `vnpay_atm`, … — null = the customer
+   *  picks on Payment Hub's hosted page (P6.1 website) */
+  paymentMethod: string | null;
+  /** Where Payment Hub sends the customer back after paying (website, P6.1) */
+  returnUrl?: string;
   expiryMinutes?: number;
   qrSize?: 200 | 300 | 500;
   customerName?: string | null;
@@ -164,6 +167,7 @@ export function createPayhubTransaction(
       currency: "VND",
       description: input.description,
       payment_method: input.paymentMethod,
+      ...(input.returnUrl ? { return_url: input.returnUrl } : {}),
       expiry_minutes: input.expiryMinutes ?? 15,
       ...(input.qrSize ? { qr_size: input.qrSize } : {}),
       ...(input.customerName ? { customer_name: input.customerName } : {}),

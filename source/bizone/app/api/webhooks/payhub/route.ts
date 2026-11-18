@@ -2,6 +2,8 @@ import { getRedis } from "@/lib/redis";
 import { isFreshTimestamp, verifyPayhubSignature } from "@/lib/payhub/webhook";
 import { isKnownTenant, runWithTenant } from "@/lib/tenant";
 import { applyWebhook, parseMerchantTxnId } from "@/server/services/payhubPayment.service";
+import { applyOrderWebhook } from "@/server/services/omni/storeOrder.service";
+import { parseWebTxnId } from "@/lib/omni/website";
 
 /**
  * POST /api/webhooks/payhub — receives Payment Hub events (payment.success / failed / expired,
@@ -12,6 +14,8 @@ import { applyWebhook, parseMerchantTxnId } from "@/server/services/payhubPaymen
  *
  * P4.5: payment events for POS card/QR payments (`merchant_txn_id = BZ-{tenant}-{intentId}`) are
  * applied to that tenant's `pos_payment_intents` row; the POS is notified over its WS channel.
+ * P6.1: website order payments (`merchant_txn_id = WEB-{tenant}-{paymentId}`) are applied to
+ * that tenant's `order_payments` row and mark the order paid.
  * Other merchant transactions are only logged.
  */
 
@@ -82,7 +86,9 @@ export async function POST(req: Request): Promise<Response> {
     `[payhub-webhook] ${event} ${payload.transaction_id ?? ""} (merchant txn ${payload.merchant_txn_id ?? "-"}) id=${webhookId}`,
   );
 
-  const ref = parseMerchantTxnId(payload.merchant_txn_id);
+  const pos = parseMerchantTxnId(payload.merchant_txn_id);
+  const web = parseWebTxnId(payload.merchant_txn_id);
+  const ref = pos ?? web;
   if (!ref || !event.startsWith("payment.")) {
     return reply(200, { success: true, data: { received: true, duplicate: false } });
   }
@@ -94,7 +100,9 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
   try {
-    const result = await runWithTenant(ref.tenantId, () => applyWebhook(payload));
+    const result = await runWithTenant(ref.tenantId, () =>
+      pos ? applyWebhook(payload) : applyOrderWebhook(payload),
+    );
     return reply(200, { success: true, data: { received: true, duplicate: false, ...result } });
   } catch (err) {
     // Not applied: forget the id so Payment Hub's retry is processed instead of skipped

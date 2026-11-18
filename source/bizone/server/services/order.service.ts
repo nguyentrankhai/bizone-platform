@@ -8,6 +8,15 @@ import type {
   CreateRefundInput,
 } from "@/lib/validators/order";
 import { notify } from "@/server/services/notification.service";
+import { enqueueStockChanged } from "@/server/queue/inventory";
+import { enqueueCommissionRecalc } from "@/server/queue/commission";
+import { recordAudit } from "@/server/services/auditLog.service";
+import { refreshDashboard, withInvoiceNumberRetry } from "@/server/services/invoice.service";
+import {
+  loadOrderForCompletion,
+  releaseOrderHoldings,
+  writeOrderInvoice,
+} from "@/server/services/omni/orderFulfillment.service";
 import { fmtVnd } from "@/lib/notifications/template";
 
 const CHANNEL_NAMES: Record<string, string> = {
@@ -131,6 +140,12 @@ export async function getOrder(id: number) {
       },
       branch: { select: { id: true, name: true } },
       createdByUser: { select: { id: true, username: true } },
+      // P6.1: online payments (Payment Hub) and the revenue invoice written on completion
+      payments: {
+        orderBy: { id: "desc" },
+        select: { id: true, status: true, amount: true, payhubTxnCode: true, paidAt: true },
+      },
+      invoice: { select: { id: true, invoiceCode: true } },
     },
   });
   if (!order) throw notFound(`Đơn hàng #${id} không tồn tại`);
@@ -281,24 +296,110 @@ export async function updateOrderStatus(
       `Không thể chuyển từ "${order.status}" sang "${input.status}". Các trạng thái cho phép: ${allowed.join(", ") || "không có"}`,
     );
   }
+  if (input.status === "completed") return completeOrder(id, input, userId);
 
   const updateData: Record<string, unknown> = { status: input.status };
   if (input.trackingCode) updateData.trackingCode = input.trackingCode;
   if (input.shippingProvider) updateData.shippingProvider = input.shippingProvider;
 
-  const [updated] = await prisma.$transaction([
-    prisma.order.update({ where: { id }, data: updateData }),
-    prisma.orderTracking.create({
+  // P6.1: goods returned after delivery go back to stock, promotions are released
+  const full = input.status === "returned" ? await orderWithItems(id) : null;
+  const { updated, released } = await prisma.$transaction(async (tx) => {
+    const res = await tx.order.updateMany({
+      where: { id, status: order.status },
+      data: updateData,
+    });
+    if (res.count === 0) throw conflict("Đơn hàng vừa được cập nhật ở nơi khác, tải lại trang");
+    await tx.orderTracking.create({
+      data: { orderId: id, status: input.status, note: input.note ?? null, createdBy: userId },
+    });
+    const released = full ? await releaseOrderHoldings(tx, full, userId, "return") : null;
+    return { updated: await tx.order.findUniqueOrThrow({ where: { id } }), released };
+  });
+  await afterStockRelease(released, id);
+  return updated;
+}
+
+async function orderWithItems(id: number) {
+  return getPrisma().order.findUniqueOrThrow({
+    where: { id },
+    include: { orderItems: { include: { product: { select: { name: true } } } } },
+  });
+}
+
+async function afterStockRelease(
+  released: { warehouseId: number | null; productIds: number[] } | null,
+  orderId: number,
+) {
+  if (released?.warehouseId && released.productIds.length)
+    await enqueueStockChanged({
+      warehouseId: released.warehouseId,
+      productIds: released.productIds,
+      reason: "cancel",
+      orderId,
+    });
+}
+
+/**
+ * P6.1 (#61): completing an order writes its revenue invoice (`online`), earns loyalty points,
+ * takes the stock if the order hadn't yet, and marks a COD order paid.
+ */
+async function completeOrder(id: number, input: UpdateOrderStatusInput, userId: number | null) {
+  if (!userId)
+    throw bizoneError(
+      "VALIDATION_ERROR",
+      "Không xác định được nhân viên hoàn tất đơn (tài khoản chưa có hồ sơ)",
+    );
+  const order = await loadOrderForCompletion(id);
+  const written = await withInvoiceNumberRetry(async (tx) => {
+    const res = await tx.order.updateMany({
+      where: { id, status: "delivered", invoiceId: null },
+      data: {
+        status: "completed",
+        paymentStatus: "paid",
+        ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}),
+        ...(input.shippingProvider ? { shippingProvider: input.shippingProvider } : {}),
+      },
+    });
+    if (res.count === 0) throw conflict("Đơn hàng vừa được cập nhật ở nơi khác, tải lại trang");
+    const w = await writeOrderInvoice(tx, order, userId);
+    await tx.order.update({ where: { id }, data: { invoiceId: w.invoice.id } });
+    await tx.orderTracking.create({
       data: {
         orderId: id,
-        status: input.status,
-        note: input.note ?? null,
+        status: "completed",
+        note:
+          input.note ??
+          `Hoàn thành — hoá đơn ${w.invoice.invoiceCode}${w.points ? `, +${w.points} điểm` : ""}`,
         createdBy: userId,
       },
-    }),
-  ]);
-
-  return updated;
+    });
+    return w;
+  });
+  if (written.warehouseId && written.movedProducts.length)
+    await enqueueStockChanged({
+      warehouseId: written.warehouseId,
+      productIds: written.movedProducts,
+      reason: "order",
+      orderId: id,
+    });
+  await enqueueCommissionRecalc(userId, written.invoice.createdAt);
+  await refreshDashboard();
+  await recordAudit({
+    userId,
+    module: "order",
+    action: "create_invoice",
+    entityType: "invoice",
+    entityId: written.invoice.id,
+    newValue: {
+      orderId: id,
+      orderCode: order.orderCode,
+      invoiceCode: written.invoice.invoiceCode,
+      amount: Number(written.invoice.totalAmount),
+      points: written.points,
+    },
+  });
+  return getPrisma().order.findUniqueOrThrow({ where: { id } });
 }
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
@@ -312,20 +413,39 @@ export async function cancelOrder(id: number, input: CancelOrderInput, userId: n
   if (!cancellable.includes(order.status)) {
     throw conflict(`Không thể huỷ đơn hàng ở trạng thái "${order.status}"`);
   }
+  await cancelOrderNow(id, input.reason, userId);
+  return { success: true };
+}
 
-  await prisma.$transaction([
-    prisma.order.update({ where: { id }, data: { status: "cancelled" } }),
-    prisma.orderTracking.create({
+/**
+ * Cancel an order still being prepared (staff, the customer on the website, or the payment
+ * deadline job): stock and promotions back, pending online payments dropped. Money already
+ * paid online is flagged for a manual refund.
+ */
+export async function cancelOrderNow(id: number, reason: string, userId: number | null) {
+  const full = await orderWithItems(id);
+  const released = await getPrisma().$transaction(async (tx) => {
+    const res = await tx.order.updateMany({
+      where: { id, status: { in: ["pending", "confirmed", "preparing"] } },
+      data: { status: "cancelled", paymentDueAt: null },
+    });
+    if (res.count === 0) throw conflict("Đơn hàng đã được xử lý, không huỷ được");
+    await tx.orderPayment.updateMany({
+      where: { orderId: id, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    const paid = full.paymentStatus === "paid" && full.channel !== "pos";
+    await tx.orderTracking.create({
       data: {
         orderId: id,
         status: "cancelled",
-        note: input.reason,
+        note: paid ? `${reason} — khách đã thanh toán online, cần hoàn tiền` : reason,
         createdBy: userId,
       },
-    }),
-  ]);
-
-  return { success: true };
+    });
+    return releaseOrderHoldings(tx, full, userId, "cancel");
+  });
+  await afterStockRelease(released, id);
 }
 
 // ─── Refund ───────────────────────────────────────────────────────────────────

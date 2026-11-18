@@ -14,8 +14,10 @@ export interface StockChangedJob {
   tenantId: string;
   warehouseId: number;
   productIds: number[];
-  reason: "sale" | "refund" | "cancel";
-  invoiceId: number;
+  reason: "sale" | "refund" | "cancel" | "order";
+  invoiceId?: number;
+  /** P6.1: website order that took / gave back the stock */
+  orderId?: number;
 }
 
 // BullMQ workers need maxRetriesPerRequest: null so blocking commands are never aborted

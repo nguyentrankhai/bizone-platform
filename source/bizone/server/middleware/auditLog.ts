@@ -233,6 +233,9 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
     action: "delete_category",
     entityType: "revenue_expense_category",
   },
+  "omni.saveWebsite": { module: "omni", action: "save_website", entityType: "channel_connection" },
+  "omni.rotateKey": { module: "omni", action: "rotate_key", entityType: "channel_connection" },
+  "omni.setActive": { module: "omni", action: "set_active", entityType: "channel_connection" },
   "accounting.createRecord": {
     module: "accounting",
     action: "create_record",

@@ -19,6 +19,15 @@ import type { Prisma } from "@/generated/prisma/client";
 
 type Db = ReturnType<typeof getPrisma> | Prisma.TransactionClient;
 
+/** Sales channel being priced: the counter (POS) or the online store (P6.1) */
+export type SalesChannel = "pos" | "website";
+
+/** `applicable_channels` values accepted by each channel ("online" = every online channel) */
+const CHANNEL_CODES: Record<SalesChannel, string[]> = {
+  pos: ["pos"],
+  website: ["website", "online"],
+};
+
 /** Coupon condition that makes a coupon apply itself when no code is entered */
 const AUTO_APPLY_CONDITION = "auto_apply";
 /** Coupon condition: comma list of customer rankings allowed (silver,gold,vip,diamond) */
@@ -347,7 +356,7 @@ async function couponProblem(
   c: NonNullable<CouponRow>,
   customerId: number | null | undefined,
   db: Db,
-  opts: { voucher?: boolean } = {},
+  opts: { voucher?: boolean; channel?: SalesChannel } = {},
 ): Promise<string | null> {
   const now = new Date();
   if (!c.isActive) return `Mã ${c.code} đã ngừng áp dụng`;
@@ -367,14 +376,12 @@ async function couponProblem(
     if (!rankings.includes(customer.ranking))
       return `Mã ${c.code} chỉ dành cho hạng ${rankings.map((r) => RANKING_LABEL[r] ?? r).join(", ")}`;
   }
-  if (
-    c.applicableChannels &&
-    !c.applicableChannels
-      .split(",")
-      .map((s) => s.trim())
-      .includes("pos")
-  ) {
-    return `Mã ${c.code} không áp dụng tại quầy`;
+  const channel = opts.channel ?? "pos";
+  const allowed = listOf(c.applicableChannels);
+  if (allowed.length && !CHANNEL_CODES[channel].some((x) => allowed.includes(x))) {
+    return channel === "pos"
+      ? `Mã ${c.code} không áp dụng tại quầy`
+      : `Mã ${c.code} không áp dụng cho đơn đặt trên website`;
   }
   if (c.usagePerCustomer !== null && !opts.voucher) {
     if (!customerId) return `Mã ${c.code} chỉ dành cho khách hàng thành viên`;
@@ -389,11 +396,12 @@ export async function resolveCoupon(
   code: string,
   customerId: number | null | undefined,
   db: Db = getPrisma(),
+  channel: SalesChannel = "pos",
 ): Promise<{ coupon: ResolvedCoupon | null; error: string | null }> {
   const normalized = code.trim().toUpperCase();
   const row = await loadCouponRow(normalized, db);
   if (row) {
-    const problem = await couponProblem(row, customerId, db);
+    const problem = await couponProblem(row, customerId, db, { channel });
     if (problem) return { coupon: null, error: problem };
     return { coupon: toRule(row, { categoryIds: await couponCategories(row, db) }), error: null };
   }
@@ -417,7 +425,7 @@ export async function resolveCoupon(
         : `Voucher ${voucher.code} dành cho khách hàng thành viên — chọn khách hàng trước`,
     };
   }
-  const problem = await couponProblem(voucher.coupon, customerId, db, { voucher: true });
+  const problem = await couponProblem(voucher.coupon, customerId, db, { voucher: true, channel });
   if (problem) return { coupon: null, error: problem.replace(voucher.coupon.code, voucher.code) };
   return {
     coupon: {
@@ -447,6 +455,7 @@ export async function bestAutoCoupon(
   db: Db = getPrisma(),
   /** Discount this rule would give the cart (category-limited coupons price only their lines) */
   discountOf?: (rule: ResolvedCoupon) => number,
+  channel: SalesChannel = "pos",
 ): Promise<ResolvedCoupon | null> {
   const rows = await db.coupon.findMany({
     where: {
@@ -457,7 +466,7 @@ export async function bestAutoCoupon(
   });
   let best: { rule: ResolvedCoupon; discount: number } | null = null;
   for (const row of rows) {
-    if (await couponProblem(row, customerId, db)) continue;
+    if (await couponProblem(row, customerId, db, { channel })) continue;
     const rule = toRule(row, { categoryIds: await couponCategories(row, db) });
     const discount = discountOf
       ? discountOf(rule)
@@ -482,6 +491,9 @@ function eligibleFor(coupon: ResolvedCoupon | null) {
 export async function quoteCart(
   input: QuoteInput & { items: (InvoiceItemInput & { id?: string })[] },
   db: Db = getPrisma(),
+  channel: SalesChannel = "pos",
+  /** Delivery order (website): its shipping fee — a `free_shipping` coupon discounts it */
+  delivery?: { fee: number },
 ) {
   const [rawLines, customer] = await Promise.all([
     loadCartLines(input.items, db),
@@ -496,7 +508,12 @@ export async function quoteCart(
   let coupon: ResolvedCoupon | null = null;
   let couponError: string | null = null;
   if (input.couponCode) {
-    ({ coupon, error: couponError } = await resolveCoupon(input.couponCode, input.customerId, db));
+    ({ coupon, error: couponError } = await resolveCoupon(
+      input.couponCode,
+      input.customerId,
+      db,
+      channel,
+    ));
   } else if (lines.length > 0) {
     coupon = await bestAutoCoupon(
       afterMember,
@@ -508,19 +525,35 @@ export async function quoteCart(
           coupon: rule,
           couponEligible: eligibleFor(rule),
         }).coupon?.discount ?? 0,
+      channel,
     );
   }
 
+  // P6.1 (#72): free shipping discounts the delivery fee, not the goods
+  const freeShip = coupon?.type === "free_shipping" && delivery ? coupon : null;
   const totals = computeCart(lines, {
     memberDiscountPercent,
-    coupon,
+    coupon: freeShip ? null : coupon,
     couponEligible: eligibleFor(coupon),
   });
+  const shipping = { fee: delivery?.fee ?? 0, discount: 0 };
+  if (freeShip) {
+    if (freeShip.minOrderAmount !== null && afterMember < freeShip.minOrderAmount) {
+      totals.couponError = `Mã ${freeShip.code} áp dụng cho đơn từ ${freeShip.minOrderAmount.toLocaleString("vi-VN")}₫`;
+    } else if (shipping.fee <= 0) {
+      totals.couponError = `Đơn hàng đã được miễn phí giao hàng`;
+    } else {
+      shipping.discount = Math.min(shipping.fee, freeShip.maxDiscount ?? shipping.fee);
+      // The goods total is unchanged; the order subtracts shipping.discount from the fee
+      totals.coupon = { code: freeShip.code, name: freeShip.name, discount: shipping.discount };
+    }
+  }
   return {
     totals: { ...totals, couponError: couponError ?? totals.couponError },
     couponId: totals.coupon ? (coupon?.id ?? null) : null,
     voucherId: totals.coupon ? (coupon?.voucherId ?? null) : null,
     promotionUses: uses as PromotionUse[],
     customer,
+    shipping,
   };
 }

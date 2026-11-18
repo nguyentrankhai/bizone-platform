@@ -16,7 +16,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [bizone, payment-hub]
+        include:
+          - app: bizone
+            jobs: true
+          - app: payment-hub
+            jobs: true
+          # P6.1: website (no background jobs, no database)
+          - app: storefront
+            jobs: false
     defaults:
       run:
         working-directory: source/${{ matrix.app }}
@@ -39,3 +46,4 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run build:jobs
+        if: ${{ matrix.jobs }}

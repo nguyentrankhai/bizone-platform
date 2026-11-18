@@ -17,7 +17,8 @@ import { buildCategoryScope } from "./commission.service";
  *  - net       = gross − discount − refunds   ("doanh thu thuần")
  *  - cost      = cost price at sale (fallback: product cost) × quantity kept
  *  - profit    = net − cost
- * Online orders (module Đơn hàng) are not included yet — same scope as the dashboard.
+ * P6.1 (#61): a completed online order writes an `online` invoice (goods net of discounts, no
+ * delivery fee) on its completion date, so online revenue is counted here like POS sales.
  */
 
 const DAY_MS = 86_400_000;

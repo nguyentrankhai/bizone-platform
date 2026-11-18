@@ -35,6 +35,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "accounting:fund",
     "accounting:revenue_expense",
     "accounting:debt",
+    "omni:manage",
   ],
   "bizone-manager": [
     "pos:write",

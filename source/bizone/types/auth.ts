@@ -72,6 +72,7 @@ export type Permission =
   | "accounting:fund"
   | "accounting:revenue_expense"
   | "accounting:debt"
+  | "omni:manage"
   | "config:read"
   | "config:write"
   | "admin:*";

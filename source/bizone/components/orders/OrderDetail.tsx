@@ -30,6 +30,19 @@ interface OrderDetailProps {
   auth: ApiAuth;
 }
 
+/** P6.1: payment methods of website orders */
+const PAYMENT_METHOD_NAME: Record<string, string> = {
+  cod: "Thanh toán khi nhận hàng (COD)",
+  payhub: "Thanh toán online (Payment Hub)",
+};
+const ONLINE_PAYMENT_STATUS: Record<string, string> = {
+  pending: "chờ thanh toán",
+  success: "đã thanh toán",
+  failed: "thất bại",
+  expired: "hết hạn",
+  cancelled: "đã huỷ",
+};
+
 export function OrderDetail({ orderId, auth }: OrderDetailProps) {
   const router = useRouter();
   const toast = useToast();
@@ -234,7 +247,23 @@ export function OrderDetail({ orderId, auth }: OrderDetailProps) {
                 }
               />
               {order.paymentMethod && (
-                <InfoRow label="Phương thức TT" value={order.paymentMethod} />
+                <InfoRow
+                  label="Phương thức TT"
+                  value={PAYMENT_METHOD_NAME[order.paymentMethod] ?? order.paymentMethod}
+                />
+              )}
+              {order.payments.map((p) => (
+                <InfoRow
+                  key={p.id}
+                  label="Payment Hub"
+                  value={`${p.payhubTxnCode ?? "—"} · ${ONLINE_PAYMENT_STATUS[p.status] ?? p.status}${p.paidAt ? ` · ${fmtDate(p.paidAt)}` : ""}`}
+                />
+              ))}
+              {order.paymentDueAt && order.paymentStatus !== "paid" && (
+                <InfoRow label="Hạn thanh toán" value={fmtDate(order.paymentDueAt)} />
+              )}
+              {order.invoice && (
+                <InfoRow label="Hoá đơn doanh thu" value={order.invoice.invoiceCode} />
               )}
               {order.notes && <InfoRow label="Ghi chú" value={order.notes} />}
             </div>
@@ -299,6 +328,12 @@ export function OrderDetail({ orderId, auth }: OrderDetailProps) {
                 Vận chuyển
               </h3>
               <div className="space-y-2.5 text-sm">
+                {order.contactName && (
+                  <InfoRow
+                    label="Người nhận"
+                    value={`${order.contactName}${order.contactPhone ? ` · ${order.contactPhone}` : ""}`}
+                  />
+                )}
                 {order.shippingAddress && (
                   <InfoRow label="Địa chỉ giao" value={order.shippingAddress} />
                 )}
