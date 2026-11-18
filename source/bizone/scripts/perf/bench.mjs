@@ -4,8 +4,8 @@
 //   node scripts/perf/bench.mjs [--url http://localhost:3001] [--tenant tenant_perf]
 //        [--runs 40] [--concurrency 4] [--only product.list,dashboard.summary] [--json out.json]
 //
-// Gọi tRPC qua HTTP như trình duyệt (superjson GET, header X-Tenant-ID, token dev-bypass — chỉ
-// chạy với server dev / build cục bộ có AUTH_DEV_BYPASS=true). Mỗi endpoint chạy `runs` lần với
+// Gọi tRPC qua HTTP như trình duyệt (superjson GET, header X-Tenant-ID, token Keycloak của user có
+// `tenant_id` = tenant đo — lấy bằng scripts/auth/login.mjs, P6.7). Mỗi endpoint chạy `runs` lần với
 // các input xoay vòng (trang, từ khoá khác nhau) để đo cả trường hợp cache trúng lẫn trượt.
 // Giới hạn 100 req/phút / user của API được xoá trước mỗi endpoint (khoá `rl:*` của tenant đo).
 import Redis from "ioredis";
@@ -22,7 +22,11 @@ const TENANT = args.tenant ?? "tenant_perf";
 const RUNS = Number(args.runs ?? 40);
 const CONCURRENCY = Number(args.concurrency ?? 4);
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
-const TOKEN = args.token ?? "dev-bypass";
+const TOKEN = args.token ?? process.env.BENCH_TOKEN;
+if (!TOKEN) {
+  console.error("Cần --token <access token> (hoặc BENCH_TOKEN) — xem scripts/perf/README.md");
+  process.exit(2);
+}
 
 const vnToday = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const vnDaysAgo = (n) =>

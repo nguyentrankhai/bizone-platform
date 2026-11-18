@@ -14,10 +14,10 @@ import {
   errorMessage,
   fmtDate,
   fmtMoney,
-  type ApiAuth,
   type RouterOutputs,
 } from "@/components/inventory/shared";
 import { ANY_METHOD_LABEL } from "./PaymentModal";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Session = NonNullable<RouterOutputs["pos"]["currentSession"]>;
 type Summary = RouterOutputs["pos"]["sessionSummary"];
@@ -25,7 +25,8 @@ type Branch = RouterOutputs["pos"]["branches"][number];
 type SessionRow = RouterOutputs["pos"]["sessions"]["items"][number];
 
 /** Mở ca / tổng kết ca / khóa ca (đối soát tiền mặt cuối ca) */
-export function SessionClient({ auth }: { auth: ApiAuth }) {
+export function SessionClient() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const [session, setSession] = useState<Session | null | undefined>(undefined);

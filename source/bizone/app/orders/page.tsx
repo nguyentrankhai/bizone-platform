@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { OrderTable } from "@/components/orders/OrderTable";
 
 export const metadata = { title: "Đơn hàng | BizOne" };
@@ -15,7 +14,7 @@ export default function OrdersPage() {
         </p>
       </div>
       <Suspense fallback={<p className="text-sm text-slate-400">Đang tải...</p>}>
-        <OrderTable auth={getDevAuth()} />
+        <OrderTable />
       </Suspense>
     </AppLayout>
   );

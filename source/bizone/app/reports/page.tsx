@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { ReportsClient } from "@/components/reports/ReportsClient";
 
 export const metadata = { title: "Báo cáo | BizOne" };
@@ -19,7 +18,7 @@ export default function ReportsPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <ReportsClient auth={getDevAuth()} />
+          <ReportsClient />
         </Suspense>
       </div>
     </AppLayout>

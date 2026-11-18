@@ -1,12 +1,9 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { ProductsClient } from "@/components/products/ProductsClient";
 
 export const metadata = { title: "Quản lý Sản phẩm | BizOne" };
 
 export default function ProductsPage() {
-  const { tenantId, authToken } = getDevAuth();
-
   return (
     <AppLayout>
       <div className="mb-6">
@@ -15,7 +12,7 @@ export default function ProductsPage() {
           Quản lý danh mục, sản phẩm, đơn vị tính và biến thể
         </p>
       </div>
-      <ProductsClient tenantId={tenantId} authToken={authToken} />
+      <ProductsClient />
     </AppLayout>
   );
 }

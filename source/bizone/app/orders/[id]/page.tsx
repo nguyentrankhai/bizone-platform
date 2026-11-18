@@ -1,5 +1,4 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { OrderDetail } from "@/components/orders/OrderDetail";
 
 export const metadata = { title: "Chi tiết đơn hàng | BizOne" };
@@ -16,7 +15,7 @@ export default async function OrderDetailPage({ params }: Props) {
 
   return (
     <AppLayout>
-      <OrderDetail orderId={orderId} auth={getDevAuth()} />
+      <OrderDetail orderId={orderId} />
     </AppLayout>
   );
 }

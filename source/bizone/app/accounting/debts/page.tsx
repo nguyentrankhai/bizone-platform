@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DebtSummary } from "@/components/accounting/DebtSummary";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Công nợ tổng hợp | BizOne" };
 
@@ -13,7 +12,7 @@ export default function Page() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <DebtSummary auth={getDevAuth()} />
+          <DebtSummary />
         </Suspense>
       </div>
     </AppLayout>

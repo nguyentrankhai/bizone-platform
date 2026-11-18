@@ -4,17 +4,13 @@ import { useState } from "react";
 import { Ban, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  errorMessage,
-  type ApiAuth,
-  type RouterOutputs,
-} from "@/components/inventory/shared";
+import { apiContext, errorMessage, type RouterOutputs } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, btnSecondary, useLoad } from "@/components/staff/shared";
 import { DeliveryLog } from "@/components/notifications/DeliveryLog";
 import { Modal } from "@/components/ui/Modal";
 import { MarketingHeader, RANKING_LABEL, StatusPill, fmtDT } from "./shared";
 import { CampaignForm } from "./CampaignForm";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Campaign = RouterOutputs["campaign"]["list"]["items"][number];
 
@@ -40,7 +36,8 @@ export function audienceText(a: Campaign["audience"]): string {
 }
 
 /** Marketing campaigns SMS / Email (SRS-MKT-06) */
-export function CampaignList({ auth }: { auth: ApiAuth }) {
+export function CampaignList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const [page, setPage] = useState(1);
   const list = useLoad(`campaigns-${page}`, () =>
@@ -215,7 +212,7 @@ export function CampaignList({ auth }: { auth: ApiAuth }) {
       {log && (
         <Modal open onClose={() => setLog(null)} size="xl" title={`Kết quả gửi — ${log.name}`}>
           <div className="max-h-[70vh] overflow-y-auto">
-            <DeliveryLog auth={auth} campaignId={log.id} />
+            <DeliveryLog campaignId={log.id} />
           </div>
         </Modal>
       )}

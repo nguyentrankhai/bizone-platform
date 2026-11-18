@@ -63,5 +63,5 @@ export function useLowStockAlerts(
       controller.abort();
       clearTimeout(retry);
     };
-  }, [auth.authToken, auth.tenantId]);
+  }, [auth]); // stable per session — the token is read at each (re)connect
 }

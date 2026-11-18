@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, inputAutoCls, inputCls, useLoad } from "@/components/staff/shared";
 import { EMPTY_SUPPLIER, SupplierForm } from "./SupplierForm";
 import { Pager, SupplierPageHeader } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
-export function SupplierTable({ auth }: { auth: ApiAuth }) {
+export function SupplierTable() {
+  const auth = useApiAuth();
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");

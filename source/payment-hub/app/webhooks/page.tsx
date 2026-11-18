@@ -2,14 +2,22 @@ import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { WebhooksClient } from "@/components/ph/WebhooksClient";
 import { getPrisma } from "@/lib/prisma";
-import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 import { listWebhookConfigs, webhookStats } from "@/server/services/webhook.service";
 
 export const instant = false;
 
 export default async function WebhooksPage() {
   await connection();
-  const token = getDevAuthToken();
+  const session = await pageSession({ globalOnly: true });
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
   const [configs, stats, merchants] = await Promise.all([
     listWebhookConfigs({}),
     webhookStats(24, {}),
@@ -25,8 +33,7 @@ export default async function WebhooksPage() {
         initialConfigs={configs}
         initialStats={stats}
         merchants={merchants}
-        authToken={token}
-        canWrite={devTokenCanWrite(token)}
+        canWrite={session.canWrite}
       />
     </PHLayout>
   );

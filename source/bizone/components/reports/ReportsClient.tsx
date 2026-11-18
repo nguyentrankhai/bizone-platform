@@ -20,6 +20,7 @@ import { StaffPerformance } from "./StaffPerformance";
 import { InventoryReport, PromotionReport } from "./PromotionInventory";
 import { BranchSummary } from "./BranchSummary";
 import { EmailReportButton } from "./EmailReportButton";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Tab = "revenue" | "profit" | "products" | "staff" | "branches" | "promotion" | "inventory";
 type Compare = "previous_period" | "previous_year" | "none";
@@ -149,7 +150,8 @@ function ExportButtons({ auth, request }: { auth: ApiAuth; request: () => unknow
   );
 }
 
-export function ReportsClient({ auth }: { auth: ApiAuth }) {
+export function ReportsClient() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const today = vnToday();
   const [tab, setTab] = useState<Tab>("revenue");

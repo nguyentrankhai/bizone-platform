@@ -34,13 +34,12 @@ function count(counts: Record<string, number>, tab: string): number {
 }
 
 interface Props {
-  authToken: string;
   initialItems: DisputeView[];
   initialMeta: DisputeListMeta;
   initialStatus: string;
 }
 
-export function DisputesClient({ authToken, initialItems, initialMeta, initialStatus }: Props) {
+export function DisputesClient({ initialItems, initialMeta, initialStatus }: Props) {
   const [items, setItems] = useState(initialItems);
   const [meta, setMeta] = useState(initialMeta);
   const [status, setStatus] = useState(initialStatus);
@@ -71,7 +70,7 @@ export function DisputesClient({ authToken, initialItems, initialMeta, initialSt
       setLoading(true);
       setError(null);
       disputeApi
-        .list(authToken, q.toString())
+        .list(q.toString())
         .then((r) => {
           if (cancelled) return;
           setItems(r.items);
@@ -84,7 +83,7 @@ export function DisputesClient({ authToken, initialItems, initialMeta, initialSt
       cancelled = true;
       clearTimeout(t);
     };
-  }, [authToken, status, search, from, to, partner, page]);
+  }, [status, search, from, to, partner, page]);
 
   const pages = Math.max(1, Math.ceil(meta.total / LIMIT));
 

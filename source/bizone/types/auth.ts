@@ -8,6 +8,8 @@ export interface KeycloakToken {
   jti: string;
   typ: string;
   azp: string;
+  /** Keycloak session id (logout revocation, P6.7) */
+  sid?: string;
   // Keycloak standard claims
   preferred_username: string;
   email?: string;
@@ -33,6 +35,8 @@ export interface AuthUser {
   resourceRoles: Record<string, string[]>;
   /** Token expiry (epoch seconds) */
   expiresAt: number;
+  /** Keycloak session id (`sid`) — revoked on logout */
+  sessionId?: string;
 }
 
 export interface TenantContext {

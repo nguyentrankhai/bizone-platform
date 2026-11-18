@@ -1,5 +1,7 @@
 "use client";
 
+import { apiContext } from "@/components/inventory/shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -8,13 +10,11 @@ import { trpc } from "@/lib/trpc";
 
 interface ProductDetailClientProps {
   id: number;
-  tenantId: string;
-  authToken: string;
 }
 
-export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailClientProps) {
+export function ProductDetailClient({ id }: ProductDetailClientProps) {
   const router = useRouter();
-  const headers = { Authorization: `Bearer ${authToken}`, "X-Tenant-ID": tenantId };
+  const auth = useApiAuth();
 
   const [product, setProduct] = useState<ProductFormData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
       return;
     }
     trpc.product.get
-      .query({ id }, { context: { headers } })
+      .query({ id }, apiContext(auth))
       .then((p) => {
         if (!p) {
           setError("Không tìm thấy sản phẩm");
@@ -94,7 +94,7 @@ export function ProductDetailClient({ id, tenantId, authToken }: ProductDetailCl
           status: data.status,
         },
       },
-      { context: { headers } },
+      apiContext(auth),
     );
     router.push("/products");
   }

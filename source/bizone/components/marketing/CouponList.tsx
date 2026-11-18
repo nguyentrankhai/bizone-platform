@@ -18,6 +18,7 @@ import {
 import { Pager } from "@/components/suppliers/shared";
 import { CouponForm } from "./CouponForm";
 import { MarketingHeader, RANKING_LABEL, StatusPill, fmtDT, type Outputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Coupon = Outputs["coupon"]["list"]["items"][number];
 type Status = "" | "running" | "scheduled" | "expired" | "inactive";
@@ -40,7 +41,8 @@ export function couponValue(c: { type: string; value: number; maxDiscount?: numb
   return `−${fmtMoney(c.value)}`;
 }
 
-export function CouponList({ auth }: { auth: ApiAuth }) {
+export function CouponList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const ctx = apiContext(auth);
   const [page, setPage] = useState(1);

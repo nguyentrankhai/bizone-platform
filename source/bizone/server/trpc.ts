@@ -21,7 +21,7 @@ export interface TRPCContext {
 
 export async function createTRPCContext(req: NextRequest): Promise<TRPCContext> {
   const token = extractBearerToken(req.headers.get("authorization"));
-  const result = await authenticateToken(token); // dev bypass (P4.0) handled inside
+  const result = await authenticateToken(token);
   if (!result.ok) return { req, user: null, tenantId: null };
 
   const tenantId = req.headers.get("x-tenant-id");

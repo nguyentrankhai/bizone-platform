@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, fmtNumber, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtNumber } from "@/components/inventory/shared";
 import { ErrorBox, useLoad } from "@/components/staff/shared";
 import { CompareBarChart, KpiTile, Panel } from "@/components/reports/shared";
 import { AccountingHeader, PeriodPicker, signed, usePeriod } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** Tổng quan kế toán: lời lỗ kỳ, thu chi, số dư quỹ, công nợ */
-export function AccountingOverview({ auth }: { auth: ApiAuth }) {
+export function AccountingOverview() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const period = usePeriod("thisMonth");
   const input = { from: period.range.from, to: period.range.to };

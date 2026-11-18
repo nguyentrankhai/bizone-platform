@@ -1,7 +1,8 @@
 import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { ReportsClient } from "@/components/ph/ReportsClient";
-import { getDevAuthToken, devTokenMerchantId } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 import { REPORT_TYPES, todayVn, type ReportType } from "@/lib/report";
 import { reportOptions } from "@/server/services/report.service";
 
@@ -15,8 +16,15 @@ export default async function ReportsPage({
 }) {
   await connection();
   const { tab } = await searchParams;
-  const token = getDevAuthToken();
-  const merchantId = devTokenMerchantId(token);
+  const session = await pageSession();
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
+  const merchantId = session.merchantId;
   const options = await reportOptions(merchantId);
   const canSeeReconciliation = merchantId === undefined;
   const initialTab: ReportType =
@@ -28,7 +36,6 @@ export default async function ReportsPage({
   return (
     <PHLayout>
       <ReportsClient
-        authToken={token}
         options={options}
         today={todayVn()}
         initialTab={initialTab}

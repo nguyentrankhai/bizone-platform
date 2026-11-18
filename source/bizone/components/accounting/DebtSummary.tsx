@@ -4,12 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney } from "@/components/inventory/shared";
 import { ErrorBox, inputCls, useLoad } from "@/components/staff/shared";
 import { Pager, fmtDay } from "@/components/suppliers/shared";
 import { KpiTile } from "@/components/reports/shared";
 import { cn } from "@/lib/utils";
 import { AccountingHeader } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const AGING_LABEL = {
   current: "Chưa đến hạn",
@@ -22,7 +23,8 @@ type AgingKey = keyof typeof AGING_LABEL;
 const AGING_KEYS = Object.keys(AGING_LABEL) as AgingKey[];
 
 /** Công nợ phải thu (khách hàng) + phải trả (NCC), tuổi nợ; thanh toán ghi tại CRM / NCC */
-export function DebtSummary({ auth }: { auth: ApiAuth }) {
+export function DebtSummary() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const [kind, setKind] = useState<"receivable" | "payable">("receivable");
   const [overdueOnly, setOverdueOnly] = useState(false);

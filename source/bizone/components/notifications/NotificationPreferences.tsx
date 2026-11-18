@@ -4,13 +4,15 @@ import { useState } from "react";
 import { BellRing, Save } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, btnSecondary, useLoad } from "@/components/staff/shared";
 import { NotificationHeader } from "./shared";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** Personal preferences: mute event types in the bell / on push, Web Push on this device */
-export function NotificationPreferences({ auth }: { auth: ApiAuth }) {
+export function NotificationPreferences() {
+  const auth = useApiAuth();
   const toast = useToast();
   const prefs = useLoad("prefs", () =>
     trpc.notification.preferences.query(undefined, apiContext(auth)),

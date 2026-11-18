@@ -1,6 +1,7 @@
 import type { DisputeAttachmentView, DisputeDetail, DisputeView } from "@/lib/dispute";
+import { adminFetch } from "@/lib/session-client";
 
-/** Client helpers for the admin dispute API (/api/internal/disputes…, Bearer token). P5.6 */
+/** Client helpers for the admin dispute API (/api/internal/disputes…, session token via adminFetch). P5.6 */
 
 export class DisputeApiError extends Error {
   constructor(
@@ -29,24 +30,18 @@ interface Envelope<T> {
 }
 
 function messageFor(status: number, json: Envelope<unknown> | null): string {
-  if (status === 401)
-    return "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang";
+  if (status === 401) return "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại";
   if (status === 403) return "Bạn không có quyền thực hiện thao tác này (cần role payhub-admin)";
   if (status === 413) return json?.error?.message ?? "Tệp quá lớn";
   return json?.error?.message ?? `Lỗi HTTP ${status}`;
 }
 
-async function call<T>(
-  token: string,
-  path: string,
-  init: RequestInit = {},
-): Promise<Envelope<T> & { data: T }> {
+async function call<T>(path: string, init: RequestInit = {}): Promise<Envelope<T> & { data: T }> {
   const isForm = init.body instanceof FormData;
-  const res = await fetch(`/api/internal${path}`, {
+  const res = await adminFetch(`/api/internal${path}`, {
     ...init,
     headers: {
       ...(init.body && !isForm ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
   const json = (await res.json().catch(() => null)) as Envelope<T> | null;
@@ -62,49 +57,48 @@ export interface DisputeListMeta {
 }
 
 export const disputeApi = {
-  list: async (token: string, query: string) => {
-    const r = await call<DisputeView[]>(token, `/disputes${query ? `?${query}` : ""}`);
+  list: async (query: string) => {
+    const r = await call<DisputeView[]>(`/disputes${query ? `?${query}` : ""}`);
     return { items: r.data, meta: r.meta as DisputeListMeta };
   },
-  get: async (token: string, id: number) =>
-    (await call<DisputeDetail>(token, `/disputes/${id}`)).data,
-  create: async (
-    token: string,
-    body: { transaction_id: number; reason: string; description?: string; submit?: boolean },
-  ) => {
-    const r = await call<DisputeDetail>(token, "/disputes", {
+  get: async (id: number) => (await call<DisputeDetail>(`/disputes/${id}`)).data,
+  create: async (body: {
+    transaction_id: number;
+    reason: string;
+    description?: string;
+    submit?: boolean;
+  }) => {
+    const r = await call<DisputeDetail>("/disputes", {
       method: "POST",
       body: JSON.stringify(body),
     });
     return { dispute: r.data, submit: r.submit ?? null, submitError: r.submitError ?? null };
   },
-  upload: async (token: string, id: number, file: File) => {
+  upload: async (id: number, file: File) => {
     const form = new FormData();
     form.append("file", file);
     return (
-      await call<DisputeAttachmentView>(token, `/disputes/${id}/attachments`, {
+      await call<DisputeAttachmentView>(`/disputes/${id}/attachments`, {
         method: "POST",
         body: form,
       })
     ).data;
   },
-  removeAttachment: (token: string, id: number, attachmentId: number) =>
-    call<{ deleted: boolean }>(token, `/disputes/${id}/attachments/${attachmentId}`, {
+  removeAttachment: (id: number, attachmentId: number) =>
+    call<{ deleted: boolean }>(`/disputes/${id}/attachments/${attachmentId}`, {
       method: "DELETE",
     }),
   submit: async (
-    token: string,
     id: number,
     body: { mode: "auto" | "manual"; partner_ref?: string; note?: string },
   ) => {
-    const r = await call<DisputeDetail>(token, `/disputes/${id}/submit`, {
+    const r = await call<DisputeDetail>(`/disputes/${id}/submit`, {
       method: "POST",
       body: JSON.stringify(body),
     });
     return { dispute: r.data, submit: r.submit ?? null };
   },
   update: async (
-    token: string,
     id: number,
     body: {
       status: "Processing" | "Resolved" | "Rejected";
@@ -115,18 +109,16 @@ export const disputeApi = {
     },
   ) =>
     (
-      await call<DisputeDetail>(token, `/disputes/${id}`, {
+      await call<DisputeDetail>(`/disputes/${id}`, {
         method: "PUT",
         body: JSON.stringify(body),
       })
     ).data,
-  check: async (token: string, id: number) =>
-    (await call<DisputeDetail>(token, `/disputes/${id}/check`, { method: "POST" })).data,
+  check: async (id: number) =>
+    (await call<DisputeDetail>(`/disputes/${id}/check`, { method: "POST" })).data,
   /** Fetch with the token, then save via an object URL (a plain link cannot send the header). */
-  download: async (token: string, id: number, attachmentId: number, fileName: string) => {
-    const res = await fetch(`/api/internal/disputes/${id}/attachments/${attachmentId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+  download: async (id: number, attachmentId: number, fileName: string) => {
+    const res = await adminFetch(`/api/internal/disputes/${id}/attachments/${attachmentId}`, {});
     if (!res.ok) {
       const json = (await res.json().catch(() => null)) as Envelope<unknown> | null;
       throw new DisputeApiError(messageFor(res.status, json), res.status, json?.error?.code);

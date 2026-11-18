@@ -52,12 +52,11 @@ function Card({
 
 interface Props {
   run: RunView;
-  authToken: string;
   canWrite: boolean;
   onChanged: () => void;
 }
 
-export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Props) {
+export function ReconciliationDetail({ run, canWrite, onChanged }: Props) {
   const [match, setMatch] = useState("discrepancy");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -83,7 +82,7 @@ export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Pr
     if (status) q.set("status", status);
     if (search.trim()) q.set("search", search.trim());
     reconApi
-      .details(authToken, run.id, q)
+      .details(run.id, q)
       .then((res) => {
         if (!alive) return;
         setResult({ key, rows: res.data, meta: res.meta ?? null });
@@ -97,13 +96,13 @@ export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Pr
     return () => {
       alive = false;
     };
-  }, [authToken, run.id, run.status, match, status, search, page, key]);
+  }, [run.id, run.status, match, status, search, page, key]);
 
   async function exportAs(format: "xlsx" | "pdf") {
     setExporting(format);
     setError(null);
     try {
-      await reconApi.download(authToken, run.id, format);
+      await reconApi.download(run.id, format);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không xuất được báo cáo");
     } finally {
@@ -419,7 +418,6 @@ export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Pr
         <ResolveDialog
           detail={resolving}
           runId={run.id}
-          authToken={authToken}
           onClose={() => setResolving(null)}
           onDone={() => {
             setResolving(null);
@@ -435,13 +433,11 @@ export function ReconciliationDetail({ run, authToken, canWrite, onChanged }: Pr
 function ResolveDialog({
   detail,
   runId,
-  authToken,
   onClose,
   onDone,
 }: {
   detail: DetailView;
   runId: number;
-  authToken: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -457,7 +453,7 @@ function ResolveDialog({
     setBusy(true);
     setError(null);
     try {
-      await reconApi.resolve(authToken, runId, detail.id, {
+      await reconApi.resolve(runId, detail.id, {
         status,
         resolution: resolution.trim() || undefined,
       });

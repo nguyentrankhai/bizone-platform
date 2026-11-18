@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { TransactionForm } from "@/components/inventory/TransactionForm";
-import { getDevAuth } from "@/lib/dev-auth";
 
 type Props = { searchParams: Promise<{ direction?: string | string[] }> };
 
@@ -29,7 +28,7 @@ async function NewTransaction({ searchParams }: Props) {
           Tạo phiếu {direction === "in" ? "nhập" : "xuất"} kho, quét mã vạch để thêm sản phẩm
         </p>
       </div>
-      <TransactionForm key={direction} auth={getDevAuth()} direction={direction} />
+      <TransactionForm key={direction} direction={direction} />
     </>
   );
 }

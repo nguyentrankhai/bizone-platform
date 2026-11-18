@@ -35,10 +35,12 @@ import {
   useFundOptions,
   usePeriod,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Status = "active" | "cancelled" | "all";
 
-export function RecordList({ auth }: { auth: ApiAuth }) {
+export function RecordList() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const period = usePeriod("thisMonth");
   const [page, setPage] = useState(1);

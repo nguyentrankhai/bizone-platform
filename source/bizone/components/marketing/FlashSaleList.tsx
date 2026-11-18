@@ -4,17 +4,12 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { trpc } from "@/lib/trpc";
-import {
-  apiContext,
-  errorMessage,
-  fmtMoney,
-  fmtNumber,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, errorMessage, fmtMoney, fmtNumber } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, inputAutoCls, useLoad } from "@/components/staff/shared";
 import { Pager } from "@/components/suppliers/shared";
 import { FlashSaleForm } from "./FlashSaleForm";
 import { MarketingHeader, StatusPill, fmtDT, type Outputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Detail = Outputs["flashSale"]["get"];
 type Status = "scheduled" | "active" | "ended" | "cancelled";
@@ -25,7 +20,8 @@ const STATUS = {
   cancelled: { label: "Đã huỷ", tone: "red" },
 } as const;
 
-export function FlashSaleList({ auth }: { auth: ApiAuth }) {
+export function FlashSaleList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const ctx = apiContext(auth);
   const [page, setPage] = useState(1);

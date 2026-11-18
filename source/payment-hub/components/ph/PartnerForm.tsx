@@ -27,7 +27,6 @@ interface LogsPage {
 interface PartnerFormProps {
   partner: PartnerView | null;
   initialLogs: LogsPage | null;
-  authToken: string;
   canWrite: boolean;
   /** Public base URL of Payment Hub (APP_URL) — default callback/IPN URLs */
   appUrl: string;
@@ -133,7 +132,6 @@ const FIELD_KEYS: Record<string, keyof FormState> = {
 export function PartnerForm({
   partner: initialPartner,
   initialLogs,
-  authToken,
   canWrite,
   appUrl,
 }: PartnerFormProps) {
@@ -211,7 +209,7 @@ export function PartnerForm({
     if (!partner) return;
     setLogsLoading(true);
     try {
-      setLogs(await partnerApi.logs(authToken, partner.id, page));
+      setLogs(await partnerApi.logs(partner.id, page));
     } catch {
       // keep the previous page
     } finally {
@@ -266,11 +264,11 @@ export function PartnerForm({
     setSaving(true);
     try {
       if (isNew) {
-        const created = await partnerApi.create(authToken, body);
+        const created = await partnerApi.create(body);
         router.push(`/partners/${created.id}`);
         return;
       }
-      const updated = await partnerApi.update(authToken, partner!.id, body);
+      const updated = await partnerApi.update(partner!.id, body);
       applyPartner(updated);
       setMessage({ tone: "ok", text: "Đã lưu cấu hình" });
       void refreshLogs();
@@ -295,7 +293,7 @@ export function PartnerForm({
     setStatusBusy(true);
     setMessage(null);
     try {
-      applyPartner(await partnerApi.setStatus(authToken, partner.id, next));
+      applyPartner(await partnerApi.setStatus(partner.id, next));
       setMessage({
         tone: "ok",
         text: next === "Active" ? "Đã kích hoạt đối tác" : "Đã vô hiệu hóa đối tác",
@@ -629,7 +627,6 @@ export function PartnerForm({
           <h2 className="font-semibold text-gray-800">Kết nối & kích hoạt</h2>
           <TestConnectionButton
             partnerId={partner.id}
-            authToken={authToken}
             lastResult={partner.testResult}
             lastTestedAt={partner.lastTestedAt}
             disabled={!canWrite || dirty || !spec.implemented}

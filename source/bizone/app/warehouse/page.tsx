@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { WarehouseClient } from "@/components/inventory/WarehouseClient";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Quản lý Kho | BizOne" };
 
@@ -16,7 +15,7 @@ export default function WarehousePage() {
       </div>
       {/* useSearchParams (active tab) needs a Suspense boundary under cacheComponents */}
       <Suspense fallback={<p className="text-sm text-gray-400">Đang tải...</p>}>
-        <WarehouseClient auth={getDevAuth()} />
+        <WarehouseClient />
       </Suspense>
     </AppLayout>
   );

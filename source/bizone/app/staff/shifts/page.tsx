@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { StaffPageHeader } from "@/components/staff/shared";
 import { ShiftCalendar } from "@/components/staff/ShiftCalendar";
 
@@ -14,7 +13,7 @@ export default function ShiftsPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <ShiftCalendar auth={getDevAuth()} />
+          <ShiftCalendar />
         </Suspense>
       </div>
     </AppLayout>

@@ -66,7 +66,7 @@ async function authorize(
     return { status: 401, message: "Missing token" };
   }
 
-  const verified = await authenticateToken(token); // DEV_BYPASS_TOKEN → dev user (P4.0)
+  const verified = await authenticateToken(token);
   if (!verified.ok) return { status: 401, message: "Invalid token" };
   const { user } = verified;
   if (!user.roles.some((r) => (ADMIN_READ_ROLES as readonly string[]).includes(r))) {

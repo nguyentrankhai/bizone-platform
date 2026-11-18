@@ -8,10 +8,10 @@ import {
   fmtDate,
   fmtMoney,
   fmtNumber,
-  type ApiAuth,
 } from "@/components/inventory/shared";
 import { CommissionRuleForm, RULE_TYPES, type RuleRow } from "./CommissionRuleForm";
 import { ErrorBox, btnPrimary, btnSecondary, inputAutoCls, useLoad, vnToday } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: "Chờ trả", cls: "bg-amber-50 text-amber-800" },
@@ -19,7 +19,8 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Huỷ", cls: "bg-slate-100 text-slate-500" },
 };
 
-export function CommissionClient({ auth }: { auth: ApiAuth }) {
+export function CommissionClient() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const [month, setMonth] = useState(vnToday().slice(0, 7));
   const [userId, setUserId] = useState<number | undefined>();

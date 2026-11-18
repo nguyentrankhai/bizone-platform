@@ -5,16 +5,22 @@ import type { AppRouter } from "@/server/routers";
 
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
-/** Auth props passed from server pages (session wiring comes later — see P2.2 notes) */
+/**
+ * API credentials of a client component: the browser session (`useApiAuth()`, P6.7 — `session`
+ * set, `authToken` reads the latest token) or a fixed token (paired customer display).
+ */
 export interface ApiAuth {
   tenantId: string;
-  authToken: string;
+  readonly authToken: string;
+  /** true → the tRPC link swaps in a fresh session token before each request */
+  session?: boolean;
 }
 
 export function apiContext(auth: ApiAuth) {
   const branch = getSelectedBranch(); // P4.6: branch picked in the top bar
   return {
     context: {
+      session: auth.session === true,
       headers: {
         Authorization: `Bearer ${auth.authToken}`,
         "X-Tenant-ID": auth.tenantId,

@@ -4,11 +4,20 @@ import { PHLayout } from "@/components/ph/PHLayout";
 export const instant = false;
 import { TransactionsClient } from "@/components/ph/TransactionsClient";
 import { listTransactions } from "@/server/services/transaction.service";
-import { getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 
 export default async function TransactionsPage() {
   await connection();
-  const result = await listTransactions({ page: 1, limit: 20 });
+  const session = await pageSession();
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
+  const result = await listTransactions({ page: 1, limit: 20, merchantId: session.merchantId });
 
   const initialData = {
     items: result.items.map((t) => ({
@@ -25,7 +34,7 @@ export default async function TransactionsPage() {
 
   return (
     <PHLayout>
-      <TransactionsClient initialData={initialData} authToken={getDevAuthToken()} />
+      <TransactionsClient initialData={initialData} />
     </PHLayout>
   );
 }

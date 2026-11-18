@@ -13,23 +13,14 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  fmtMoney,
-  fmtDate,
-  errorMessage,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtDate, errorMessage } from "@/components/inventory/shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type DashboardData = inferRouterOutputs<AppRouter>["dashboard"]["summary"];
 
 const AUTO_REFRESH_MS = 20_000;
-
-interface Props {
-  auth: ApiAuth;
-}
 
 function fmtCompact(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
@@ -200,7 +191,8 @@ function PaymentPie({ breakdown }: { breakdown: DashboardData["paymentBreakdown"
   );
 }
 
-export function DashboardClient({ auth }: Props) {
+export function DashboardClient() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

@@ -1,13 +1,15 @@
 "use client";
 
 import { trpc } from "@/lib/trpc";
-import { apiContext, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext } from "@/components/inventory/shared";
 import { ErrorBox, useLoad } from "@/components/staff/shared";
 import { ChannelCard } from "@/components/omni/ChannelCard";
 import { SyncHistory } from "@/components/omni/SyncHistory";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** `/omni` — every sales channel at a glance + the combined sync log (P6.2, P6.3) */
-export function OmniOverview({ auth }: { auth: ApiAuth }) {
+export function OmniOverview() {
+  const auth = useApiAuth();
   const ch = useLoad("omni-channels", () => trpc.omni.channels.query(undefined, apiContext(auth)));
   const d = ch.data;
   return (

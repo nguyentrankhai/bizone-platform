@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Delete, MonitorSmartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomerDisplay } from "./CustomerDisplay";
@@ -116,11 +116,17 @@ export function PairingScreen() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // one object per grant: the display's WebSocket reconnects when `auth` changes
+  const displayAuth = useMemo(
+    () => (grant ? { tenantId: grant.tenantId, authToken: grant.token } : null),
+    [grant],
+  );
+
   if (grant === undefined) return <div className="h-screen bg-slate-900" />;
-  if (grant) {
+  if (grant && displayAuth) {
     return (
       <CustomerDisplay
-        auth={{ tenantId: grant.tenantId, authToken: grant.token }}
+        auth={displayAuth}
         sessionId={grant.sessionId}
         storeName={grant.storeName}
         onRejected={onRejected}

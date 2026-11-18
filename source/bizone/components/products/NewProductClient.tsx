@@ -1,17 +1,14 @@
 "use client";
 
+import { apiContext } from "@/components/inventory/shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 import { useRouter } from "next/navigation";
 import { ProductForm, type ProductFormData } from "./ProductForm";
 import { trpc } from "@/lib/trpc";
 
-interface NewProductClientProps {
-  tenantId: string;
-  authToken: string;
-}
-
-export function NewProductClient({ tenantId, authToken }: NewProductClientProps) {
+export function NewProductClient() {
   const router = useRouter();
-  const headers = { Authorization: `Bearer ${authToken}`, "X-Tenant-ID": tenantId };
+  const auth = useApiAuth();
 
   async function handleSave(data: ProductFormData) {
     await trpc.product.create.mutate(
@@ -44,7 +41,7 @@ export function NewProductClient({ tenantId, authToken }: NewProductClientProps)
           attributes: v.attributes,
         })),
       },
-      { context: { headers } },
+      apiContext(auth),
     );
     router.push("/products");
   }

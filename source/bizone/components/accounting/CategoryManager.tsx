@@ -9,6 +9,7 @@ import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/s
 import { ErrorBox, Field, btnPrimary, btnSecondary, inputCls } from "@/components/staff/shared";
 import { cn } from "@/lib/utils";
 import { AccountingHeader, flattenCategories, useCategories, type CategoryNode } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const TYPE_LABEL = { revenue: "Thu", expense: "Chi", both: "Thu & chi" } as const;
 const TYPE_CLS = {
@@ -18,7 +19,8 @@ const TYPE_CLS = {
 } as const;
 
 /** Danh mục thu chi dạng cây (tuỳ chỉnh theo cửa hàng) */
-export function CategoryManager({ auth }: { auth: ApiAuth }) {
+export function CategoryManager() {
+  const auth = useApiAuth();
   const toast = useToast();
   const cats = useCategories(auth);
   const [editing, setEditing] = useState<CategoryNode | { parentId: number | null } | null>(null);

@@ -78,7 +78,6 @@ type Notice = { ok: boolean; text: string };
 interface CardProps {
   dispute: DisputeDetail;
   submitOptions: DisputeSubmitOptions;
-  authToken: string;
   canWrite: boolean;
   onChanged: (notice?: Notice) => void;
   defaultOpen?: boolean;
@@ -88,7 +87,6 @@ interface CardProps {
 export function DisputeCard({
   dispute: d,
   submitOptions,
-  authToken,
   canWrite,
   onChanged,
   defaultOpen,
@@ -128,13 +126,13 @@ export function DisputeCard({
 
   const sendAuto = () =>
     run(async () => {
-      const r = await disputeApi.submit(authToken, d.id, { mode: "auto" });
+      const r = await disputeApi.submit(d.id, { mode: "auto" });
       return { ok: true, text: `${d.disputeCode}: ${r.submit?.message ?? "đã gửi đối tác"}` };
     });
 
   const sendManual = () =>
     run(async () => {
-      await disputeApi.submit(authToken, d.id, {
+      await disputeApi.submit(d.id, {
         mode: "manual",
         partner_ref: partnerRef.trim() || undefined,
         note: note.trim() || undefined,
@@ -144,7 +142,7 @@ export function DisputeCard({
 
   const saveNote = () =>
     run(async () => {
-      await disputeApi.update(authToken, d.id, {
+      await disputeApi.update(d.id, {
         status: "Processing",
         note: note.trim() || undefined,
         from_partner: fromPartner,
@@ -157,7 +155,7 @@ export function DisputeCard({
       if (resolution.trim().length < DISPUTE_RESOLUTION_MIN) {
         throw new Error(`Nhập kết quả xử lý (tối thiểu ${DISPUTE_RESOLUTION_MIN} ký tự)`);
       }
-      await disputeApi.update(authToken, d.id, {
+      await disputeApi.update(d.id, {
         status: outcome,
         resolution: resolution.trim(),
         partner_ref: partnerRef.trim() || undefined,
@@ -170,7 +168,7 @@ export function DisputeCard({
 
   const check = () =>
     run(async () => {
-      const r = await disputeApi.check(authToken, d.id);
+      const r = await disputeApi.check(d.id);
       return { ok: true, text: `${d.disputeCode}: ${DISPUTE_STATUS_LABELS[r.status]}` };
     });
 
@@ -181,7 +179,7 @@ export function DisputeCard({
       const failed: string[] = [];
       for (const f of files) {
         try {
-          await disputeApi.upload(authToken, d.id, f);
+          await disputeApi.upload(d.id, f);
         } catch (e) {
           failed.push(`${f.name}: ${e instanceof Error ? e.message : "lỗi"}`);
         }
@@ -194,7 +192,7 @@ export function DisputeCard({
   async function download(attachmentId: number, name: string) {
     setError(null);
     try {
-      await disputeApi.download(authToken, d.id, attachmentId, name);
+      await disputeApi.download(d.id, attachmentId, name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tải được tệp");
     }
@@ -324,7 +322,7 @@ export function DisputeCard({
                         onClick={() => {
                           if (window.confirm(`Xoá tệp ${a.fileName}?`)) {
                             void run(async () => {
-                              await disputeApi.removeAttachment(authToken, d.id, a.id);
+                              await disputeApi.removeAttachment(d.id, a.id);
                             });
                           }
                         }}
@@ -571,18 +569,11 @@ export function DisputeCard({
 interface HistoryProps {
   disputes: DisputeDetail[];
   submitOptions: DisputeSubmitOptions;
-  authToken: string;
   canWrite: boolean;
   onChanged: (notice?: Notice) => void;
 }
 
-export function DisputeHistory({
-  disputes,
-  submitOptions,
-  authToken,
-  canWrite,
-  onChanged,
-}: HistoryProps) {
+export function DisputeHistory({ disputes, submitOptions, canWrite, onChanged }: HistoryProps) {
   const open = disputes.filter((d) => isOpen(d.status)).length;
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -596,7 +587,6 @@ export function DisputeHistory({
             key={d.id}
             dispute={d}
             submitOptions={submitOptions}
-            authToken={authToken}
             canWrite={canWrite}
             onChanged={onChanged}
           />

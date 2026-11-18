@@ -1,3 +1,4 @@
+import { adminFetch } from "@/lib/session-client";
 import type {
   WebhookConfigView,
   WebhookLogDetail,
@@ -5,7 +6,7 @@ import type {
   WebhookStats,
 } from "@/lib/webhook-events";
 
-/** Client helpers for /api/internal/webhooks + /api/internal/webhook-logs (Bearer token). */
+/** Client helpers for /api/internal/webhooks + /api/internal/webhook-logs (session token via adminFetch). */
 
 export class WebhookApiError extends Error {
   constructor(
@@ -25,22 +26,20 @@ interface Envelope<T> {
 }
 
 async function call<T>(
-  token: string,
   path: string,
   init?: RequestInit,
 ): Promise<{ data: T; meta?: Envelope<T>["meta"] }> {
-  const res = await fetch(`/api/internal${path}`, {
+  const res = await adminFetch(`/api/internal${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
   const json = (await res.json().catch(() => null)) as Envelope<T> | null;
   if (!res.ok || !json?.success) {
     const message =
       res.status === 401
-        ? "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang"
+        ? "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại"
         : res.status === 403
           ? "Bạn không có quyền thực hiện thao tác này (cần role payhub-admin)"
           : (json?.error?.message ?? `Lỗi HTTP ${res.status}`);
@@ -67,45 +66,43 @@ export interface ManualSendResult {
 }
 
 export const webhookApi = {
-  list: async (t: string) => (await call<WebhookConfigView[]>(t, "/webhooks")).data,
-  stats: async (t: string, hours = 24) =>
-    (await call<WebhookStats>(t, `/webhooks/stats?hours=${hours}`)).data,
-  create: async (t: string, body: WebhookPayload) =>
+  list: async () => (await call<WebhookConfigView[]>("/webhooks")).data,
+  stats: async (hours = 24) => (await call<WebhookStats>(`/webhooks/stats?hours=${hours}`)).data,
+  create: async (body: WebhookPayload) =>
     (
-      await call<WebhookConfigView & { secret: string }>(t, "/webhooks", {
+      await call<WebhookConfigView & { secret: string }>("/webhooks", {
         method: "POST",
         body: JSON.stringify(body),
       })
     ).data,
-  update: async (t: string, id: number, body: WebhookPayload) =>
+  update: async (id: number, body: WebhookPayload) =>
     (
-      await call<WebhookConfigView>(t, `/webhooks/${id}`, {
+      await call<WebhookConfigView>(`/webhooks/${id}`, {
         method: "PUT",
         body: JSON.stringify(body),
       })
     ).data,
-  remove: async (t: string, id: number) =>
-    (await call<{ deleted: boolean }>(t, `/webhooks/${id}`, { method: "DELETE" })).data,
-  setStatus: async (t: string, id: number, status: "Active" | "Inactive") =>
+  remove: async (id: number) =>
+    (await call<{ deleted: boolean }>(`/webhooks/${id}`, { method: "DELETE" })).data,
+  setStatus: async (id: number, status: "Active" | "Inactive") =>
     (
-      await call<WebhookConfigView>(t, `/webhooks/${id}/status`, {
+      await call<WebhookConfigView>(`/webhooks/${id}/status`, {
         method: "PUT",
         body: JSON.stringify({ status }),
       })
     ).data,
-  rotate: async (t: string, id: number) =>
+  rotate: async (id: number) =>
     (
-      await call<WebhookConfigView & { secret: string }>(t, `/webhooks/${id}/rotate-secret`, {
+      await call<WebhookConfigView & { secret: string }>(`/webhooks/${id}/rotate-secret`, {
         method: "POST",
       })
     ).data,
-  ping: async (t: string, id: number) =>
-    (await call<ManualSendResult>(t, `/webhooks/${id}/test`, { method: "POST" })).data,
-  logs: (t: string, query: string) => call<WebhookLogView[]>(t, `/webhook-logs?${query}`),
-  log: async (t: string, id: string) =>
-    (await call<WebhookLogDetail>(t, `/webhook-logs/${id}`)).data,
-  replay: async (t: string, id: string) =>
-    (await call<ManualSendResult>(t, `/webhook-logs/${id}/replay`, { method: "POST" })).data,
+  ping: async (id: number) =>
+    (await call<ManualSendResult>(`/webhooks/${id}/test`, { method: "POST" })).data,
+  logs: (query: string) => call<WebhookLogView[]>(`/webhook-logs?${query}`),
+  log: async (id: string) => (await call<WebhookLogDetail>(`/webhook-logs/${id}`)).data,
+  replay: async (id: string) =>
+    (await call<ManualSendResult>(`/webhook-logs/${id}/replay`, { method: "POST" })).data,
 };
 
 export function fmtTime(iso: string | null): string {

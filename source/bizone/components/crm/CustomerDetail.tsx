@@ -5,17 +5,12 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Edit2, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  fmtMoney,
-  fmtDate,
-  errorMessage,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtDate, errorMessage } from "@/components/inventory/shared";
 import { RANKING, DEBT_STATUS, LOYALTY_TYPE, GENDER_LABEL } from "./shared";
 import { FundSelect, useFundOptions } from "@/components/accounting/shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type CustomerFull = inferRouterOutputs<AppRouter>["customer"]["get"] & {
   group?: { id: number; name: string } | null;
@@ -56,10 +51,10 @@ type Tab = "info" | "history" | "points" | "debts";
 
 interface Props {
   customerId: number;
-  auth: ApiAuth;
 }
 
-export function CustomerDetail({ customerId, auth }: Props) {
+export function CustomerDetail({ customerId }: Props) {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

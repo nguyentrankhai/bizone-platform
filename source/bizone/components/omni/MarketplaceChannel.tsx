@@ -37,6 +37,7 @@ import {
   type MarketplaceConfig,
 } from "@/lib/omni/marketplace";
 import { SyncHistory } from "@/components/omni/SyncHistory";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Channel = RouterOutputs["omni"]["marketplace"];
 type Tab = "products" | "categories" | "settings" | "logs";
@@ -65,14 +66,13 @@ const DEFAULTS: MarketplaceConfig = {
  * category map and no order import: buyers order on the website through the product link)
  */
 export function MarketplaceChannel({
-  auth,
   code,
   flash,
 }: {
-  auth: ApiAuth;
   code: MarketplaceCode;
   flash: { connected?: boolean; error?: string };
 }) {
+  const auth = useApiAuth();
   const toast = useToast();
   const ch = useLoad(`omni-mp-${code}`, () =>
     trpc.omni.marketplace.query({ code }, apiContext(auth)),

@@ -5,24 +5,16 @@ import { useRouter } from "next/navigation";
 import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  fmtMoney,
-  fmtDate,
-  errorMessage,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtDate, errorMessage } from "@/components/inventory/shared";
 import { ORDER_STATUS, PAYMENT_STATUS, CHANNEL_LABEL, channelLabel } from "./shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type OrderRow = inferRouterOutputs<AppRouter>["order"]["list"]["items"][number];
 
-interface OrderTableProps {
-  auth: ApiAuth;
-}
-
-export function OrderTable({ auth }: OrderTableProps) {
+export function OrderTable() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

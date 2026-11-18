@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { PartnerForm } from "@/components/ph/PartnerForm";
 import { getPartner, listPartnerLogs } from "@/server/services/partner.service";
-import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 
 export const instant = false;
 
@@ -15,7 +16,14 @@ interface PageProps {
 export default async function PartnerPage({ params }: PageProps) {
   await connection();
   const { id } = await params;
-  const token = getDevAuthToken();
+  const session = await pageSession({ globalOnly: true });
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
   const appUrl = process.env.APP_URL ?? "http://localhost:4000";
 
   if (id === "new") {
@@ -24,8 +32,7 @@ export default async function PartnerPage({ params }: PageProps) {
         <PartnerForm
           partner={null}
           initialLogs={null}
-          authToken={token}
-          canWrite={devTokenCanWrite(token)}
+          canWrite={session.canWrite}
           appUrl={appUrl}
         />
       </PHLayout>
@@ -43,8 +50,7 @@ export default async function PartnerPage({ params }: PageProps) {
       <PartnerForm
         partner={partner}
         initialLogs={logs}
-        authToken={token}
-        canWrite={devTokenCanWrite(token)}
+        canWrite={session.canWrite}
         appUrl={appUrl}
       />
     </PHLayout>

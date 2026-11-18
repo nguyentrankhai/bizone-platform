@@ -1,7 +1,6 @@
 import { connection } from "next/server";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MarketingReport } from "@/components/marketing/MarketingReport";
-import { getDevAuth } from "@/lib/dev-auth";
 import { vnDateKey } from "@/lib/vn-time";
 
 export const metadata = { title: "Hiệu quả khuyến mãi | BizOne" };
@@ -13,7 +12,7 @@ export default async function Page() {
   return (
     <AppLayout>
       <div className="p-4 sm:p-6">
-        <MarketingReport auth={getDevAuth()} today={vnDateKey(new Date())} />
+        <MarketingReport today={vnDateKey(new Date())} />
       </div>
     </AppLayout>
   );

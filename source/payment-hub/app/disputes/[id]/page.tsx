@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { DisputeDetailClient } from "@/components/ph/DisputeDetailClient";
-import { devTokenCanWrite, devTokenMerchantId, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 import { DisputeError, getDispute, getTxnDisputeOverview } from "@/server/services/dispute.service";
 
 export const instant = false;
@@ -12,8 +13,15 @@ export default async function DisputeDetailPage({ params }: { params: Promise<{ 
   await connection();
   const { id } = await params;
   if (!/^\d+$/.test(id)) return notFound();
-  const token = getDevAuthToken();
-  const scope = { merchantId: devTokenMerchantId(token) };
+  const session = await pageSession();
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
+  const scope = { merchantId: session.merchantId };
   const dispute = await getDispute(Number(id), scope).catch((e: unknown) => {
     if (e instanceof DisputeError && e.code === "NOT_FOUND") return null;
     throw e;
@@ -34,8 +42,7 @@ export default async function DisputeDetailPage({ params }: { params: Promise<{ 
       <DisputeDetailClient
         dispute={dispute}
         submitOptions={overview.submit}
-        authToken={token}
-        canWrite={devTokenCanWrite(token)}
+        canWrite={session.canWrite}
       />
     </PHLayout>
   );

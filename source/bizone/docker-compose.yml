@@ -13,8 +13,6 @@ services:
       DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/bizonedb
       TENANT_DATABASES: ${TENANT_DATABASES:-tenant_demo=bizonedb}
       REDIS_URL: redis://:${REDIS_PASSWORD:-123456}@cache:6379
-      # QA-4 #128: `.env.local` is a dev file — never let its login bypass into the container
-      AUTH_DEV_BYPASS: "false"
     depends_on:
       db:
         condition: service_healthy

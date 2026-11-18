@@ -5,12 +5,14 @@ import { Plus, Star } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
-import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, btnSecondary, useLoad } from "@/components/staff/shared";
 import { BranchForm } from "./BranchForm";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** Quản lý chi nhánh (SRS-CONFIG-03, P4.6) */
-export function BranchList({ auth }: { auth: ApiAuth }) {
+export function BranchList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const list = useLoad("branches", () =>
     trpc.branch.list.query({ includeInactive: true }, apiContext(auth)),

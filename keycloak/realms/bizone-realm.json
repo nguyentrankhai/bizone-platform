@@ -16,6 +16,8 @@
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 15,
   "accessTokenLifespan": 900,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 28800,
   "ssoSessionMaxLifespan": 604800,
@@ -75,16 +77,19 @@
       "authorizationServicesEnabled": false,
       "redirectUris": [
         "http://localhost:3000/*",
+        "http://localhost:3001/*",
         "https://app.bizone.vn/*",
         "https://staging-app.bizone.vn/*"
       ],
       "webOrigins": [
         "http://localhost:3000",
+        "http://localhost:3001",
         "https://app.bizone.vn",
         "https://staging-app.bizone.vn"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+",
         "use.refresh.tokens": "true",
         "access.token.lifespan": "900",
         "client.session.idle.timeout": "28800"
@@ -129,6 +134,31 @@
             "jsonType.label": "String",
             "access.token.claim": "true",
             "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "full name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
             "userinfo.token.claim": "true",
             "introspection.token.claim": "true"
           }

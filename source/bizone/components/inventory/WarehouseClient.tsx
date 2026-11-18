@@ -29,6 +29,7 @@ import {
   type ApiAuth,
   type RouterOutputs,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type InventoryRow = RouterOutputs["inventory"]["list"]["items"][number];
 type BatchRow = RouterOutputs["inventory"]["batches"]["items"][number];
@@ -45,7 +46,8 @@ type TabKey = (typeof TABS)[number]["key"];
 
 const PAGE_SIZE = 20;
 
-export function WarehouseClient({ auth }: { auth: ApiAuth }) {
+export function WarehouseClient() {
+  const auth = useApiAuth();
   const toast = useToast();
   const router = useRouter();
   const params = useSearchParams();
@@ -82,7 +84,7 @@ export function WarehouseClient({ auth }: { auth: ApiAuth }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.authToken]);
+  }, [auth]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -346,7 +348,7 @@ function InventoryTable({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, warehouseId, q, lowOnly, auth.authToken]);
+  }, [page, warehouseId, q, lowOnly, auth]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -503,7 +505,7 @@ function BatchTable({
       })
       .catch((e) => toast.error(errorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, warehouseId, exp, auth.authToken]);
+  }, [page, warehouseId, exp, auth]);
 
   const soon = (now ?? 0) + 30 * 24 * 60 * 60 * 1000;
 

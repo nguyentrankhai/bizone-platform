@@ -42,11 +42,9 @@ const STATUS_BADGE = {
 } as const;
 
 export function ReconciliationReport({
-  authToken,
   options,
   today,
 }: {
-  authToken: string;
   options: ReportOptions;
   today: string;
 }) {
@@ -71,7 +69,7 @@ export function ReconciliationReport({
   useEffect(() => {
     let alive = true;
     reportApi
-      .reconciliation(authToken, query)
+      .reconciliation(query)
       .then((res) => {
         if (!alive) return;
         setReport(res.data);
@@ -86,7 +84,7 @@ export function ReconciliationReport({
     return () => {
       alive = false;
     };
-  }, [authToken, query]);
+  }, [query]);
 
   useEffect(() => {
     let alive = true;
@@ -97,7 +95,7 @@ export function ReconciliationReport({
     if (search.trim()) q.set("search", search.trim());
     const t = setTimeout(() => {
       reportApi
-        .discrepancies(authToken, q)
+        .discrepancies(q)
         .then((res) => {
           if (!alive) return;
           setDetails(res.data);
@@ -111,7 +109,7 @@ export function ReconciliationReport({
       alive = false;
       clearTimeout(t);
     };
-  }, [authToken, query, page, detailStatus, search]);
+  }, [query, page, detailStatus, search]);
 
   const s = report?.summary;
   return (
@@ -151,7 +149,7 @@ export function ReconciliationReport({
           disabled={!report}
           onExport={async (f) => {
             try {
-              await reportApi.download(authToken, "reconciliation", f, query);
+              await reportApi.download("reconciliation", f, query);
             } catch (e) {
               setError(e instanceof Error ? e.message : "Xuất báo cáo thất bại");
             }

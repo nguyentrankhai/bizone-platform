@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { StaffPageHeader } from "@/components/staff/shared";
 import { CommissionClient } from "@/components/staff/CommissionClient";
 
@@ -17,7 +16,7 @@ export default function CommissionsPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <CommissionClient auth={getDevAuth()} />
+          <CommissionClient />
         </Suspense>
       </div>
     </AppLayout>

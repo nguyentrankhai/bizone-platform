@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, fmtNumber, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtNumber } from "@/components/inventory/shared";
 import { ErrorBox, useLoad } from "@/components/staff/shared";
 import { CompareBarChart, KpiTile, Panel, tdNum, thCls, thNum } from "@/components/reports/shared";
 import { cn } from "@/lib/utils";
 import { AccountingHeader, PeriodPicker, signed, usePeriod, type Outputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Pnl = Outputs["accounting"]["profitLoss"];
 type Flow = Outputs["accounting"]["cashFlow"];
 
 /** Báo cáo lời lỗ + báo cáo dòng tiền (SRS-ACC-04) */
-export function FinanceReports({ auth }: { auth: ApiAuth }) {
+export function FinanceReports() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const period = usePeriod("thisMonth");
   const [tab, setTab] = useState<"pnl" | "flow">("pnl");

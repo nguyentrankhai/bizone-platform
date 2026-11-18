@@ -1,6 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { StockTakeClient } from "@/components/inventory/StockTakeClient";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Kiểm kê kho | BizOne" };
 
@@ -13,7 +12,7 @@ export default function StockTakePage() {
           Đối chiếu tồn kho thực tế với hệ thống, hỗ trợ quét mã vạch
         </p>
       </div>
-      <StockTakeClient auth={getDevAuth()} />
+      <StockTakeClient />
     </AppLayout>
   );
 }

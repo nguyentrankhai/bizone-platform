@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { POEditLoader } from "@/components/suppliers/POForm";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Sửa đơn nhập | BizOne" };
 // dynamic params access — disable static prerendering (cacheComponents mode)
@@ -17,7 +16,7 @@ export default async function EditPurchaseOrderPage({
   return (
     <AppLayout>
       <div className="p-4 sm:p-6">
-        <POEditLoader auth={getDevAuth()} poId={id} />
+        <POEditLoader poId={id} />
       </div>
     </AppLayout>
   );

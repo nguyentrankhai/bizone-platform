@@ -88,12 +88,11 @@ export function RefundSummary({
 
 interface RefundHistoryProps {
   refunds: RefundView[];
-  authToken: string;
   canWrite: boolean;
   onChanged: () => void;
 }
 
-export function RefundHistory({ refunds, authToken, canWrite, onChanged }: RefundHistoryProps) {
+export function RefundHistory({ refunds, canWrite, onChanged }: RefundHistoryProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [resolving, setResolving] = useState<RefundView | null>(null);
@@ -102,7 +101,7 @@ export function RefundHistory({ refunds, authToken, canWrite, onChanged }: Refun
     setBusyId(r.id);
     setMessage(null);
     try {
-      const out = await refundApi.check(authToken, r.id);
+      const out = await refundApi.check(r.id);
       setMessage({
         ok: true,
         text:
@@ -223,7 +222,6 @@ export function RefundHistory({ refunds, authToken, canWrite, onChanged }: Refun
       {resolving && (
         <ResolveDialog
           refund={resolving}
-          authToken={authToken}
           onClose={() => setResolving(null)}
           onDone={(text) => {
             setResolving(null);
@@ -238,12 +236,10 @@ export function RefundHistory({ refunds, authToken, canWrite, onChanged }: Refun
 
 function ResolveDialog({
   refund,
-  authToken,
   onClose,
   onDone,
 }: {
   refund: RefundView;
-  authToken: string;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -261,7 +257,7 @@ function ResolveDialog({
     setBusy(true);
     setError(null);
     try {
-      const out = await refundApi.resolve(authToken, refund.id, {
+      const out = await refundApi.resolve(refund.id, {
         outcome,
         note: note.trim(),
         partner_refund_id: partnerId.trim() || undefined,

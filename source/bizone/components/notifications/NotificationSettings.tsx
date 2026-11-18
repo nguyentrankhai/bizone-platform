@@ -14,6 +14,7 @@ import { ErrorBox, btnPrimary, inputCls, useLoad } from "@/components/staff/shar
 import type { NotificationEventDef } from "@/lib/notifications/events";
 import { cn } from "@/lib/utils";
 import { NotificationHeader } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Settings = RouterOutputs["notification"]["settings"];
 type Setting = Settings["settings"][number];
@@ -28,7 +29,8 @@ const PROVIDER_TEXT: Record<string, string> = {
 };
 
 /** Store-level channels per event type (config:write) — SRS §9 */
-export function NotificationSettings({ auth }: { auth: ApiAuth }) {
+export function NotificationSettings() {
+  const auth = useApiAuth();
   const data = useLoad("settings", () =>
     Promise.all([
       trpc.notification.settings.query(undefined, apiContext(auth)),

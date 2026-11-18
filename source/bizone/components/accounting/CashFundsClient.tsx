@@ -22,10 +22,12 @@ import {
   type Fund,
   type Outputs,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Session = Outputs["accounting"]["sessionsToDeposit"][number];
 
-export function CashFundsClient({ auth }: { auth: ApiAuth }) {
+export function CashFundsClient() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const [showInactive, setShowInactive] = useState(false);
   const funds = useLoad(`funds:${showInactive}`, () =>

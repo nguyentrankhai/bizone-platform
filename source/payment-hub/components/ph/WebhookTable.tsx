@@ -8,7 +8,6 @@ import { webhookApi, type ManualSendResult } from "./webhook-api";
 
 interface WebhookTableProps {
   configs: WebhookConfigView[];
-  authToken: string;
   canWrite: boolean;
   onEdit: (c: WebhookConfigView) => void;
   onChange: (c: WebhookConfigView) => void;
@@ -35,7 +34,6 @@ function ActiveBadge({ status }: { status: WebhookConfigView["status"] }) {
 
 export function WebhookTable({
   configs,
-  authToken,
   canWrite,
   onEdit,
   onChange,
@@ -139,7 +137,7 @@ export function WebhookTable({
                         onClick={() =>
                           run(`ping${c.id}`, async () => {
                             try {
-                              const r = await webhookApi.ping(authToken, c.id);
+                              const r = await webhookApi.ping(c.id);
                               setPings((p) => ({ ...p, [c.id]: r }));
                             } catch (e) {
                               setPings((p) => ({
@@ -176,7 +174,6 @@ export function WebhookTable({
                           run(`st${c.id}`, async () =>
                             onChange(
                               await webhookApi.setStatus(
-                                authToken,
                                 c.id,
                                 c.status === "Active" ? "Inactive" : "Active",
                               ),
@@ -203,7 +200,7 @@ export function WebhookTable({
                           if (!window.confirm(`Xoá endpoint ${c.url}? Lịch sử gửi vẫn được giữ.`))
                             return;
                           void run(`del${c.id}`, async () => {
-                            await webhookApi.remove(authToken, c.id);
+                            await webhookApi.remove(c.id);
                             onDeleted(c.id);
                           });
                         }}

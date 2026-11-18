@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecordList } from "@/components/accounting/RecordList";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Sổ thu chi | BizOne" };
 
@@ -13,7 +12,7 @@ export default function Page() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <RecordList auth={getDevAuth()} />
+          <RecordList />
         </Suspense>
       </div>
     </AppLayout>

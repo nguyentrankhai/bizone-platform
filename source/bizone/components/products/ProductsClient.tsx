@@ -1,5 +1,7 @@
 "use client";
 
+import { apiContext } from "@/components/inventory/shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Upload, Download, Plus, Trash2, Tag } from "lucide-react";
@@ -10,12 +12,7 @@ import { ImportDialog } from "./ImportDialog";
 
 const PAGE_SIZE = 20;
 
-interface ProductsClientProps {
-  tenantId: string;
-  authToken: string;
-}
-
-export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
+export function ProductsClient() {
   const router = useRouter();
 
   // Filters
@@ -38,7 +35,8 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
   const [loading, setLoading] = useState(false);
   const [catLoading, setCatLoading] = useState(false);
 
-  const headers = { Authorization: `Bearer ${authToken}`, "X-Tenant-ID": tenantId };
+  const auth = useApiAuth();
+  const { tenantId } = auth;
 
   // Debounce search
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -57,7 +55,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
     setCatLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (trpc.category.tree as any)
-      .query(undefined, { context: { headers } })
+      .query(undefined, apiContext(auth))
       .then((data: unknown) => setCategories(data as CategoryNode[]))
       .catch(console.error)
       .finally(() => setCatLoading(false));
@@ -79,7 +77,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
             "name" | "sku" | "sellingPrice" | "costPrice" | "createdAt" | "updatedAt",
           sortDir,
         },
-        { context: { headers } },
+        apiContext(auth),
       );
       setProducts(
         result.items.map((p: Record<string, unknown>) => ({
@@ -123,7 +121,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
           categoryId: categoryId ?? undefined,
           status: (status || undefined) as "active" | "inactive" | "discontinued" | undefined,
         },
-        { context: { headers } },
+        apiContext(auth),
       );
       const a = document.createElement("a");
       a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${result.fileBase64}`;
@@ -136,7 +134,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
 
   async function handleDownloadTemplate() {
     try {
-      const result = await trpc.product.exportTemplate.query(undefined, { context: { headers } });
+      const result = await trpc.product.exportTemplate.query(undefined, apiContext(auth));
       const a = document.createElement("a");
       a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${result.fileBase64}`;
       a.download = "template-san-pham.xlsx";
@@ -149,10 +147,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
   async function handleImport(file: File) {
     const buffer = await file.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
-    const result = await trpc.product.importExcel.mutate(
-      { fileBase64: base64 },
-      { context: { headers } },
-    );
+    const result = await trpc.product.importExcel.mutate({ fileBase64: base64 }, apiContext(auth));
     await loadProducts();
     return result;
   }
@@ -162,7 +157,7 @@ export function ProductsClient({ tenantId, authToken }: ProductsClientProps) {
     if (!confirm(`Xóa ${selectedIds.length} sản phẩm đã chọn?`)) return;
     for (const id of selectedIds) {
       try {
-        await trpc.product.delete.mutate({ id }, { context: { headers } });
+        await trpc.product.delete.mutate({ id }, apiContext(auth));
       } catch {
         // skip individual errors
       }

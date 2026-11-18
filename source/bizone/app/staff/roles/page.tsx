@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { StaffPageHeader } from "@/components/staff/shared";
 import { RoleMatrix } from "@/components/staff/RoleMatrix";
 
@@ -14,7 +13,7 @@ export default function RolesPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <RoleMatrix auth={getDevAuth()} />
+          <RoleMatrix />
         </Suspense>
       </div>
     </AppLayout>

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { AuditTable } from "@/components/audit/AuditTable";
 
 export const metadata = { title: "Audit Log | BizOne" };
@@ -18,7 +17,7 @@ export default function AuditLogPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <AuditTable auth={getDevAuth()} />
+          <AuditTable />
         </Suspense>
       </div>
     </AppLayout>

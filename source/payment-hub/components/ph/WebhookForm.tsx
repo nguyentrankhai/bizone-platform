@@ -19,7 +19,6 @@ export interface MerchantOption {
 }
 
 interface WebhookFormProps {
-  authToken: string;
   merchants: MerchantOption[];
   /** null → create */
   config: WebhookConfigView | null;
@@ -72,7 +71,7 @@ export function SecretReveal({ secret, onDone }: { secret: string; onDone: () =>
   );
 }
 
-export function WebhookForm({ authToken, merchants, config, onSaved, onClose }: WebhookFormProps) {
+export function WebhookForm({ merchants, config, onSaved, onClose }: WebhookFormProps) {
   const isNew = config === null;
   const [merchantId, setMerchantId] = useState(
     String(config?.merchantId ?? merchants[0]?.id ?? ""),
@@ -136,12 +135,12 @@ export function WebhookForm({ authToken, merchants, config, onSaved, onClose }: 
     };
     try {
       if (isNew) {
-        const created = await webhookApi.create(authToken, body);
+        const created = await webhookApi.create(body);
         const { secret: s, ...view } = created;
         setSavedConfig(view);
         setSecret(s);
       } else {
-        onSaved(await webhookApi.update(authToken, config.id, body));
+        onSaved(await webhookApi.update(config.id, body));
       }
     } catch (e) {
       if (e instanceof WebhookApiError && e.details) {
@@ -163,7 +162,7 @@ export function WebhookForm({ authToken, merchants, config, onSaved, onClose }: 
       return;
     setSaving(true);
     try {
-      const rotated = await webhookApi.rotate(authToken, config.id);
+      const rotated = await webhookApi.rotate(config.id);
       const { secret: s, ...view } = rotated;
       setSavedConfig(view);
       setSecret(s);

@@ -4,21 +4,29 @@ import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ToastProvider } from "@/components/ui/Toast";
-import type { ApiAuth } from "@/components/inventory/shared";
+import { RequireAuth, useApiAuth } from "@/components/auth/AuthProvider";
 
 interface AppShellProps {
   children: React.ReactNode;
-  /** Optional strip under the top bar (e.g. the sign-in notice rendered by AppLayout) */
+  /** Optional strip under the top bar */
   banner?: React.ReactNode;
-  /** API auth for shell widgets (branch switcher) */
-  auth?: ApiAuth;
 }
 
 /**
  * Sidebar + top bar frame; safe to use from client components (no server-only code).
+ * Only rendered for a signed-in user (P6.7) — otherwise the browser goes to Keycloak.
  * P6.4 (#54): under 768 px the sidebar is a drawer opened from the top bar's menu button.
  */
-export function AppShell({ children, banner, auth }: AppShellProps) {
+export function AppShell({ children, banner }: AppShellProps) {
+  return (
+    <RequireAuth>
+      <ShellFrame banner={banner}>{children}</ShellFrame>
+    </RequireAuth>
+  );
+}
+
+function ShellFrame({ children, banner }: AppShellProps) {
+  const auth = useApiAuth();
   const [navOpen, setNavOpen] = useState(false);
   return (
     <ToastProvider>

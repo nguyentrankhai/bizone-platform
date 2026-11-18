@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronRight, Package, Receipt, UserPlus, Wallet } from 
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney } from "@/components/inventory/shared";
 import { useOfflineQuery } from "@/hooks/useOfflineQuery";
 import { cn } from "@/lib/utils";
 import { InstallPrompt } from "./InstallPrompt";
@@ -19,13 +19,15 @@ import {
   fmtClock,
   fmtCompact,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Summary = inferRouterOutputs<AppRouter>["dashboard"]["summary"];
 
 const WEEKDAY = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 /** Owner dashboard on the phone (P6.4): today's numbers, 7-day revenue, orders and stock alerts */
-export function MobileDashboard({ auth }: { auth: ApiAuth }) {
+export function MobileDashboard() {
+  const auth = useApiAuth();
   const q = useOfflineQuery<Summary>(
     auth,
     "dashboard",

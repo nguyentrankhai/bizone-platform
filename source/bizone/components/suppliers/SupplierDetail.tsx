@@ -21,6 +21,7 @@ import { PaymentModal } from "./PaymentModal";
 import { PurchaseOrderTable } from "./PurchaseOrderList";
 import { PriceComparisonTable } from "./PriceComparison";
 import { Badge, DEBT_STATUS, PAYMENT_METHODS, Pager, SupplierNav, fmtDay } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Tab = "orders" | "debts" | "history" | "prices";
 const TABS: { key: Tab; label: string }[] = [
@@ -30,7 +31,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "prices", label: "Giá nhập" },
 ];
 
-export function SupplierDetail({ auth, supplierId }: { auth: ApiAuth; supplierId: number }) {
+export function SupplierDetail({ supplierId }: { supplierId: number }) {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

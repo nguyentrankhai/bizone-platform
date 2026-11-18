@@ -1,5 +1,6 @@
 "use client";
 
+import { adminFetch } from "@/lib/session-client";
 import { useRef, useState } from "react";
 import { TransactionTable, type TxnRow } from "@/components/ph/TransactionTable";
 
@@ -35,15 +36,12 @@ interface ApiResult {
 
 interface TransactionsClientProps {
   initialData: ApiResult;
-  /** Bearer token for /api/internal/* (dev: DEV_AUTH_TOKEN until OIDC login lands). */
-  authToken: string;
 }
 
 const EXPORT_PAGE_SIZE = 100; // API maximum per page
 const EXPORT_MAX_ROWS = 10_000;
 
-export function TransactionsClient({ initialData, authToken }: TransactionsClientProps) {
-  const authHeaders: HeadersInit = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+export function TransactionsClient({ initialData }: TransactionsClientProps) {
   const [rows, setRows] = useState<TxnRow[]>(initialData.items);
   const [total, setTotal] = useState(initialData.total);
   const [totalPages, setTotalPages] = useState(initialData.totalPages);
@@ -87,7 +85,7 @@ export function TransactionsClient({ initialData, authToken }: TransactionsClien
       if (dt) params.set("date_to", dt);
       if (q) params.set("search", q);
 
-      const res = await fetch(`/api/internal/transactions?${params}`, { headers: authHeaders });
+      const res = await adminFetch(`/api/internal/transactions?${params}`);
       const json = (await res.json()) as { success: boolean; data: ApiResult };
       if (json.success) {
         setRows(json.data.items);
@@ -133,7 +131,7 @@ export function TransactionsClient({ initialData, authToken }: TransactionsClien
     const items: TxnRow[] = [];
     for (let p = 1; items.length < EXPORT_MAX_ROWS; p++) {
       params.set("page", String(p));
-      const res = await fetch(`/api/internal/transactions?${params}`, { headers: authHeaders });
+      const res = await adminFetch(`/api/internal/transactions?${params}`);
       const json = (await res.json()) as { success: boolean; data: ApiResult };
       if (!json.success) return;
       items.push(...json.data.items);

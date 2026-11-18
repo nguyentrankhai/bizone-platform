@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Search, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { apiContext, errorMessage, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage, fmtMoney } from "@/components/inventory/shared";
 import {
   ErrorBox,
   Field,
@@ -18,6 +18,7 @@ import {
 import { lineTotal, poTotals } from "@/lib/supplier/calc";
 import { cn } from "@/lib/utils";
 import { SupplierNav, type Outputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type LookupRow = Outputs["purchaseOrder"]["productLookup"][number];
 type PoDetail = Outputs["purchaseOrder"]["get"];
@@ -58,15 +59,8 @@ function fromPo(po: PoDetail): Line[] {
 }
 
 /** Create (no `po`) or edit a pending purchase order */
-export function POForm({
-  auth,
-  po,
-  initialSupplierId,
-}: {
-  auth: ApiAuth;
-  po?: PoDetail;
-  initialSupplierId?: number;
-}) {
+export function POForm({ po, initialSupplierId }: { po?: PoDetail; initialSupplierId?: number }) {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);
@@ -465,7 +459,8 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 /** /purchase-orders/[id]/edit — load the PO, then the same form */
-export function POEditLoader({ auth, poId }: { auth: ApiAuth; poId: number }) {
+export function POEditLoader({ poId }: { poId: number }) {
+  const auth = useApiAuth();
   const data = useLoad(`po-edit:${poId}`, () =>
     trpc.purchaseOrder.get.query({ id: poId }, apiContext(auth)),
   );
@@ -489,5 +484,5 @@ export function POEditLoader({ auth, poId }: { auth: ApiAuth; poId: number }) {
       </div>
     );
   }
-  return <POForm auth={auth} po={data.data} />;
+  return <POForm po={data.data} />;
 }

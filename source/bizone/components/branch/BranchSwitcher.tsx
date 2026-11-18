@@ -69,7 +69,7 @@ export function BranchSwitcher({ auth }: { auth: ApiAuth }) {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <button
         onClick={() => !single && setOpen((o) => !o)}
         aria-haspopup="listbox"
@@ -77,7 +77,7 @@ export function BranchSwitcher({ auth }: { auth: ApiAuth }) {
         aria-label={`Chi nhánh: ${current.label}`}
         data-testid="branch-switcher"
         className={cn(
-          "flex max-w-[14rem] items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700",
+          "flex w-full max-w-[14rem] min-w-0 items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700",
           single ? "cursor-default" : "hover:bg-gray-50",
         )}
       >

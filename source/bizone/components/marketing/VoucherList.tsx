@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { trpc } from "@/lib/trpc";
-import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage } from "@/components/inventory/shared";
 import { ErrorBox, inputAutoCls, inputCls, useLoad } from "@/components/staff/shared";
 import { Pager } from "@/components/suppliers/shared";
 import { couponValue } from "./CouponList";
 import { MarketingHeader, RANKING_LABEL, StatusPill, fmtDT } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const STATUS = {
   active: { label: "Còn hiệu lực", tone: "green" },
@@ -18,7 +19,8 @@ const STATUS = {
 } as const;
 type Status = keyof typeof STATUS;
 
-export function VoucherList({ auth }: { auth: ApiAuth }) {
+export function VoucherList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const ctx = apiContext(auth);
   const [page, setPage] = useState(1);

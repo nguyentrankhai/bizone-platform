@@ -21,6 +21,7 @@ import {
   useLoad,
   vnToday,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type StaffRow = RouterOutputs["staff"]["list"]["items"][number];
 type RoleRow = RouterOutputs["staff"]["role"]["list"][number];
@@ -408,7 +409,8 @@ function EditStaffModal({
   );
 }
 
-export function StaffTable({ auth }: { auth: ApiAuth }) {
+export function StaffTable() {
+  const auth = useApiAuth();
   const [search, setSearch] = useState("");
   const [roleId, setRoleId] = useState<number | "">("");
   const [status, setStatus] = useState<"" | "active" | "inactive">("active");

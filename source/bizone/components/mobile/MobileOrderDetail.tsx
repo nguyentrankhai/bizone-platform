@@ -5,12 +5,13 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtDate, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtDate, fmtMoney } from "@/components/inventory/shared";
 import { ORDER_STATUS, PAYMENT_STATUS, channelLabel } from "@/components/orders/shared";
 import { METHOD_LABEL } from "@/components/reports/shared";
 import { useOfflineQuery } from "@/hooks/useOfflineQuery";
 import { cn } from "@/lib/utils";
 import { Card, DataStatus, Skeleton } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Order = inferRouterOutputs<AppRouter>["order"]["get"];
 
@@ -18,7 +19,8 @@ type Order = inferRouterOutputs<AppRouter>["order"]["get"];
  * Read-only order view on the phone (P6.4). Processing (confirm, ship, cancel, refund) stays on
  * the full order page — one place for the status rules (P6.1 website / P6.2 marketplace).
  */
-export function MobileOrderDetail({ auth, orderId }: { auth: ApiAuth; orderId: number }) {
+export function MobileOrderDetail({ orderId }: { orderId: number }) {
+  const auth = useApiAuth();
   const q = useOfflineQuery<Order>(auth, `order:${orderId}`, () =>
     trpc.order.get.query({ id: orderId }, apiContext(auth)),
   );

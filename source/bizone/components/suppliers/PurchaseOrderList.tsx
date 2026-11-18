@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { apiContext, fmtDate, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, inputAutoCls, inputCls, useLoad } from "@/components/staff/shared";
 import { Badge, PO_STATUS, Pager, SupplierPageHeader } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type PoStatus = "pending" | "partial" | "received" | "cancelled";
 
@@ -211,7 +212,8 @@ export function PurchaseOrderTable({ auth, supplierId }: { auth: ApiAuth; suppli
   );
 }
 
-export function PurchaseOrderList({ auth }: { auth: ApiAuth }) {
+export function PurchaseOrderList() {
+  const auth = useApiAuth();
   return (
     <div className="space-y-5">
       <SupplierPageHeader

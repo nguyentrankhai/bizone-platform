@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import type { ApiAuth } from "@/components/inventory/shared";
 import { apiContext, fmtDate, errorMessage } from "@/components/inventory/shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type AuditListOutput = inferRouterOutputs<AppRouter>["auditLog"]["list"];
 type AuditRow = AuditListOutput["items"][number];
@@ -132,11 +132,8 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-interface AuditTableProps {
-  auth: ApiAuth;
-}
-
-export function AuditTable({ auth }: AuditTableProps) {
+export function AuditTable() {
+  const auth = useApiAuth();
   const [page, setPage] = useState(1);
   const [filterModule, setFilterModule] = useState("");
   const [filterAction, setFilterAction] = useState("");
@@ -164,7 +161,7 @@ export function AuditTable({ auth }: AuditTableProps) {
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
   };
-  const queryKey = JSON.stringify([query, auth.tenantId, auth.authToken]);
+  const queryKey = JSON.stringify([query, auth.tenantId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,7 +207,7 @@ export function AuditTable({ auth }: AuditTableProps) {
     } finally {
       setExporting(false);
     }
-  }, [filterModule, filterAction, dateFrom, dateTo, auth.authToken, auth.tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterModule, filterAction, dateFrom, dateTo, auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetFilters = () => {
     setFilterModule("");

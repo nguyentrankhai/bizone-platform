@@ -18,11 +18,13 @@ import { mobileLink } from "@/lib/pwa/links";
 import { cn } from "@/lib/utils";
 import { InstallPrompt } from "./InstallPrompt";
 import { Card, DataStatus, Empty, Skeleton } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type List = inferRouterOutputs<AppRouter>["notification"]["list"];
 
 /** Notifications on the phone (P6.4): push on this device, install card, latest 30 notifications */
-export function MobileNotifications({ auth }: { auth: ApiAuth }) {
+export function MobileNotifications() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const q = useOfflineQuery<List>(auth, "notifications", () =>

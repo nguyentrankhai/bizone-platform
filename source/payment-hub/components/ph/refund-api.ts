@@ -1,6 +1,7 @@
 import type { RefundOutcomeView } from "@/lib/refund";
+import { adminFetch } from "@/lib/session-client";
 
-/** Client helpers for the admin refund API (/api/internal/…, Bearer token). */
+/** Client helpers for the admin refund API (/api/internal/…, session token via adminFetch). */
 
 export class RefundApiError extends Error {
   constructor(
@@ -21,16 +22,14 @@ interface Envelope {
 }
 
 async function post(
-  token: string,
   path: string,
   body: unknown,
   idempotencyKey?: string,
 ): Promise<RefundOutcomeView> {
-  const res = await fetch(`/api/internal${path}`, {
+  const res = await adminFetch(`/api/internal${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify(body),
@@ -39,7 +38,7 @@ async function post(
   if (res.ok && json?.success && json.data) return json.data;
   const message =
     res.status === 401
-      ? "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang"
+      ? "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại"
       : res.status === 403
         ? "Bạn không có quyền thực hiện thao tác này (cần role payhub-admin)"
         : (json?.error?.message ?? `Lỗi HTTP ${res.status}`);
@@ -50,15 +49,13 @@ export const refundApi = {
   /** 200 Completed · 202 Processing · throws RefundApiError (502 = PSP refused, with outcome) */
   /** `idempotencyKey`: one per form opening — a double submit / retry returns the same refund */
   create: (
-    token: string,
     txnId: number,
     body: { amount: number | null; reason: string; note?: string },
     idempotencyKey?: string,
-  ) => post(token, `/transactions/${txnId}/refund`, body, idempotencyKey),
-  check: (token: string, refundId: number) => post(token, `/refunds/${refundId}/check`, {}),
+  ) => post(`/transactions/${txnId}/refund`, body, idempotencyKey),
+  check: (refundId: number) => post(`/refunds/${refundId}/check`, {}),
   resolve: (
-    token: string,
     refundId: number,
     body: { outcome: "Completed" | "Failed"; note: string; partner_refund_id?: string },
-  ) => post(token, `/refunds/${refundId}/resolve`, body),
+  ) => post(`/refunds/${refundId}/resolve`, body),
 };

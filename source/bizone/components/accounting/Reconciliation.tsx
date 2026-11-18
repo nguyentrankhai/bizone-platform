@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney } from "@/components/inventory/shared";
 import { ErrorBox, useLoad } from "@/components/staff/shared";
 import { KpiTile, Panel, tdNum, thCls, thNum } from "@/components/reports/shared";
 import { fmtDT } from "@/components/marketing/shared";
 import { cn } from "@/lib/utils";
 import { AccountingHeader, PeriodPicker, signed, usePeriod } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const SEVERITY = {
   error: { label: "Cần xử lý", cls: "bg-red-50 text-red-700 ring-red-200" },
@@ -26,7 +27,8 @@ const ISSUE_LABEL: Record<string, string> = {
 };
 
 /** Đối soát thanh toán (SRS-ACC-05): hoá đơn ↔ tiền thu theo từng kênh */
-export function Reconciliation({ auth }: { auth: ApiAuth }) {
+export function Reconciliation() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const period = usePeriod("7days");
   const [onlyIssues, setOnlyIssues] = useState(true);

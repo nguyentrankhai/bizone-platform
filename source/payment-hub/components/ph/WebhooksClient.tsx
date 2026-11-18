@@ -13,7 +13,6 @@ interface WebhooksClientProps {
   initialConfigs: WebhookConfigView[];
   initialStats: WebhookStats;
   merchants: MerchantOption[];
-  authToken: string;
   canWrite: boolean;
 }
 
@@ -54,7 +53,6 @@ export function WebhooksClient({
   initialConfigs,
   initialStats,
   merchants,
-  authToken,
   canWrite,
 }: WebhooksClientProps) {
   const [tab, setTab] = useState<"endpoints" | "history">("endpoints");
@@ -66,22 +64,19 @@ export function WebhooksClient({
 
   const refresh = useCallback(async () => {
     try {
-      const [c, s] = await Promise.all([
-        webhookApi.list(authToken),
-        webhookApi.stats(authToken, hours),
-      ]);
+      const [c, s] = await Promise.all([webhookApi.list(), webhookApi.stats(hours)]);
       setConfigs(c);
       setStats(s);
     } catch {
       // keep current numbers (token expired etc. surfaces on actions)
     }
     setRefreshKey((k) => k + 1);
-  }, [authToken, hours]);
+  }, [hours]);
 
   useEffect(() => {
     if (hours === 24 && refreshKey === 0) return; // initial data is already 24 h
     void webhookApi
-      .stats(authToken, hours)
+      .stats(hours)
       .then(setStats)
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +174,6 @@ export function WebhooksClient({
       {tab === "endpoints" ? (
         <WebhookTable
           configs={configs}
-          authToken={authToken}
           canWrite={canWrite}
           onEdit={(c) => setEditing(c)}
           onChange={(c) => setConfigs((list) => list.map((x) => (x.id === c.id ? c : x)))}
@@ -188,7 +182,6 @@ export function WebhooksClient({
         />
       ) : (
         <WebhookLogTable
-          authToken={authToken}
           canWrite={canWrite}
           refreshKey={refreshKey}
           onActivity={() => void refresh()}
@@ -197,7 +190,6 @@ export function WebhooksClient({
 
       {editing !== undefined && (
         <WebhookForm
-          authToken={authToken}
           merchants={merchants}
           config={editing}
           onClose={() => setEditing(undefined)}

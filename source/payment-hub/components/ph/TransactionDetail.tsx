@@ -45,7 +45,6 @@ interface TransactionDetailProps {
   dispute: TxnDisputeOverview;
   /** `?dispute=…` (e.g. from a reconciliation discrepancy): open the form with this reason */
   openDispute?: string | null;
-  authToken: string;
   /** UI hint only (hides write buttons) — the API enforces payhub-admin itself */
   canWrite: boolean;
 }
@@ -110,7 +109,6 @@ export function TransactionDetail({
   refund,
   dispute,
   openDispute,
-  authToken,
   canWrite,
 }: TransactionDetailProps) {
   const router = useRouter();
@@ -239,7 +237,6 @@ export function TransactionDetail({
       {refund.refunds.length > 0 && (
         <RefundHistory
           refunds={refund.refunds}
-          authToken={authToken}
           canWrite={canWrite}
           onChanged={() => router.refresh()}
         />
@@ -249,7 +246,6 @@ export function TransactionDetail({
         <DisputeHistory
           disputes={dispute.disputes}
           submitOptions={dispute.submit}
-          authToken={authToken}
           canWrite={canWrite}
           onChanged={(n) => {
             if (n) setNotice(n);
@@ -260,7 +256,6 @@ export function TransactionDetail({
 
       {disputeOpen && (
         <DisputeForm
-          authToken={authToken}
           txn={{
             id: txn.id,
             txnCode: txn.txnCode,
@@ -283,7 +278,6 @@ export function TransactionDetail({
 
       {refundOpen && (
         <RefundForm
-          authToken={authToken}
           txn={{ id: txn.id, txnCode: txn.txnCode, currency: txn.currency, paidAt: txn.paidAt }}
           eligibility={refund.eligibility}
           onClose={() => setRefundOpen(false)}

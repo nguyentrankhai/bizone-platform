@@ -5,15 +5,17 @@ import { useEffect, useState } from "react";
 import { CheckCheck, Mail, MailOpen } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage } from "@/components/inventory/shared";
 import { ErrorBox, btnSecondary, useLoad } from "@/components/staff/shared";
 import { announceUnread, NOTIFICATION_EVENT } from "@/hooks/useNotifications";
 import { EVENT_TYPES, NOTIFICATION_EVENTS } from "@/lib/notifications/events";
 import { cn } from "@/lib/utils";
 import { NotificationHeader, SeverityDot, eventLabel, timeAgo } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** Notification Center (SRS §9): every notification of the last 30 days, read / unread */
-export function NotificationCenter({ auth }: { auth: ApiAuth }) {
+export function NotificationCenter() {
+  const auth = useApiAuth();
   const toast = useToast();
   const router = useRouter();
   const [page, setPage] = useState(1);

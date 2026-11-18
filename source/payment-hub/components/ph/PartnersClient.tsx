@@ -8,14 +8,13 @@ import { PartnerCard } from "./PartnerCard";
 
 interface PartnersClientProps {
   initial: PartnerView[];
-  authToken: string;
   canWrite: boolean;
 }
 
 const selectCls =
   "h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none";
 
-export function PartnersClient({ initial, authToken, canWrite }: PartnersClientProps) {
+export function PartnersClient({ initial, canWrite }: PartnersClientProps) {
   const [partners, setPartners] = useState(initial);
   const [status, setStatus] = useState("");
   const [env, setEnv] = useState("");
@@ -95,13 +94,7 @@ export function PartnersClient({ initial, authToken, canWrite }: PartnersClientP
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((p) => (
-            <PartnerCard
-              key={p.id}
-              partner={p}
-              authToken={authToken}
-              canWrite={canWrite}
-              onChange={replace}
-            />
+            <PartnerCard key={p.id} partner={p} canWrite={canWrite} onChange={replace} />
           ))}
         </div>
       )}

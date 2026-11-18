@@ -4,21 +4,18 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  errorMessage,
-  type ApiAuth,
-  type RouterOutputs,
-} from "@/components/inventory/shared";
+import { apiContext, errorMessage, type RouterOutputs } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, useLoad } from "@/components/staff/shared";
 import { cn } from "@/lib/utils";
 import { CHANNEL_LABEL, NotificationHeader } from "./shared";
 import { TemplateForm } from "./TemplateForm";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Template = RouterOutputs["notification"]["templates"][number];
 
 /** Notification templates CRUD (API-Design §14 notification-templates) */
-export function TemplateList({ auth }: { auth: ApiAuth }) {
+export function TemplateList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const list = useLoad("templates", () =>
     trpc.notification.templates.query(undefined, apiContext(auth)),

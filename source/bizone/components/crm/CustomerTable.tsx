@@ -5,18 +5,16 @@ import { useRouter } from "next/navigation";
 import { Search, Download, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
-import { apiContext, fmtMoney, errorMessage, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney, errorMessage } from "@/components/inventory/shared";
 import { RANKING } from "./shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type CustomerRow = inferRouterOutputs<AppRouter>["customer"]["list"]["items"][number];
 
-interface Props {
-  auth: ApiAuth;
-}
-
-export function CustomerTable({ auth }: Props) {
+export function CustomerTable() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import {
-  apiContext,
-  errorMessage,
-  type ApiAuth,
-  type RouterOutputs,
-} from "@/components/inventory/shared";
+import { apiContext, errorMessage, type RouterOutputs } from "@/components/inventory/shared";
 import {
   ErrorBox,
   Field,
@@ -17,6 +12,7 @@ import {
   roleBadgeClass,
   useLoad,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type RoleRow = RouterOutputs["staff"]["role"]["list"][number];
 
@@ -27,7 +23,8 @@ interface Draft {
   permissions: string[];
 }
 
-export function RoleMatrix({ auth }: { auth: ApiAuth }) {
+export function RoleMatrix() {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const data = useLoad(JSON.stringify(auth), async () => {
     const [roles, catalog] = await Promise.all([

@@ -2,17 +2,25 @@ import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { PartnersClient } from "@/components/ph/PartnersClient";
 import { listPartners } from "@/server/services/partner.service";
-import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 
 export const instant = false;
 
 export default async function PartnersPage() {
   await connection();
   const partners = await listPartners();
-  const token = getDevAuthToken();
+  const session = await pageSession({ globalOnly: true });
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
   return (
     <PHLayout>
-      <PartnersClient initial={partners} authToken={token} canWrite={devTokenCanWrite(token)} />
+      <PartnersClient initial={partners} canWrite={session.canWrite} />
     </PHLayout>
   );
 }

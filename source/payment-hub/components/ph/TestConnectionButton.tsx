@@ -8,7 +8,6 @@ import { fmtDateTime, partnerApi } from "./partner-api";
 
 interface TestConnectionButtonProps {
   partnerId: number;
-  authToken: string;
   lastResult: TestResult | null;
   lastTestedAt: string | null;
   disabled?: boolean;
@@ -47,7 +46,6 @@ export function TestResultLine({
 
 export function TestConnectionButton({
   partnerId,
-  authToken,
   lastResult,
   lastTestedAt,
   disabled,
@@ -62,7 +60,7 @@ export function TestConnectionButton({
     setRunning(true);
     setError(null);
     try {
-      const res = await partnerApi.test(authToken, partnerId);
+      const res = await partnerApi.test(partnerId);
       onTested(res.partner);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test thất bại");

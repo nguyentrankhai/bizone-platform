@@ -6,13 +6,7 @@ import { ArrowLeft, Truck, RotateCcw, XCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import {
-  apiContext,
-  fmtMoney,
-  fmtDate,
-  errorMessage,
-  type ApiAuth,
-} from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtDate, errorMessage } from "@/components/inventory/shared";
 import {
   ORDER_STATUS,
   PAYMENT_STATUS,
@@ -22,12 +16,12 @@ import {
 } from "./shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type OrderFull = inferRouterOutputs<AppRouter>["order"]["get"];
 
 interface OrderDetailProps {
   orderId: number;
-  auth: ApiAuth;
 }
 
 /** P6.1: payment methods of website orders */
@@ -47,7 +41,8 @@ const ONLINE_PAYMENT_STATUS: Record<string, string> = {
   cancelled: "đã huỷ",
 };
 
-export function OrderDetail({ orderId, auth }: OrderDetailProps) {
+export function OrderDetail({ orderId }: OrderDetailProps) {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const ctx = apiContext(auth);

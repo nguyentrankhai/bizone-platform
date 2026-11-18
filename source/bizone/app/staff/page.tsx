@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { StaffPageHeader } from "@/components/staff/shared";
 import { StaffTable } from "@/components/staff/StaffTable";
 
@@ -17,7 +16,7 @@ export default function StaffPage() {
         <Suspense
           fallback={<div className="py-12 text-center text-sm text-slate-400">Đang tải...</div>}
         >
-          <StaffTable auth={getDevAuth()} />
+          <StaffTable />
         </Suspense>
       </div>
     </AppLayout>

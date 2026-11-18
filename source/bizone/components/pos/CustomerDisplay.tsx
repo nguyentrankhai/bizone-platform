@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { usePosWebSocket } from "@/hooks/usePosWebSocket";
 import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
 import { PaymentQr } from "./PaymentQr";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const THANKS_MS = 8_000;
 
@@ -14,6 +15,12 @@ const THANKS_MS = 8_000;
  * lớn, QR thanh toán khi thu ngân chọn chuyển khoản/QR, lời cảm ơn sau khi thanh toán.
  * Chỉ nhận dữ liệu — đồng bộ qua WebSocket (hoặc BroadcastChannel khi mất kết nối).
  */
+/** Display on the cashier's machine (`/pos/display?session=`): uses the signed-in session (P6.7). */
+export function SessionCustomerDisplay({ sessionId }: { sessionId: number }) {
+  const auth = useApiAuth();
+  return <CustomerDisplay auth={auth} sessionId={sessionId} />;
+}
+
 export function CustomerDisplay({
   auth,
   sessionId,

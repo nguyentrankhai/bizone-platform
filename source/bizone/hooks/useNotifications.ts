@@ -41,24 +41,21 @@ export function useNotifications(
     onNewRef.current = onNew;
   });
 
-  const token = auth?.authToken ?? "";
+  // `auth` is stable for the session (P6.7); its token is read at each call / reconnect
   const tenantId = auth?.tenantId ?? "";
 
   const refresh = useCallback(async () => {
-    if (!token) return;
+    if (!auth?.authToken) return;
     try {
-      const res = await trpc.notification.unreadCount.query(
-        undefined,
-        apiContext({ authToken: token, tenantId }),
-      );
+      const res = await trpc.notification.unreadCount.query(undefined, apiContext(auth));
       setUnread(res.unread);
     } catch {
       /* keep the last value */
     }
-  }, [token, tenantId]);
+  }, [auth]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!auth?.authToken) return;
     let ws: WebSocket | null = null;
     let closed = false;
     let attempts = 0;
@@ -79,7 +76,7 @@ export function useNotifications(
       try {
         ws = new WebSocket(`${wsBase()}${NOTIFY_WS_PATH}?tenant=${encodeURIComponent(tenantId)}`, [
           NOTIFY_WS_PROTOCOL,
-          token,
+          auth.authToken,
         ]);
       } catch {
         return schedule();
@@ -132,7 +129,7 @@ export function useNotifications(
       window.removeEventListener(NOTIFICATION_READ_EVENT, onRead);
       ws?.close(1000);
     };
-  }, [token, tenantId, refresh]);
+  }, [auth, tenantId, refresh]);
 
   return { unread, mode, refresh, setUnread };
 }

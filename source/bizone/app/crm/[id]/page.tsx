@@ -1,5 +1,4 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { getDevAuth } from "@/lib/dev-auth";
 import { CustomerDetail } from "@/components/crm/CustomerDetail";
 
 export const metadata = { title: "Chi tiết khách hàng | BizOne" };
@@ -16,7 +15,7 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   return (
     <AppLayout>
-      <CustomerDetail customerId={customerId} auth={getDevAuth()} />
+      <CustomerDetail customerId={customerId} />
     </AppLayout>
   );
 }

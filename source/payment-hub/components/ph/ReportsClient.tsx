@@ -10,13 +10,11 @@ import { ReconciliationReport } from "./ReconciliationReport";
 /** /reports (P5.5): tabs Báo cáo giao dịch / doanh thu / đối soát (mockup "Báo cáo"). */
 
 export function ReportsClient({
-  authToken,
   options,
   today,
   initialTab,
   canSeeReconciliation,
 }: {
-  authToken: string;
   options: ReportOptions;
   today: string;
   initialTab: ReportType;
@@ -57,14 +55,10 @@ export function ReportsClient({
         ))}
       </div>
       <div role="tabpanel">
-        {tab === "transactions" && (
-          <TransactionReport authToken={authToken} options={options} today={today} />
-        )}
-        {tab === "revenue" && (
-          <RevenueReport authToken={authToken} options={options} today={today} />
-        )}
+        {tab === "transactions" && <TransactionReport options={options} today={today} />}
+        {tab === "revenue" && <RevenueReport options={options} today={today} />}
         {tab === "reconciliation" && canSeeReconciliation && (
-          <ReconciliationReport authToken={authToken} options={options} today={today} />
+          <ReconciliationReport options={options} today={today} />
         )}
       </div>
     </div>

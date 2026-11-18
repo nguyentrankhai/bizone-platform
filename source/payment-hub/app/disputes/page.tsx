@@ -1,7 +1,8 @@
 import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { DisputesClient } from "@/components/ph/DisputesClient";
-import { devTokenMerchantId, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 import { DISPUTE_STATUSES, type DisputeStatus } from "@/lib/dispute";
 import { listDisputes } from "@/server/services/dispute.service";
 
@@ -20,15 +21,21 @@ export default async function DisputesPage({
       : raw && (DISPUTE_STATUSES as readonly string[]).includes(raw)
         ? (raw as DisputeStatus)
         : "open";
-  const token = getDevAuthToken();
+  const session = await pageSession();
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
   const result = await listDisputes(
     { status: status || undefined, page: 1, limit: 20 },
-    { merchantId: devTokenMerchantId(token) },
+    { merchantId: session.merchantId },
   );
   return (
     <PHLayout>
       <DisputesClient
-        authToken={token}
         initialItems={result.items}
         initialMeta={{ ...result.meta, counts: result.counts }}
         initialStatus={status}

@@ -10,12 +10,11 @@ import { fmtDateTime, partnerApi } from "./partner-api";
 
 interface PartnerCardProps {
   partner: PartnerView;
-  authToken: string;
   canWrite: boolean;
   onChange: (partner: PartnerView) => void;
 }
 
-export function PartnerCard({ partner, authToken, canWrite, onChange }: PartnerCardProps) {
+export function PartnerCard({ partner, canWrite, onChange }: PartnerCardProps) {
   const spec = PARTNER_TYPES[partner.connectorType];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +31,7 @@ export function PartnerCard({ partner, authToken, canWrite, onChange }: PartnerC
     setBusy(true);
     setError(null);
     try {
-      onChange(await partnerApi.setStatus(authToken, partner.id, next));
+      onChange(await partnerApi.setStatus(partner.id, next));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Thao tác thất bại");
     } finally {
@@ -89,7 +88,6 @@ export function PartnerCard({ partner, authToken, canWrite, onChange }: PartnerC
             <TestConnectionButton
               compact
               partnerId={partner.id}
-              authToken={authToken}
               lastResult={partner.testResult}
               lastTestedAt={partner.lastTestedAt}
               disabled={!spec?.implemented}

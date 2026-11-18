@@ -9,6 +9,8 @@
   "bruteForceProtected": true,
   "failureFactor": 10,
   "accessTokenLifespan": 1800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
   "ssoSessionIdleTimeout": 28800,
   "ssoSessionMaxLifespan": 86400,
   "sslRequired": "external",
@@ -56,7 +58,8 @@
         "https://admin-payment.bizone.vn"
       ],
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
       },
       "defaultClientScopes": [
         "openid",

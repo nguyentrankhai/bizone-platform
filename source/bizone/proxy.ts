@@ -14,7 +14,7 @@ function strippedHeaders(request: NextRequest): Headers {
 // Routes that don't require authentication
 const PUBLIC_PATHS = [
   "/api/health",
-  "/api/auth", // Keycloak callback routes
+  "/api/auth/logout", // verifies the bearer token itself (P6.7) — no tenant header
   "/api/webhooks/", // inbound partner webhooks — authenticated by HMAC in the route (P3.6)
   "/api/pos/pair", // customer display exchanges a one-time PIN for a display token (P4.5)
   "/api/store/", // storefront API — authenticated by the store key in the route (P6.1)
@@ -42,7 +42,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   const token = extractBearerToken(authHeader);
 
-  // Dev bypass (P4.0): no token → dev user when AUTH_DEV_BYPASS=true
   const result = await authenticateToken(token);
 
   if (!result.ok) {

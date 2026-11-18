@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/v1/webhooks", // inbound partner webhooks (verified by HMAC, not JWT)
   "/api/ipn/", // PSP IPN callbacks (verified by the connector's signature, not JWT)
+  "/api/auth/logout", // verifies the bearer token itself (P6.7)
   "/_next",
   "/favicon.ico",
 ];
@@ -42,7 +43,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   const token = extractBearerToken(authHeader);
 
-  // Dev bypass (P4.0): no token → dev user when AUTH_DEV_BYPASS=true
   const result = await authenticateToken(token);
 
   if (!result.ok) {

@@ -73,7 +73,7 @@ export function StockTakeForm({ auth, stockTakeId, onBack }: StockTakeFormProps)
       })
       .catch((e) => toast.error(errorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stockTakeId, auth.authToken]);
+  }, [stockTakeId, auth]);
 
   const editable = note?.status === "draft" || note?.status === "in_progress";
   const stats = useMemo(

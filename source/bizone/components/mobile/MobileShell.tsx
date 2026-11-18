@@ -5,15 +5,12 @@ import { useEffect } from "react";
 import { Monitor, WifiOff } from "lucide-react";
 import { ToastProvider } from "@/components/ui/Toast";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
-import type { ApiAuth } from "@/components/inventory/shared";
+import { LogoutButton, RequireAuth, useApiAuth } from "@/components/auth/AuthProvider";
 import { useOnline } from "@/hooks/useOnline";
 import { registerServiceWorker } from "@/lib/pwa/register";
 import { BottomNav } from "./BottomNav";
 
 interface Props {
-  auth: ApiAuth;
-  /** Strip under the header (dev sign-in notice from the server layout) */
-  banner?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -21,7 +18,16 @@ interface Props {
  * Frame of the store-owner PWA (P6.4): compact header with the branch switcher, offline strip,
  * content column, bottom navigation. Registers the service worker (offline cache + push).
  */
-export function MobileShell({ auth, banner, children }: Props) {
+export function MobileShell({ children }: Props) {
+  return (
+    <RequireAuth>
+      <MobileFrame>{children}</MobileFrame>
+    </RequireAuth>
+  );
+}
+
+function MobileFrame({ children }: Props) {
+  const auth = useApiAuth();
   const online = useOnline();
 
   useEffect(() => {
@@ -52,6 +58,7 @@ export function MobileShell({ auth, banner, children }: Props) {
               >
                 <Monitor className="h-5 w-5" />
               </Link>
+              <LogoutButton label={false} className="shrink-0 text-slate-500" />
             </div>
           </div>
           {!online && (
@@ -63,7 +70,6 @@ export function MobileShell({ auth, banner, children }: Props) {
             </div>
           )}
         </header>
-        {banner}
         <main className="mx-auto w-full max-w-xl flex-1 px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
           {children}
         </main>

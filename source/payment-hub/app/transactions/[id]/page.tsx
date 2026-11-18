@@ -10,14 +10,16 @@ import { getTransactionByCode, getTransactionById } from "@/server/services/tran
 import { getRefundOverview } from "@/server/services/refund.service";
 import { getTxnDisputeOverview } from "@/server/services/dispute.service";
 import { toEligibilityDto } from "@/lib/refund";
-import { devTokenCanWrite, devTokenMerchantId, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ dispute?: string | string[] }>;
 }
 
-async function fetchTxn(id: string): Promise<TxnDetail | null> {
+/** `merchantId`: a merchant-bound user only sees that merchant's transactions (as the API). */
+async function fetchTxn(id: string, merchantId?: number): Promise<TxnDetail | null> {
   let txn;
   const numId = parseInt(id, 10);
   if (!isNaN(numId)) {
@@ -26,7 +28,7 @@ async function fetchTxn(id: string): Promise<TxnDetail | null> {
     txn = await getTransactionByCode(id);
   }
 
-  if (!txn) return null;
+  if (!txn || (merchantId !== undefined && txn.merchantId !== merchantId)) return null;
   // Names only — never the partner config row itself (it holds encrypted credentials)
   const [merchant, partnerConfig] = await Promise.all([
     getPrisma().merchant.findUnique({
@@ -63,11 +65,17 @@ export default async function TransactionDetailPage({ params, searchParams }: Pa
   await connection();
   const { id } = await params;
   const { dispute: disputeParam } = await searchParams;
-  const txn = await fetchTxn(id);
-
+  const session = await pageSession();
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
+  const txn = await fetchTxn(id, session.merchantId);
   if (!txn) return notFound();
-  const token = getDevAuthToken();
-  const scope = { merchantId: devTokenMerchantId(token) };
+  const scope = { merchantId: session.merchantId };
   const [overview, disputes] = await Promise.all([
     getRefundOverview(txn.id),
     getTxnDisputeOverview(txn.id, scope),
@@ -93,8 +101,7 @@ export default async function TransactionDetailPage({ params, searchParams }: Pa
         refund={{ eligibility: toEligibilityDto(overview.eligibility), refunds: overview.refunds }}
         dispute={disputes}
         openDispute={openDispute === "1" ? "" : openDispute}
-        authToken={token}
-        canWrite={devTokenCanWrite(token)}
+        canWrite={session.canWrite}
       />
     </PHLayout>
   );

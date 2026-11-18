@@ -21,6 +21,7 @@ import {
   vnToday,
   weekStart,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Calendar = RouterOutputs["staff"]["shift"]["calendar"];
 type ShiftRow = RouterOutputs["staff"]["shift"]["list"][number];
@@ -275,7 +276,8 @@ function AssignModal({
   );
 }
 
-export function ShiftCalendar({ auth }: { auth: ApiAuth }) {
+export function ShiftCalendar() {
+  const auth = useApiAuth();
   const [from, setFrom] = useState(() => weekStart(vnToday()));
   const to = addDays(from, 6);
   const [editingShift, setEditingShift] = useState<ShiftRow | null | "new">(null);

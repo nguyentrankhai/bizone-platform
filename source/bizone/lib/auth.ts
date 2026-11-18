@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { AuthUser, KeycloakToken } from "@/types/auth";
+import { getRedis } from "@/lib/redis";
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://localhost:8080";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "bizone";
@@ -60,6 +61,7 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
       roles: [...new Set(allRoles)],
       resourceRoles,
       expiresAt: claims.exp,
+      sessionId: claims.sid,
     };
 
     return { ok: true, user };
@@ -74,53 +76,37 @@ export function extractBearerToken(authHeader: string | null): string | null {
   return authHeader.slice(7);
 }
 
-// ─── Dev auth bypass (P4.0) ──────────────────────────────────────────────────
-// Browser login (Keycloak OIDC) is not built yet (PROGRESS #7, P6.7). With AUTH_DEV_BYPASS=true a
-// request WITHOUT a token (or with the placeholder token below) runs as a configured dev user;
-// a real token is still fully verified, so permission tests with real users keep working.
-// Remove together with P6.7.
+// ─── Single entry point + logout revocation (P6.7) ────────────────────────────
+// Keycloak access tokens are stateless JWTs valid for 15 minutes. Logging out ends the Keycloak
+// session (no new tokens), and `/api/auth/logout` also marks the token's session id (`sid`)
+// revoked in Redis until the token expires — so a copied token stops working at once.
 
-/** Placeholder token pages hand to clients when bypass is on (WS subprotocols can't be empty). */
-export const DEV_BYPASS_TOKEN = "dev-bypass";
+const REVOKED_PREFIX = "auth:revoked:";
 
-const DEV_TOKEN_TTL_SECONDS = 12 * 60 * 60;
-let bypassWarned = false;
-
-export function isDevAuthBypass(): boolean {
-  return process.env.AUTH_DEV_BYPASS === "true";
+/** Mark a Keycloak session's tokens revoked until `expiresAt` (epoch seconds). */
+export async function revokeSession(sessionId: string, expiresAt: number): Promise<void> {
+  const ttl = Math.max(1, expiresAt - Math.floor(Date.now() / 1000));
+  await getRedis().set(`${REVOKED_PREFIX}${sessionId}`, "1", "EX", ttl);
 }
 
-/** Dev identity: AUTH_DEV_USER (default admin@bizone.vn), AUTH_DEV_ROLES, DEV_TENANT_ID. */
-export function devBypassUser(now = Date.now()): AuthUser {
-  const username = process.env.AUTH_DEV_USER?.trim() || "admin@bizone.vn";
-  const roles = (process.env.AUTH_DEV_ROLES ?? "bizone-admin")
-    .split(",")
-    .map((r) => r.trim())
-    .filter(Boolean);
-  return {
-    id: `dev-bypass:${username}`,
-    username,
-    email: username.includes("@") ? username : undefined,
-    name: `${username} (dev)`,
-    tenantId: process.env.DEV_TENANT_ID?.trim() || "tenant_demo",
-    roles,
-    resourceRoles: {},
-    expiresAt: Math.floor(now / 1000) + DEV_TOKEN_TTL_SECONDS,
-  };
+async function isSessionRevoked(sessionId: string | undefined): Promise<boolean> {
+  if (!sessionId) return false;
+  try {
+    return (await getRedis().exists(`${REVOKED_PREFIX}${sessionId}`)) === 1;
+  } catch {
+    return false; // Redis down: the 15-minute token lifetime still bounds a revoked token
+  }
 }
 
 /**
- * Single authentication entry point (proxy, tRPC, POS WebSocket): a real token → JWT verify;
- * no token / DEV_BYPASS_TOKEN → dev user when AUTH_DEV_BYPASS=true, otherwise rejected.
+ * Single authentication entry point (proxy, tRPC, WebSockets, route handlers): verify the
+ * Keycloak JWT and reject tokens of a session that logged out. No token → rejected.
  */
 export async function authenticateToken(token: string | null): Promise<JwtVerifyResult> {
-  if (token && token !== DEV_BYPASS_TOKEN) return verifyJwt(token);
-  if (!isDevAuthBypass()) return { ok: false, reason: token ? "invalid_token" : "missing_token" };
-  if (!bypassWarned) {
-    bypassWarned = true;
-    console.warn(
-      "[auth] AUTH_DEV_BYPASS=true — requests without a token run as the dev user. Never enable outside dev/test.",
-    );
+  if (!token) return { ok: false, reason: "missing_token" };
+  const result = await verifyJwt(token);
+  if (result.ok && (await isSessionRevoked(result.user.sessionId))) {
+    return { ok: false, reason: "session_revoked" };
   }
-  return { ok: true, user: devBypassUser() };
+  return result;
 }

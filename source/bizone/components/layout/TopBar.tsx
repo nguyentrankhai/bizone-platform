@@ -6,6 +6,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import type { ApiAuth } from "@/components/inventory/shared";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { LogoutButton, useCurrentUser } from "@/components/auth/AuthProvider";
 
 interface TopBarProps {
   className?: string;
@@ -17,6 +18,7 @@ interface TopBarProps {
 
 export function TopBar({ className, auth, onMenu }: TopBarProps) {
   const [search, setSearch] = useState("");
+  const user = useCurrentUser();
 
   return (
     <header
@@ -57,10 +59,24 @@ export function TopBar({ className, auth, onMenu }: TopBarProps) {
         {/* Notifications (P4.7) */}
         {auth && <NotificationBell auth={auth} />}
 
-        {/* Avatar */}
-        <button className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white sm:flex">
-          M
-        </button>
+        {/* Signed-in user (P6.7) */}
+        {user && (
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white sm:flex"
+            >
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+            <span
+              className="hidden max-w-40 truncate text-sm font-medium text-gray-700 lg:block"
+              title={user.email ?? user.username}
+            >
+              {user.name}
+            </span>
+          </div>
+        )}
+        <LogoutButton label={false} className="shrink-0" />
       </div>
     </header>
   );

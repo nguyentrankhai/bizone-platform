@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext } from "@/components/inventory/shared";
 import { ErrorBox, btnSecondary, inputAutoCls, useLoad } from "@/components/staff/shared";
 import { cn } from "@/lib/utils";
 import { CHANNEL_LABEL, NotificationHeader, STATUS_BADGE, eventLabel } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /** Email / SMS / push sent in the last 30 days (events, tests, report emails, campaigns) */
-export function DeliveryLog({ auth, campaignId }: { auth: ApiAuth; campaignId?: number }) {
+export function DeliveryLog({ campaignId }: { campaignId?: number }) {
+  const auth = useApiAuth();
   const [page, setPage] = useState(1);
   const [channel, setChannel] = useState("");
   const [status, setStatus] = useState("");

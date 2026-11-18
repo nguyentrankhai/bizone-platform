@@ -1,6 +1,7 @@
 import type { PartnerLogView, PartnerView, TestResult } from "@/lib/partner-types";
+import { adminFetch } from "@/lib/session-client";
 
-/** Client helpers for /api/internal/partners (Bearer token: dev DEV_AUTH_TOKEN, see issue #7). */
+/** Client helpers for /api/internal/partners (session token via adminFetch, P6.7). */
 
 export class ApiCallError extends Error {
   constructor(
@@ -12,12 +13,11 @@ export class ApiCallError extends Error {
   }
 }
 
-async function call<T>(token: string, path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/internal/partners${path}`, {
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await adminFetch(`/api/internal/partners${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
@@ -29,7 +29,7 @@ async function call<T>(token: string, path: string, init?: RequestInit): Promise
   if (!res.ok || !json?.success) {
     const message =
       res.status === 401
-        ? "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang"
+        ? "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại"
         : res.status === 403
           ? "Bạn không có quyền thực hiện thao tác này (cần role payhub-admin)"
           : (json?.error?.message ?? `Lỗi HTTP ${res.status}`);
@@ -57,25 +57,22 @@ export interface PartnerPayload {
 }
 
 export const partnerApi = {
-  list: (token: string, query = "") => call<PartnerView[]>(token, query ? `?${query}` : ""),
-  create: (token: string, body: PartnerPayload) =>
-    call<PartnerView>(token, "", { method: "POST", body: JSON.stringify(body) }),
-  update: (token: string, id: number, body: PartnerPayload) =>
-    call<PartnerView>(token, `/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  test: (token: string, id: number) =>
-    call<{ test_result: TestResult; last_tested_at: string; partner: PartnerView }>(
-      token,
-      `/${id}/test`,
-      { method: "POST" },
-    ),
-  setStatus: (token: string, id: number, status: "Active" | "Inactive") =>
-    call<PartnerView>(token, `/${id}/status`, {
+  list: (query = "") => call<PartnerView[]>(query ? `?${query}` : ""),
+  create: (body: PartnerPayload) =>
+    call<PartnerView>("", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: PartnerPayload) =>
+    call<PartnerView>(`/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  test: (id: number) =>
+    call<{ test_result: TestResult; last_tested_at: string; partner: PartnerView }>(`/${id}/test`, {
+      method: "POST",
+    }),
+  setStatus: (id: number, status: "Active" | "Inactive") =>
+    call<PartnerView>(`/${id}/status`, {
       method: "PUT",
       body: JSON.stringify({ status }),
     }),
-  logs: (token: string, id: number, page = 1) =>
+  logs: (id: number, page = 1) =>
     call<{ items: PartnerLogView[]; total: number; page: number; totalPages: number }>(
-      token,
       `/${id}/logs?page=${page}`,
     ),
 };

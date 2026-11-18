@@ -38,15 +38,7 @@ const STATUS_OPTIONS = [
   ["Refunded,PartiallyRefunded", "Đã hoàn tiền"],
 ] as const;
 
-export function TransactionReport({
-  authToken,
-  options,
-  today,
-}: {
-  authToken: string;
-  options: ReportOptions;
-  today: string;
-}) {
+export function TransactionReport({ options, today }: { options: ReportOptions; today: string }) {
   const [period, setPeriod] = useState(() => initialPeriod(today));
   const [groupBy, setGroupBy] = useState<GroupBy | "">("");
   const [status, setStatus] = useState("");
@@ -70,7 +62,7 @@ export function TransactionReport({
   useEffect(() => {
     let alive = true;
     reportApi
-      .transactions(authToken, query)
+      .transactions(query)
       .then((res) => {
         if (!alive) return;
         setReport(res.data);
@@ -85,7 +77,7 @@ export function TransactionReport({
     return () => {
       alive = false;
     };
-  }, [authToken, query]);
+  }, [query]);
 
   const s = report?.summary;
   return (
@@ -187,7 +179,7 @@ export function TransactionReport({
           disabled={!report}
           onExport={async (f) => {
             try {
-              await reportApi.download(authToken, "transactions", f, query);
+              await reportApi.download("transactions", f, query);
             } catch (e) {
               setError(e instanceof Error ? e.message : "Xuất báo cáo thất bại");
             }

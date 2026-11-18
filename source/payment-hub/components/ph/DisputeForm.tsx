@@ -36,7 +36,6 @@ export interface DisputeTxnSummary {
 }
 
 interface DisputeFormProps {
-  authToken: string;
   txn: DisputeTxnSummary;
   submitOptions: DisputeSubmitOptions;
   defaultReason?: string;
@@ -69,7 +68,6 @@ export function channelHint(o: DisputeSubmitOptions, partner: string | null): st
 }
 
 export function DisputeForm({
-  authToken,
   txn,
   submitOptions,
   defaultReason,
@@ -127,7 +125,7 @@ export function DisputeForm({
     setBusy("Đang tạo yêu cầu…");
     let created;
     try {
-      created = await disputeApi.create(authToken, {
+      created = await disputeApi.create({
         transaction_id: txn.id,
         reason,
         description: description.trim() || undefined,
@@ -143,7 +141,7 @@ export function DisputeForm({
     for (let i = 0; i < files.length; i++) {
       setBusy(`Đang tải tệp ${i + 1}/${files.length}…`);
       try {
-        await disputeApi.upload(authToken, created.dispute.id, files[i]!);
+        await disputeApi.upload(created.dispute.id, files[i]!);
       } catch (e) {
         failed.push(`${files[i]!.name} (${e instanceof Error ? e.message : "lỗi"})`);
       }
@@ -153,7 +151,7 @@ export function DisputeForm({
     if (sendNow && canAutoSend) {
       setBusy("Đang gửi đối tác…");
       try {
-        const r = await disputeApi.submit(authToken, created.dispute.id, { mode: "auto" });
+        const r = await disputeApi.submit(created.dispute.id, { mode: "auto" });
         sendText = r.submit ? ` — ${r.submit.message}` : "";
       } catch (e) {
         ok = false;

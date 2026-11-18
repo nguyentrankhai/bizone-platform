@@ -238,7 +238,7 @@ export function usePosWebSocket({
       client.stop();
       clientRef.current = null;
     };
-  }, [sessionId, auth.authToken, auth.tenantId, role, applyCart, replayLocal]);
+  }, [sessionId, auth, role, applyCart, replayLocal]);
 
   const online = () => clientRef.current?.mode === "ws";
 

@@ -9,7 +9,6 @@ import { ReconciliationDetail } from "./ReconciliationDetail";
 /** /reconciliation (P5.4): runs list + selected run, manual run (status queries) or statement import. */
 
 interface Props {
-  authToken: string;
   canWrite: boolean;
   partners: ReconPartner[];
   initialRuns: RunView[];
@@ -19,7 +18,7 @@ interface Props {
 }
 
 export function ReconciliationClient(props: Props) {
-  const { authToken, canWrite, partners, yesterday } = props;
+  const { canWrite, partners, yesterday } = props;
   const [runs, setRuns] = useState(props.initialRuns);
   const [meta, setMeta] = useState(props.initialMeta);
   const [partnerFilter, setPartnerFilter] = useState("");
@@ -43,7 +42,7 @@ export function ReconciliationClient(props: Props) {
     const q = new URLSearchParams({ page: String(page), limit: "15" });
     if (partnerFilter) q.set("partner_config_id", partnerFilter);
     reconApi
-      .runs(authToken, q)
+      .runs(q)
       .then((res) => {
         if (!alive) return;
         setRuns(res.data);
@@ -55,14 +54,14 @@ export function ReconciliationClient(props: Props) {
     return () => {
       alive = false;
     };
-  }, [authToken, page, partnerFilter, tick]);
+  }, [page, partnerFilter, tick]);
 
   useEffect(() => {
     if (!selectedId) return;
     let alive = true;
     window.history.replaceState(null, "", `/reconciliation?run=${selectedId}`);
     reconApi
-      .run(authToken, selectedId)
+      .run(selectedId)
       .then((res) => {
         if (alive) setSelected(res.data);
       })
@@ -72,7 +71,7 @@ export function ReconciliationClient(props: Props) {
     return () => {
       alive = false;
     };
-  }, [authToken, selectedId, tick]);
+  }, [selectedId, tick]);
 
   // A status-query run executes in the worker: poll until it finishes
   useEffect(() => {
@@ -156,7 +155,6 @@ export function ReconciliationClient(props: Props) {
         <ReconciliationDetail
           key={selected.id}
           run={selected}
-          authToken={authToken}
           canWrite={canWrite}
           onChanged={refresh}
         />
@@ -164,7 +162,6 @@ export function ReconciliationClient(props: Props) {
 
       {showRun && (
         <RunDialog
-          authToken={authToken}
           partners={partners}
           yesterday={yesterday}
           onClose={() => setShowRun(false)}
@@ -182,13 +179,11 @@ export function ReconciliationClient(props: Props) {
 }
 
 function RunDialog({
-  authToken,
   partners,
   yesterday,
   onClose,
   onStarted,
 }: {
-  authToken: string;
   partners: ReconPartner[];
   yesterday: string;
   onClose: () => void;
@@ -211,15 +206,13 @@ function RunDialog({
     setError(null);
     try {
       if (effective === "Api") {
-        onStarted(
-          (await reconApi.start(authToken, { partner_config_id: partner.id, run_date: day })).data,
-        );
+        onStarted((await reconApi.start({ partner_config_id: partner.id, run_date: day })).data);
       } else {
         const form = new FormData();
         form.set("file", file!);
         form.set("partner_config_id", String(partner.id));
         form.set("run_date", day);
-        onStarted((await reconApi.importFile(authToken, form)).data);
+        onStarted((await reconApi.importFile(form)).data);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không chạy được đối soát");

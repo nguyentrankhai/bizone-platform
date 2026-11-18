@@ -31,13 +31,13 @@ import {
   apiContext,
   errorMessage,
   fmtDate,
-  type ApiAuth,
   type RouterOutputs,
 } from "@/components/inventory/shared";
 import { ProductGrid, type ProductGridHandle } from "./ProductGrid";
 import { CartPanel, type CartPanelHandle } from "./CartPanel";
 import { PaymentModal } from "./PaymentModal";
 import { Receipt } from "./Receipt";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 // P6.5: dialogs used now and then are split out of the POS bundle — loaded in the background once
 // the screen is idle (so they still open instantly) and mounted on first open
@@ -93,7 +93,8 @@ export const SHORTCUTS: [string, string][] = [
 ];
 
 /** Màn hình nhân viên bán hàng (mockup 02-pos §03) */
-export function PosClient({ auth }: { auth: ApiAuth }) {
+export function PosClient() {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const gridRef = useRef<ProductGridHandle>(null);

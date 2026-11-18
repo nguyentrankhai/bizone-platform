@@ -24,11 +24,13 @@ import {
   useCategoryOptions,
   type Outputs,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Bxgy = Outputs["promotion"]["buyXGetY"]["list"][number];
 type Combo = Outputs["promotion"]["combo"]["list"][number];
 
-export function PromotionList({ auth }: { auth: ApiAuth }) {
+export function PromotionList() {
+  const auth = useApiAuth();
   const toast = useToast();
   const ctx = apiContext(auth);
   const bxgy = useLoad("bxgy", () => trpc.promotion.buyXGetY.list.query(undefined, ctx));

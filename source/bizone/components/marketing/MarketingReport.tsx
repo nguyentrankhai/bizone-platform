@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, fmtNumber, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney, fmtNumber } from "@/components/inventory/shared";
 import { ErrorBox, inputAutoCls, useLoad } from "@/components/staff/shared";
 import { MarketingHeader, StatusPill } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 const TYPE = {
   coupon: { label: "Mã giảm giá", tone: "blue", unit: "lượt" },
@@ -18,7 +19,8 @@ const minusDays = (key: string, days: number) =>
   new Date(Date.parse(`${key}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
 
 /** `today` (VN date) comes from the server request — no clock reads while prerendering */
-export function MarketingReport({ auth, today }: { auth: ApiAuth; today: string }) {
+export function MarketingReport({ today }: { today: string }) {
+  const auth = useApiAuth();
   const [from, setFrom] = useState(minusDays(today, 29));
   const [to, setTo] = useState(today);
   const valid = from <= to;

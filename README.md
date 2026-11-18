@@ -141,7 +141,7 @@ npm run dev
 - Performance check (P6.5): `source/bizone/scripts/perf/README.md` — load a 200 000-invoice test database into a separate tenant and measure API P50 / P95 with `node scripts/perf/bench.mjs`; index review in `scripts/database-indexing.sql`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
-- Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
+- Sign-in: both web apps redirect to Keycloak (Authorization Code + PKCE — BizOne client `bizone-frontend`, Payment Hub Admin client `payhub-admin-console`); dev users are in `keycloak/realms/*.json`. Scripts / tests get a token with `KC_PASSWORD=… node scripts/auth/login.mjs --user <username>` (in each app).
 
 ### Build Plan
 
@@ -274,7 +274,7 @@ npm run dev
 - Đo hiệu năng (P6.5): `source/bizone/scripts/perf/README.md` — nạp DB thử 200 000 hoá đơn vào tenant riêng và đo P50 / P95 API bằng `node scripts/perf/bench.mjs`; rà soát index ở `scripts/database-indexing.sql`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
-- Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).
+- Đăng nhập: cả 2 web app chuyển sang Keycloak (Authorization Code + PKCE — BizOne client `bizone-frontend`, Payment Hub Admin client `payhub-admin-console`); user dev nằm trong `keycloak/realms/*.json`. Script / kiểm thử lấy token bằng `KC_PASSWORD=… node scripts/auth/login.mjs --user <username>` (trong từng app).
 
 ### Kế hoạch xây dựng
 

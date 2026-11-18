@@ -33,10 +33,12 @@ import {
   vnToday,
   type Outputs,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Po = Outputs["purchaseOrder"]["get"];
 
-export function PurchaseOrderDetail({ auth, poId }: { auth: ApiAuth; poId: number }) {
+export function PurchaseOrderDetail({ poId }: { poId: number }) {
+  const auth = useApiAuth();
   const ctx = apiContext(auth);
   const data = useLoad(`po:${poId}`, () => trpc.purchaseOrder.get.query({ id: poId }, ctx));
   const [receiving, setReceiving] = useState(false);

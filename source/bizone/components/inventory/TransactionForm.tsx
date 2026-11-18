@@ -10,14 +10,8 @@ import {
   type BarcodeScanInputHandle,
   type ScannedProduct,
 } from "./BarcodeScanInput";
-import {
-  apiContext,
-  errorMessage,
-  fmtMoney,
-  fmtNumber,
-  type ApiAuth,
-  type RouterOutputs,
-} from "./shared";
+import { apiContext, errorMessage, fmtMoney, fmtNumber, type RouterOutputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type TxType = RouterOutputs["inventory"]["transactionTypes"][number];
 type Warehouse = RouterOutputs["warehouse"]["list"][number];
@@ -35,12 +29,12 @@ const EXCLUDED_TYPES = ["transfer_out", "transfer_in", "stock_take"];
 const DEFAULT_TYPE = { in: "purchase_receipt", out: "sales_issue" };
 
 interface TransactionFormProps {
-  auth: ApiAuth;
   direction: "in" | "out";
 }
 
 /** Phiếu nhập / xuất kho với quét mã vạch (mockup 04-warehouse §08) */
-export function TransactionForm({ auth, direction }: TransactionFormProps) {
+export function TransactionForm({ direction }: TransactionFormProps) {
+  const auth = useApiAuth();
   const router = useRouter();
   const toast = useToast();
   const scanRef = useRef<BarcodeScanInputHandle>(null);
@@ -71,7 +65,7 @@ export function TransactionForm({ auth, direction }: TransactionFormProps) {
       })
       .catch((e) => toast.error(errorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [direction, auth.authToken]);
+  }, [direction, auth]);
 
   function addProduct(p: ScannedProduct) {
     const key = `${p.productId}-${p.variantId ?? 0}`;

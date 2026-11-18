@@ -28,6 +28,7 @@ import {
   WEBSITE_PAYMENT_METHODS,
   type WebsiteConfig,
 } from "@/lib/omni/website";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Channel = RouterOutputs["omni"]["website"];
 
@@ -44,7 +45,8 @@ const DEFAULTS: WebsiteConfig = {
 };
 
 /** Omni Channel → Website (P6.1): settings of the online store, store key, sync log */
-export function WebsiteChannel({ auth }: { auth: ApiAuth }) {
+export function WebsiteChannel() {
+  const auth = useApiAuth();
   const toast = useToast();
   const ch = useLoad("omni-website", () => trpc.omni.website.query(undefined, apiContext(auth)));
   const [newKey, setNewKey] = useState<string | null>(null);

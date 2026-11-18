@@ -9,12 +9,10 @@ import { DisputeCard } from "./DisputeHistory";
 export function DisputeDetailClient({
   dispute,
   submitOptions,
-  authToken,
   canWrite,
 }: {
   dispute: DisputeDetail;
   submitOptions: DisputeSubmitOptions;
-  authToken: string;
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -37,7 +35,6 @@ export function DisputeDetailClient({
         <DisputeCard
           dispute={dispute}
           submitOptions={submitOptions}
-          authToken={authToken}
           canWrite={canWrite}
           defaultOpen
           showTxnLink

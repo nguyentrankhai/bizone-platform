@@ -6,12 +6,13 @@ import { ExternalLink } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 import { trpc } from "@/lib/trpc";
-import { apiContext, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, fmtMoney } from "@/components/inventory/shared";
 import { METHOD_LABEL } from "@/components/reports/shared";
 import { useOfflineQuery } from "@/hooks/useOfflineQuery";
 import { MOBILE_PERIODS, periodRange, type MobilePeriod } from "@/lib/pwa/periods";
 import { cn } from "@/lib/utils";
 import { Card, Change, DataStatus, Empty, MiniBars, Skeleton, fmtCompact } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Outputs = inferRouterOutputs<AppRouter>["reports"];
 interface ReportData {
@@ -23,7 +24,8 @@ interface ReportData {
  * Sales report on the phone (P6.4): net revenue, profit, invoices vs the previous period,
  * revenue by day, payment methods, best sellers. Same numbers as /reports (report.service).
  */
-export function MobileReports({ auth }: { auth: ApiAuth }) {
+export function MobileReports() {
+  const auth = useApiAuth();
   const [period, setPeriod] = useState<MobilePeriod>("7d");
   // the range is computed when fetching (not while rendering: "today" moves, and the page shell
   // is prerendered)

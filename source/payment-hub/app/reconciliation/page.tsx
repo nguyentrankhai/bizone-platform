@@ -1,7 +1,8 @@
 import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { ReconciliationClient } from "@/components/ph/ReconciliationClient";
-import { devTokenCanWrite, getDevAuthToken } from "@/lib/dev-auth";
+import { pageSession } from "@/lib/page-session";
+import { SessionGate } from "@/components/auth/AuthProvider";
 import {
   getRun,
   listRuns,
@@ -18,7 +19,14 @@ export default async function ReconciliationPage({
 }) {
   await connection();
   const { run } = await searchParams;
-  const token = getDevAuthToken();
+  const session = await pageSession({ globalOnly: true });
+  if (!session.ok) {
+    return (
+      <PHLayout>
+        <SessionGate reason={session.reason} message={session.message} />
+      </PHLayout>
+    );
+  }
   const [partners, runs] = await Promise.all([
     reconcilablePartners(),
     listRuns({ page: 1, limit: 15 }),
@@ -32,8 +40,7 @@ export default async function ReconciliationPage({
   return (
     <PHLayout>
       <ReconciliationClient
-        authToken={token}
-        canWrite={devTokenCanWrite(token)}
+        canWrite={session.canWrite}
         partners={partners}
         initialRuns={runs.items}
         initialMeta={runs.meta}

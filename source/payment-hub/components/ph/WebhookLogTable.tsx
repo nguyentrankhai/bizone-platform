@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { fmtTime, webhookApi } from "./webhook-api";
 
 interface WebhookLogTableProps {
-  authToken: string;
   canWrite: boolean;
   /** Bump to reload (after a ping/replay elsewhere) */
   refreshKey: number;
@@ -54,13 +53,11 @@ function Pre({ value }: { value: unknown }) {
 
 function LogDrawer({
   id,
-  authToken,
   canWrite,
   onClose,
   onReplayed,
 }: {
   id: string;
-  authToken: string;
   canWrite: boolean;
   onClose: () => void;
   onReplayed: () => void;
@@ -74,7 +71,7 @@ function LogDrawer({
   useEffect(() => {
     let alive = true;
     webhookApi
-      .log(authToken, id)
+      .log(id)
       .then((l) => {
         if (!alive) return;
         setLog(l);
@@ -84,13 +81,13 @@ function LogDrawer({
     return () => {
       alive = false;
     };
-  }, [authToken, id]);
+  }, [id]);
 
   async function replay() {
     setReplaying(true);
     setReplayMsg(null);
     try {
-      const r = await webhookApi.replay(authToken, id);
+      const r = await webhookApi.replay(id);
       setReplayMsg({
         ok: r.ok,
         text: r.ok
@@ -216,12 +213,7 @@ function LogDrawer({
   );
 }
 
-export function WebhookLogTable({
-  authToken,
-  canWrite,
-  refreshKey,
-  onActivity,
-}: WebhookLogTableProps) {
+export function WebhookLogTable({ canWrite, refreshKey, onActivity }: WebhookLogTableProps) {
   const [items, setItems] = useState<WebhookLogView[]>([]);
   const [loadedAt, setLoadedAt] = useState(0);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -241,7 +233,7 @@ export function WebhookLogTable({
     if (event) q.set("event", event);
     if (txn.trim()) q.set("transaction", txn.trim());
     try {
-      const res = await webhookApi.logs(authToken, q.toString());
+      const res = await webhookApi.logs(q.toString());
       setItems(res.data);
       setLoadedAt(Date.now());
       if (res.meta) setMeta(res.meta);
@@ -250,7 +242,7 @@ export function WebhookLogTable({
     } finally {
       setLoading(false);
     }
-  }, [authToken, page, status, event, txn]);
+  }, [page, status, event, txn]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(), txn ? 300 : 0);
@@ -398,7 +390,6 @@ export function WebhookLogTable({
       {openId && (
         <LogDrawer
           id={openId}
-          authToken={authToken}
           canWrite={canWrite}
           onClose={() => setOpenId(null)}
           onReplayed={() => {

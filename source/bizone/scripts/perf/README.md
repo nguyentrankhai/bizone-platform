@@ -19,11 +19,15 @@ Quy mô: 10 000 SP (2 000 có 3 biến thể), 42 000 dòng tồn, 50 000 khách
 
 ```bash
 unset DATABASE_URL   # app lấy host / mật khẩu từ .env.local, DB theo TENANT_DATABASES
-export DEV_TENANT_ID=tenant_perf TENANT_DATABASES="tenant_demo=bizonedb,tenant_perf=bizone_perf"
+export TENANT_DATABASES="tenant_demo=bizonedb,tenant_perf=bizone_perf"
 npm run build && npx next start -p 3001
 ```
 
-Cần `AUTH_DEV_BYPASS=true` (token `dev-bypass`).
+Token: user Keycloak (realm `bizone`) có thuộc tính `tenant_id = tenant_perf` và vai trò `bizone-admin` (tạo trong admin console), đăng nhập bằng script (P6.7 — không còn chế độ bỏ qua đăng nhập; token sống 15 phút):
+
+```bash
+export BENCH_TOKEN=$(KC_PASSWORD=… node scripts/auth/login.mjs --user perf.admin@bizone.vn)
+```
 
 ## 3. Đo
 

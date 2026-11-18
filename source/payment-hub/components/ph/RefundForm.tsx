@@ -17,7 +17,6 @@ import { RefundApiError, refundApi } from "./refund-api";
  */
 
 interface RefundFormProps {
-  authToken: string;
   txn: { id: number; txnCode: string; currency: string; paidAt: string | null };
   eligibility: RefundEligibilityDto;
   onDone: (outcome: RefundOutcomeView) => void;
@@ -51,7 +50,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function RefundForm({ authToken, txn, eligibility: e, onDone, onClose }: RefundFormProps) {
+export function RefundForm({ txn, eligibility: e, onDone, onClose }: RefundFormProps) {
   const remainingIsAll = e.refundedAmount === 0 && e.inflightAmount === 0;
   const [type, setType] = useState<"full" | "partial">("full");
   const [amountText, setAmountText] = useState("");
@@ -85,7 +84,6 @@ export function RefundForm({ authToken, txn, eligibility: e, onDone, onClose }: 
     setError(null);
     try {
       const outcome = await refundApi.create(
-        authToken,
         txn.id,
         {
           amount: type === "full" ? null : partialAmount,

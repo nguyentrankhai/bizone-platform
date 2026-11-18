@@ -14,6 +14,7 @@ import {
 import { ErrorBox, inputAutoCls, inputCls, useLoad } from "@/components/staff/shared";
 import { cn } from "@/lib/utils";
 import { SupplierPageHeader } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 /**
  * Net purchase price of each product per supplier (last / min / avg). `supplierId` limits to
@@ -164,7 +165,8 @@ export function PriceComparisonTable({
   );
 }
 
-export function PriceComparisonPage({ auth }: { auth: ApiAuth }) {
+export function PriceComparisonPage() {
+  const auth = useApiAuth();
   return (
     <div className="space-y-5">
       <SupplierPageHeader

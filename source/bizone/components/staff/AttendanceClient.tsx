@@ -21,6 +21,7 @@ import {
   vnToday,
   weekStart,
 } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type Sheet = RouterOutputs["staff"]["attendance"]["timesheet"];
 type Row = Sheet["rows"][number];
@@ -170,7 +171,8 @@ function DetailTable({ row }: { row: Row }) {
   );
 }
 
-export function AttendanceClient({ auth }: { auth: ApiAuth }) {
+export function AttendanceClient() {
+  const auth = useApiAuth();
   const today = vnToday();
   const [mode, setMode] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState(today);

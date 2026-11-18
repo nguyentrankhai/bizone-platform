@@ -136,15 +136,7 @@ function LinesTable({
   );
 }
 
-export function RevenueReport({
-  authToken,
-  options,
-  today,
-}: {
-  authToken: string;
-  options: ReportOptions;
-  today: string;
-}) {
+export function RevenueReport({ options, today }: { options: ReportOptions; today: string }) {
   const [period, setPeriod] = useState(() => initialPeriod(today, "thisMonth"));
   const [compare, setCompare] = useState<CompareMode>("previous");
   const [partner, setPartner] = useState("");
@@ -167,7 +159,7 @@ export function RevenueReport({
   useEffect(() => {
     let alive = true;
     reportApi
-      .revenue(authToken, query)
+      .revenue(query)
       .then((res) => {
         if (!alive) return;
         setReport(res.data);
@@ -182,7 +174,7 @@ export function RevenueReport({
     return () => {
       alive = false;
     };
-  }, [authToken, query]);
+  }, [query]);
 
   const s = report?.summary;
   const compareLabel = compare === "year" ? "cùng kỳ năm trước" : "kỳ trước";
@@ -251,7 +243,7 @@ export function RevenueReport({
           disabled={!report}
           onExport={async (f) => {
             try {
-              await reportApi.download(authToken, "revenue", f, query);
+              await reportApi.download("revenue", f, query);
             } catch (e) {
               setError(e instanceof Error ? e.message : "Xuất báo cáo thất bại");
             }

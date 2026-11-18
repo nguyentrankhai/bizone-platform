@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { CustomerDisplay } from "@/components/pos/CustomerDisplay";
+import { SessionCustomerDisplay } from "@/components/pos/CustomerDisplay";
+import { RequireAuth } from "@/components/auth/AuthProvider";
 import { PairingScreen } from "@/components/pos/PairingScreen";
-import { getDevAuth } from "@/lib/dev-auth";
 
 export const metadata = { title: "Màn hình khách hàng | BizOne" };
 
@@ -22,5 +22,9 @@ export default function CustomerDisplayPage({ searchParams }: Props) {
 async function Display({ searchParams }: Props) {
   const sessionId = Number((await searchParams).session);
   if (!sessionId) return <PairingScreen />;
-  return <CustomerDisplay auth={getDevAuth()} sessionId={sessionId} />;
+  return (
+    <RequireAuth>
+      <SessionCustomerDisplay sessionId={sessionId} />
+    </RequireAuth>
+  );
 }

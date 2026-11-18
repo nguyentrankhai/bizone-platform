@@ -7,12 +7,14 @@ import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import { StockTakeForm } from "./StockTakeForm";
 import { StatusBadge } from "./StatusBadge";
-import { apiContext, errorMessage, fmtDate, type ApiAuth, type RouterOutputs } from "./shared";
+import { apiContext, errorMessage, fmtDate, type RouterOutputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type NoteRow = RouterOutputs["stockTake"]["list"]["items"][number];
 type Warehouse = RouterOutputs["warehouse"]["list"][number];
 
-export function StockTakeClient({ auth }: { auth: ApiAuth }) {
+export function StockTakeClient() {
+  const auth = useApiAuth();
   const toast = useToast();
   const [openId, setOpenId] = useState<number | null>(null);
   const [notes, setNotes] = useState<NoteRow[]>([]);
@@ -43,7 +45,7 @@ export function StockTakeClient({ auth }: { auth: ApiAuth }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, auth.authToken]);
+  }, [status, auth]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -60,7 +62,7 @@ export function StockTakeClient({ auth }: { auth: ApiAuth }) {
       })
       .catch((e) => toast.error(errorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.authToken]);
+  }, [auth]);
 
   async function create() {
     if (!newWarehouseId) return;

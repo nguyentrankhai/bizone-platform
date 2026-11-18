@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MarketplaceChannel } from "@/components/omni/MarketplaceChannel";
-import { getDevAuth } from "@/lib/dev-auth";
 import { isMarketplace } from "@/lib/omni/marketplace";
 
 export const metadata = { title: "Kênh sàn TMĐT | BizOne" };
@@ -22,7 +21,6 @@ export default async function OmniMarketplacePage({
     <AppLayout>
       <div className="p-4 sm:p-6">
         <MarketplaceChannel
-          auth={getDevAuth()}
           code={channel}
           flash={{ connected: sp.connected === "1", error: sp.error?.slice(0, 300) }}
         />

@@ -1,6 +1,7 @@
 import type { DetailView, RunView } from "@/server/services/reconciliation.service";
+import { adminFetch } from "@/lib/session-client";
 
-/** Client helpers for /api/internal/reconciliation (Bearer token). Types only from the service. */
+/** Client helpers for /api/internal/reconciliation (session token via adminFetch). Types only from the service. */
 
 export type { DetailView, RunView };
 
@@ -37,8 +38,7 @@ interface Envelope<T> {
 }
 
 function messageOf(res: Response, json: Envelope<unknown> | null): string {
-  if (res.status === 401)
-    return "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang";
+  if (res.status === 401) return "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại";
   if (res.status === 403)
     return (
       json?.error?.message ?? "Bạn không có quyền thực hiện thao tác này (cần role payhub-admin)"
@@ -46,12 +46,11 @@ function messageOf(res: Response, json: Envelope<unknown> | null): string {
   return json?.error?.message ?? `Lỗi HTTP ${res.status}`;
 }
 
-async function call<T>(token: string, path: string, init?: RequestInit) {
-  const res = await fetch(`/api/internal/reconciliation${path}`, {
+async function call<T>(path: string, init?: RequestInit) {
+  const res = await adminFetch(`/api/internal/reconciliation${path}`, {
     ...init,
     headers: {
       ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
   const json = (await res.json().catch(() => null)) as Envelope<T> | null;
@@ -60,32 +59,28 @@ async function call<T>(token: string, path: string, init?: RequestInit) {
 }
 
 export const reconApi = {
-  runs: (token: string, q: URLSearchParams) => call<RunView[]>(token, `?${q.toString()}`),
-  run: (token: string, id: number) => call<RunView>(token, `/${id}`),
-  details: (token: string, id: number, q: URLSearchParams) =>
-    call<DetailView[]>(token, `/${id}/details?${q.toString()}`),
-  start: (token: string, body: { partner_config_id: number; run_date: string }) =>
-    call<RunView>(token, "", { method: "POST", body: JSON.stringify(body) }),
-  importFile: (token: string, form: FormData) =>
-    call<RunView & { skipped: { row: number; reason: string }[] }>(token, "/import", {
+  runs: (q: URLSearchParams) => call<RunView[]>(`?${q.toString()}`),
+  run: (id: number) => call<RunView>(`/${id}`),
+  details: (id: number, q: URLSearchParams) => call<DetailView[]>(`/${id}/details?${q.toString()}`),
+  start: (body: { partner_config_id: number; run_date: string }) =>
+    call<RunView>("", { method: "POST", body: JSON.stringify(body) }),
+  importFile: (form: FormData) =>
+    call<RunView & { skipped: { row: number; reason: string }[] }>("/import", {
       method: "POST",
       body: form,
     }),
   resolve: (
-    token: string,
     runId: number,
     detailId: string,
     body: { status: "Open" | "Resolved"; resolution?: string },
   ) =>
-    call<DetailView>(token, `/${runId}/details/${detailId}`, {
+    call<DetailView>(`/${runId}/details/${detailId}`, {
       method: "PUT",
       body: JSON.stringify(body),
     }),
   /** Download the report through fetch (the API needs the Authorization header). */
-  async download(token: string, id: number, format: "xlsx" | "pdf"): Promise<void> {
-    const res = await fetch(`/api/internal/reconciliation/${id}/export?format=${format}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+  async download(id: number, format: "xlsx" | "pdf"): Promise<void> {
+    const res = await adminFetch(`/api/internal/reconciliation/${id}/export?format=${format}`, {});
     if (!res.ok) {
       const json = (await res.json().catch(() => null)) as Envelope<unknown> | null;
       throw new ReconApiError(messageOf(res, json), res.status);

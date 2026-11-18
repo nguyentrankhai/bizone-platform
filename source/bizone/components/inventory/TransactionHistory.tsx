@@ -68,7 +68,7 @@ export function TransactionHistory({
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, warehouseId, typeId, status, auth.authToken]);
+  }, [page, warehouseId, typeId, status, auth]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

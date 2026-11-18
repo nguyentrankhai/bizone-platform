@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Bell, Search, ChevronRight } from "lucide-react";
+import { UserMenu } from "@/components/auth/AuthProvider";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -64,9 +65,7 @@ export function PHHeader() {
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
         </button>
 
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
-          TA
-        </button>
+        <UserMenu />
       </div>
     </header>
   );

@@ -6,12 +6,14 @@ import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { TransferForm } from "./TransferForm";
 import { StatusBadge } from "./StatusBadge";
-import { apiContext, errorMessage, fmtDate, type ApiAuth, type RouterOutputs } from "./shared";
+import { apiContext, errorMessage, fmtDate, type RouterOutputs } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type TransferRow = RouterOutputs["transfer"]["list"]["items"][number];
 type Warehouse = RouterOutputs["warehouse"]["list"][number];
 
-export function TransferClient({ auth }: { auth: ApiAuth }) {
+export function TransferClient() {
+  const auth = useApiAuth();
   const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [rows, setRows] = useState<TransferRow[]>([]);
@@ -38,7 +40,7 @@ export function TransferClient({ auth }: { auth: ApiAuth }) {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, auth.authToken]);
+  }, [status, auth]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -51,7 +53,7 @@ export function TransferClient({ auth }: { auth: ApiAuth }) {
       .then((w) => setWarehouses(w.filter((x) => x.isActive)))
       .catch((e) => toast.error(errorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.authToken]);
+  }, [auth]);
 
   async function act(id: number, action: "confirm" | "cancel") {
     if (action === "cancel" && !confirm("Huỷ phiếu chuyển kho này?")) return;

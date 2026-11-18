@@ -167,7 +167,7 @@ async function authorize(
     return { sessionId, room: roomKey(tenantId, sessionId), user: null, tenantId, canWrite: false };
   }
 
-  const verified = await authenticateToken(token); // DEV_BYPASS_TOKEN → dev user (P4.0)
+  const verified = await authenticateToken(token);
   if (!verified.ok) return { status: 401, message: "Invalid token" };
   if (!tenantId || tenantId !== verified.user.tenantId)
     return { status: 403, message: "Tenant mismatch" };

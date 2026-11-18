@@ -1,5 +1,6 @@
 "use client";
 
+import { adminFetch, oidc } from "@/lib/session-client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -28,7 +29,6 @@ type WsState = "connecting" | "live" | "offline";
 
 interface Props {
   initial: DashboardData;
-  authToken: string;
   wsUrl: string;
 }
 
@@ -56,12 +56,12 @@ function Panel({
   );
 }
 
-export function DashboardClient({ initial, authToken, wsUrl }: Props) {
+export function DashboardClient({ initial, wsUrl }: Props) {
   const [data, setData] = useState<DashboardData>(initial);
   const [period, setPeriod] = useState<DashboardPeriod>(initial.period);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ws, setWs] = useState<WsState>(wsUrl && authToken ? "connecting" : "offline");
+  const [ws, setWs] = useState<WsState>(wsUrl ? "connecting" : "offline");
   const [flash, setFlash] = useState(false);
   const [newIds, setNewIds] = useState<ReadonlySet<number>>(new Set());
   const [now, setNow] = useState(() => Date.parse(initial.generatedAt));
@@ -78,56 +78,50 @@ export function DashboardClient({ initial, authToken, wsUrl }: Props) {
     dataRef.current = data;
   }, [data]);
 
-  const load = useCallback(
-    async (p: DashboardPeriod) => {
-      inFlight.current?.abort();
-      const ctrl = new AbortController();
-      inFlight.current = ctrl;
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/internal/dashboard?period=${p}`, {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-        const json = (await res.json().catch(() => null)) as {
-          success?: boolean;
-          data?: DashboardData;
-          error?: { message?: string };
-        } | null;
-        if (!res.ok || !json?.success || !json.data) {
-          throw new Error(
-            res.status === 401
-              ? "Phiên đăng nhập hết hạn (DEV_AUTH_TOKEN) — lấy token mới rồi tải lại trang"
-              : res.status === 403
-                ? "Bạn không có quyền xem dashboard (cần role payhub-admin/payhub-viewer)"
-                : (json?.error?.message ?? `Lỗi HTTP ${res.status}`),
-          );
-        }
-        if (p !== periodRef.current) return;
-        const prevIds = new Set(dataRef.current.recentTransactions.map((t) => t.id));
-        const fresh = json.data.recentTransactions
-          .filter((t) => !prevIds.has(t.id))
-          .map((t) => t.id);
-        setData(json.data);
-        setError(null);
-        setNow(Date.now());
-        if (fresh.length) {
-          setNewIds(new Set(fresh));
-          setTimeout(() => setNewIds(new Set()), 4000);
-        }
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        setError((err as Error).message);
-      } finally {
-        if (inFlight.current === ctrl) {
-          inFlight.current = null;
-          setLoading(false);
-        }
+  const load = useCallback(async (p: DashboardPeriod) => {
+    inFlight.current?.abort();
+    const ctrl = new AbortController();
+    inFlight.current = ctrl;
+    setLoading(true);
+    try {
+      const res = await adminFetch(`/api/internal/dashboard?period=${p}`, {
+        signal: ctrl.signal,
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        data?: DashboardData;
+        error?: { message?: string };
+      } | null;
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(
+          res.status === 401
+            ? "Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại"
+            : res.status === 403
+              ? "Bạn không có quyền xem dashboard (cần role payhub-admin/payhub-viewer)"
+              : (json?.error?.message ?? `Lỗi HTTP ${res.status}`),
+        );
       }
-    },
-    [authToken],
-  );
+      if (p !== periodRef.current) return;
+      const prevIds = new Set(dataRef.current.recentTransactions.map((t) => t.id));
+      const fresh = json.data.recentTransactions.filter((t) => !prevIds.has(t.id)).map((t) => t.id);
+      setData(json.data);
+      setError(null);
+      setNow(Date.now());
+      if (fresh.length) {
+        setNewIds(new Set(fresh));
+        setTimeout(() => setNewIds(new Set()), 4000);
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      setError((err as Error).message);
+    } finally {
+      if (inFlight.current === ctrl) {
+        inFlight.current = null;
+        setLoading(false);
+      }
+    }
+  }, []);
 
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) return;
@@ -147,7 +141,7 @@ export function DashboardClient({ initial, authToken, wsUrl }: Props) {
   // Realtime: dashboard:stats patches the top bar instantly (period "today"), dashboard:refresh
   // re-fetches the whole dashboard. Reconnects with exponential backoff.
   useEffect(() => {
-    if (!wsUrl || !authToken) return;
+    if (!wsUrl) return;
     let socket: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
@@ -156,7 +150,10 @@ export function DashboardClient({ initial, authToken, wsUrl }: Props) {
     const connect = () => {
       setWs("connecting");
       try {
-        socket = new WebSocket(wsUrl, [WS_PROTOCOL, authToken]);
+        // token read at each (re)connect — the session refreshes it in the background
+        const token = oidc.currentToken();
+        if (!token) throw new Error("signed out");
+        socket = new WebSocket(wsUrl, [WS_PROTOCOL, token]);
       } catch {
         setWs("offline");
         return;
@@ -213,7 +210,7 @@ export function DashboardClient({ initial, authToken, wsUrl }: Props) {
       if (retry) clearTimeout(retry);
       socket?.close();
     };
-  }, [wsUrl, authToken, scheduleRefresh]);
+  }, [wsUrl, scheduleRefresh]);
 
   // Fallback polling while realtime is unavailable.
   useEffect(() => {

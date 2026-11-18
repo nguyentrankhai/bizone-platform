@@ -7,12 +7,13 @@ import { ChevronRight, Search } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 import { trpc } from "@/lib/trpc";
-import { apiContext, errorMessage, fmtMoney, type ApiAuth } from "@/components/inventory/shared";
+import { apiContext, errorMessage, fmtMoney } from "@/components/inventory/shared";
 import { ORDER_STATUS, PAYMENT_STATUS, channelLabel } from "@/components/orders/shared";
 import { useOfflineQuery } from "@/hooks/useOfflineQuery";
 import { cn } from "@/lib/utils";
 import type { ListOrdersInput } from "@/lib/validators/order";
 import { DataStatus, Empty, Skeleton, fmtClock } from "./shared";
+import { useApiAuth } from "@/components/auth/AuthProvider";
 
 type OrderPage = inferRouterOutputs<AppRouter>["order"]["list"];
 type OrderRow = OrderPage["items"][number];
@@ -30,7 +31,8 @@ const FILTERS: { value: Status | ""; label: string }[] = [
 const PAGE_SIZE = 20;
 
 /** Order list on the phone (P6.4): status chips, search, "Tải thêm"; first page kept offline */
-export function MobileOrders({ auth }: { auth: ApiAuth }) {
+export function MobileOrders() {
+  const auth = useApiAuth();
   const router = useRouter();
   const params = useSearchParams();
   const initial = params.get("status") ?? "";
