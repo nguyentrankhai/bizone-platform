@@ -122,7 +122,7 @@ export type StoreChannel = { id: number; config: WebsiteConfig };
 
 export interface SyncEvent {
   channelId: number | null;
-  syncType: "order" | "payment" | "stock";
+  syncType: "order" | "payment" | "stock" | "product" | "auth";
   direction: "push" | "pull";
   status: "success" | "failed" | "partial";
   message: string;
@@ -155,40 +155,62 @@ export async function logSync(e: SyncEvent) {
 
 /** Sync problem that needs a person (#87): log it and raise the `sync_failed` notification */
 export async function reportSyncFailure(
-  e: Omit<SyncEvent, "status"> & { link?: string; dedupeKey: string; branchId?: number | null },
+  e: Omit<SyncEvent, "status"> & {
+    link?: string;
+    dedupeKey: string;
+    branchId?: number | null;
+    /** P6.2: Shopee / Lazada… (default Website) */
+    channelName?: string;
+  },
 ) {
-  await logSync({ ...e, status: "failed" });
+  const { channelName = "Website", link, dedupeKey, branchId, ...event } = e;
+  await logSync({ ...event, status: "failed" });
   await notify({
     type: "sync_failed",
-    title: `Đồng bộ Website lỗi: ${e.message}`.slice(0, 250),
+    title: `Đồng bộ ${channelName} lỗi: ${e.message}`.slice(0, 250),
     content: e.details ? JSON.stringify(e.details).slice(0, 500) : null,
-    link: e.link ?? "/omni",
-    branchId: e.branchId ?? null,
-    dedupeKey: e.dedupeKey,
-    vars: { channel: "Website", error: e.message },
+    link: link ?? "/omni",
+    branchId: branchId ?? null,
+    dedupeKey,
+    vars: { channel: channelName, error: e.message },
   });
 }
 
+/** Sync log of one channel (by channel_code) or of every channel (P6.2: `/omni` overview) */
 export async function listSyncLogs(input: {
   page: number;
   limit: number;
   status?: "success" | "failed" | "partial";
+  channel?: string;
 }) {
-  const ch = await websiteChannel();
-  if (!ch) return { items: [], total: 0, page: input.page, limit: input.limit };
-  const where = { channelId: ch.id, ...(input.status ? { status: input.status } : {}) };
+  let channelId: number | undefined;
+  if (input.channel) {
+    const ch = await getPrisma().channelConnection.findFirst({
+      where: { channelCode: input.channel },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    if (!ch) return { items: [], total: 0, page: input.page, limit: input.limit };
+    channelId = ch.id;
+  }
+  const where = {
+    ...(channelId ? { channelId } : {}),
+    ...(input.status ? { status: input.status } : {}),
+  };
   const [items, total] = await Promise.all([
     getPrisma().syncLog.findMany({
       where,
       orderBy: { id: "desc" },
       skip: (input.page - 1) * input.limit,
       take: input.limit,
+      include: { channel: { select: { channelCode: true } } },
     }),
     getPrisma().syncLog.count({ where }),
   ]);
   return {
     items: items.map((l) => ({
       id: l.id,
+      channel: l.channel?.channelCode ?? null,
       syncType: l.syncType,
       direction: l.direction,
       status: l.status,

@@ -236,6 +236,22 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "omni.saveWebsite": { module: "omni", action: "save_website", entityType: "channel_connection" },
   "omni.rotateKey": { module: "omni", action: "rotate_key", entityType: "channel_connection" },
   "omni.setActive": { module: "omni", action: "set_active", entityType: "channel_connection" },
+  // P6.2: marketplaces
+  "omni.saveMarketplace": {
+    module: "omni",
+    action: "save_marketplace",
+    entityType: "channel_connection",
+  },
+  "omni.connect": { module: "omni", action: "connect", entityType: "channel_connection" },
+  "omni.disconnect": { module: "omni", action: "disconnect", entityType: "channel_connection" },
+  "omni.setMarketplaceActive": {
+    module: "omni",
+    action: "set_marketplace_active",
+    entityType: "channel_connection",
+  },
+  "omni.pushProducts": { module: "omni", action: "push_products", entityType: "product" },
+  "omni.setListingActive": { module: "omni", action: "set_listing_active", entityType: "product" },
+  "omni.syncNow": { module: "omni", action: "sync_now", entityType: "channel_connection" },
   "accounting.createRecord": {
     module: "accounting",
     action: "create_record",

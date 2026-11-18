@@ -1,4 +1,4 @@
-/** BizOne background worker process — BullMQ consumers (inventory + commission follow-ups, report exports, notifications, website payment deadline). */
+/** BizOne background worker process — BullMQ consumers (inventory + commission follow-ups, report exports, notifications, website payment deadline, marketplace sync). */
 import { getRedis } from "@/lib/redis";
 import { INVENTORY_QUEUE, startInventoryWorker } from "@/server/queue/inventory";
 import { COMMISSION_QUEUE, startCommissionWorker } from "@/server/queue/commission";
@@ -7,6 +7,7 @@ import { startReportExportWorker } from "@/server/queue/reportExportWorker";
 import { NOTIFICATION_QUEUE } from "@/server/queue/notification";
 import { startNotificationWorker } from "@/server/queue/notificationWorker";
 import { OMNI_QUEUE, startOmniWorker } from "@/server/queue/omni";
+import { OMNI_SYNC_QUEUE, startOmniSyncWorker } from "@/server/queue/omniSync";
 
 const inventory = startInventoryWorker();
 console.log(`[worker] consuming "${INVENTORY_QUEUE}"`);
@@ -29,6 +30,13 @@ const omni = startOmniWorker().then((w) => {
   return w;
 });
 omni.catch((err) => console.error("[worker] omni worker failed to start:", err));
+const omniSync = startOmniSyncWorker().then((w) => {
+  console.log(
+    `[worker] consuming "${OMNI_SYNC_QUEUE}" (marketplace stock 10 s, orders 2 min, tokens 15 min)`,
+  );
+  return w;
+});
+omniSync.catch((err) => console.error("[worker] omni-sync worker failed to start:", err));
 
 let shuttingDown = false;
 async function shutdown(signal: string) {
@@ -44,6 +52,7 @@ async function shutdown(signal: string) {
     commission.then((w) => w.close()).catch(() => {}),
     notifications.then((w) => w.close()).catch(() => {}),
     omni.then((w) => w.close()).catch(() => {}),
+    omniSync.then((w) => w.close()).catch(() => {}),
   ]);
   getRedis().disconnect();
   process.exit(0);

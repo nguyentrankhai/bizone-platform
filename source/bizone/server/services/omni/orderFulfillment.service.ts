@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/prisma";
 import { bizoneError } from "@/lib/errors";
 import { pointsFor } from "@/lib/pos/cart";
 import { orderGoodsRevenue } from "@/lib/omni/website";
+import { isMarketplace } from "@/lib/omni/marketplace";
 import {
   applyLoyalty,
   branchWarehouseId,
@@ -144,6 +145,8 @@ export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: n
     shippingFee: Number(o.shippingFee),
   });
   const online = o.payments[0];
+  // P6.2: marketplace orders are collected by the marketplace (unless COD)
+  const marketplace = isMarketplace(o.channel) && o.paymentMethod !== "cod" ? o.channel : null;
   const invoice = await tx.invoice.create({
     data: {
       invoiceCode: await nextCode(tx, cfg.invoice_prefix || "HD"),
@@ -171,9 +174,10 @@ export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: n
       invoicePayments: {
         create: [
           {
-            paymentMethod: online ? "online" : "cod",
+            paymentMethod: online ? "online" : (marketplace ?? "cod"),
             amount: total,
-            referenceCode: online?.payhubTxnCode ?? o.orderCode,
+            referenceCode:
+              online?.payhubTxnCode ?? (marketplace ? o.channelOrderId : null) ?? o.orderCode,
           },
         ],
       },

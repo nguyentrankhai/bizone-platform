@@ -128,9 +128,17 @@ model ChannelConnection {
   accessToken           String?                 @map("access_token") @db.Text
   refreshToken          String?                 @map("refresh_token") @db.Text
   tokenExpiresAt        DateTime?               @map("token_expires_at") @db.DateTime(0)
+  /// P6.2: refresh token expiry (marketplaces) — past it the shop must authorize again
+  refreshExpiresAt      DateTime?               @map("refresh_expires_at") @db.DateTime(0)
   shopId                String?                 @map("shop_id") @db.VarChar(100)
   isActive              Boolean                 @default(true) @map("is_active")
   lastSyncAt            DateTime?               @map("last_sync_at") @db.DateTime(0)
+  /// P6.2: orders updated up to this instant have been pulled from the marketplace
+  lastOrderSyncAt       DateTime?               @map("last_order_sync_at") @db.DateTime(0)
+  /// P6.2: last connection problem (token revoked / expired…), cleared on success
+  lastError             String?                 @map("last_error") @db.Text
+  /// P6.2: users.id of who authorized the shop — writes the invoices of completed orders
+  connectedBy           Int?                    @map("connected_by")
   config                String?                 @db.Text
   createdAt             DateTime                @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt             DateTime                @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
@@ -139,6 +147,7 @@ model ChannelConnection {
   syncLogs              SyncLog[]
 
   @@index([channelCode], map: "idx_cc_channel")
+  @@index([channelCode, shopId], map: "idx_cc_shop")
   @@map("channel_connections")
 }
 
@@ -148,10 +157,14 @@ model ChannelProductMapping {
   productId        Int               @map("product_id")
   variantId        Int?              @map("variant_id")
   channelProductId String?           @map("channel_product_id") @db.VarChar(100)
+  /// P6.2: Shopee model_id / Lazada SkuId of a variant (null = listing without variations)
+  channelModelId   String?           @map("channel_model_id") @db.VarChar(100)
   channelSku       String?           @map("channel_sku") @db.VarChar(100)
   channelPrice     Decimal?          @map("channel_price") @db.Decimal(15, 2)
   channelStock     Int?              @map("channel_stock")
   isActive         Boolean           @default(true) @map("is_active")
+  syncStatus       ChannelSyncStatus @default(pending) @map("sync_status")
+  lastError        String?           @map("last_error") @db.Text
   lastSyncAt       DateTime?         @map("last_sync_at") @db.DateTime(0)
   createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(0)
   updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
@@ -162,6 +175,8 @@ model ChannelProductMapping {
   @@index([productId], map: "fk_cpm_product")
   @@index([variantId], map: "fk_cpm_variant")
   @@index([channelId], map: "idx_cpm_channel")
+  @@index([channelId, channelProductId], map: "idx_cpm_listing")
+  @@index([channelId, channelSku], map: "idx_cpm_sku")
   @@map("channel_product_mapping")
 }
 
@@ -677,10 +692,14 @@ model OrderChannelMapping {
   channelId        Int               @map("channel_id")
   channelOrderId   String?           @map("channel_order_id") @db.VarChar(100)
   channelOrderData String?           @map("channel_order_data") @db.Text
+  /// P6.2: marketplace status last applied (e.g. READY_TO_SHIP) and its update time
+  channelStatus    String?           @map("channel_status") @db.VarChar(50)
+  channelUpdatedAt DateTime?         @map("channel_updated_at") @db.DateTime(0)
   createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(0)
   channel          ChannelConnection @relation(fields: [channelId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ocm_channel")
   order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ocm_order")
 
+  @@unique([channelId, channelOrderId], map: "uq_ocm_channel_order")
   @@index([channelId], map: "idx_ocm_channel")
   @@index([orderId], map: "idx_ocm_order")
   @@map("order_channel_mapping")
@@ -1655,6 +1674,13 @@ enum InventoryTransactionStatus {
 enum CashSessionStatus {
   open
   closed
+}
+
+/// P6.2: state of a product listing on a marketplace
+enum ChannelSyncStatus {
+  pending
+  synced
+  error
 }
 
 enum OrderPaymentStatus {

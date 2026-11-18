@@ -135,6 +135,7 @@ npm run dev
 - Checks (same as CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
 - Online store (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — `{store}.bizone.vn` in production. In BizOne go to **Omni Channel → Website**, save the settings and create a store key, then put it in the storefront's `.env.local` (`STORE_KEYS="demo=bzs.…"`, see `.env.example`). Online payment goes through Payment Hub with BizOne's merchant key (`PAYHUB_*`).
+- Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — save the settings, then **Connect** (OAuth on the marketplace). Needs BizOne's platform apps in BizOne's `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) and a public `APP_URL` for the OAuth return + push (`/api/webhooks/shopee|lazada`); listings, stock (≤ 30 s) and orders sync in `npm run dev:worker`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
@@ -264,6 +265,7 @@ npm run dev
 - Kiểm tra (giống CI): `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 - Payment Hub: http://localhost:4000
 - Website bán hàng (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — production là `{cửa-hàng}.bizone.vn`. Trong BizOne vào **Omni Channel → Website**, lưu cấu hình và tạo khoá kết nối, rồi đặt vào `.env.local` của storefront (`STORE_KEYS="demo=bzs.…"`, xem `.env.example`). Thanh toán online đi qua Payment Hub bằng merchant key của BizOne (`PAYHUB_*`).
+- Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — lưu cài đặt rồi bấm **Kết nối** (OAuth trên sàn). Cần ứng dụng của BizOne trên sàn trong `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) và `APP_URL` public cho OAuth + push (`/api/webhooks/shopee|lazada`); đăng SP, tồn kho (≤ 30 giây), đơn hàng đồng bộ trong `npm run dev:worker`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).
@@ -301,7 +303,7 @@ bizone/
 │   ├── bizone/                         # BizOne Core — NextJS 16 (P1.1)
 │   │   ├── app/                        # App Router (pages, layouts, /api/*)
 │   │   ├── components/ui/              # shadcn/ui components
-│   │   ├── prisma/                     # Prisma schema, migrations (0_init … 7_omni_website), seed
+│   │   ├── prisma/                     # Prisma schema, migrations (0_init … 8_omni_marketplace), seed
 │   │   ├── hooks/  lib/  server/  types/
 │   │   ├── server/ws/pos.ts            # POS 2-screen + notifications WebSocket (:3002/ws/pos/{sessionId}, /ws/notifications)
 │   │   ├── server/worker.ts            # BullMQ worker (inventory, commissions, report exports, notifications)

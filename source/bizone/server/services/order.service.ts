@@ -18,6 +18,7 @@ import {
   writeOrderInvoice,
 } from "@/server/services/omni/orderFulfillment.service";
 import { fmtVnd } from "@/lib/notifications/template";
+import type { OrderStatus } from "@/generated/prisma/client";
 
 const CHANNEL_NAMES: Record<string, string> = {
   website: "Website",
@@ -344,7 +345,13 @@ async function afterStockRelease(
  * P6.1 (#61): completing an order writes its revenue invoice (`online`), earns loyalty points,
  * takes the stock if the order hadn't yet, and marks a COD order paid.
  */
-async function completeOrder(id: number, input: UpdateOrderStatusInput, userId: number | null) {
+async function completeOrder(
+  id: number,
+  input: UpdateOrderStatusInput,
+  userId: number | null,
+  /** P6.2: marketplace orders may complete straight from any in-progress status */
+  from: OrderStatus[] = ["delivered"],
+) {
   if (!userId)
     throw bizoneError(
       "VALIDATION_ERROR",
@@ -353,7 +360,7 @@ async function completeOrder(id: number, input: UpdateOrderStatusInput, userId: 
   const order = await loadOrderForCompletion(id);
   const written = await withInvoiceNumberRetry(async (tx) => {
     const res = await tx.order.updateMany({
-      where: { id, status: "delivered", invoiceId: null },
+      where: { id, status: { in: from }, invoiceId: null },
       data: {
         status: "completed",
         paymentStatus: "paid",
@@ -400,6 +407,11 @@ async function completeOrder(id: number, input: UpdateOrderStatusInput, userId: 
     },
   });
   return getPrisma().order.findUniqueOrThrow({ where: { id } });
+}
+
+/** P6.2: complete an order the marketplace reports as finished (writes the revenue invoice) */
+export function completeOrderFrom(id: number, note: string, userId: number, from: OrderStatus[]) {
+  return completeOrder(id, { status: "completed", note }, userId, from);
 }
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────

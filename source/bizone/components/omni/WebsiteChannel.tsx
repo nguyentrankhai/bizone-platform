@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, ExternalLink, Globe, KeyRound, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Copy, ExternalLink, Globe, KeyRound } from "lucide-react";
+import { SyncHistory } from "@/components/omni/SyncHistory";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
@@ -45,14 +47,6 @@ const DEFAULTS: WebsiteConfig = {
 export function WebsiteChannel({ auth }: { auth: ApiAuth }) {
   const toast = useToast();
   const ch = useLoad("omni-website", () => trpc.omni.website.query(undefined, apiContext(auth)));
-  const [logPage, setLogPage] = useState(1);
-  const [logStatus, setLogStatus] = useState<"" | "failed">("");
-  const logs = useLoad(`omni-logs-${logPage}-${logStatus}`, () =>
-    trpc.omni.syncLogs.query(
-      { page: logPage, limit: 20, ...(logStatus ? { status: logStatus } : {}) },
-      apiContext(auth),
-    ),
-  );
   const [newKey, setNewKey] = useState<string | null>(null);
 
   async function rotate() {
@@ -88,9 +82,12 @@ export function WebsiteChannel({ auth }: { auth: ApiAuth }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Omni Channel</h1>
+          <Link href="/omni" className="text-sm text-primary hover:underline">
+            ← Omni Channel
+          </Link>
+          <h1 className="text-xl font-bold text-slate-900">Website bán hàng</h1>
           <p className="text-sm text-slate-500">
-            Kết nối kênh bán: website bán hàng (Shopee, Lazada, TikTok Shop… ở P6.2 / P6.3)
+            Cửa hàng online [tên].bizone.vn: sản phẩm, tồn kho, đơn hàng đồng bộ trực tiếp
           </p>
         </div>
       </div>
@@ -201,109 +198,10 @@ export function WebsiteChannel({ auth }: { auth: ApiAuth }) {
         </div>
       )}
 
-      {data?.connected && (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-            <div className="font-semibold text-slate-900">Lịch sử đồng bộ</div>
-            <div className="flex items-center gap-2">
-              <select
-                className={cn(inputCls, "w-auto")}
-                value={logStatus}
-                onChange={(e) => {
-                  setLogStatus(e.target.value as "" | "failed");
-                  setLogPage(1);
-                }}
-              >
-                <option value="">Tất cả</option>
-                <option value="failed">Chỉ lỗi</option>
-              </select>
-              <button className={btnSecondary} onClick={logs.reload} aria-label="Tải lại">
-                <RefreshCw className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <ErrorBox message={logs.error} />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs text-slate-500 uppercase">
-                <tr>
-                  <th className="px-4 py-2">Thời gian</th>
-                  <th className="px-4 py-2">Loại</th>
-                  <th className="px-4 py-2">Kết quả</th>
-                  <th className="px-4 py-2">Nội dung</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(logs.data?.items ?? []).map((l) => (
-                  <tr key={l.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 whitespace-nowrap text-slate-500">
-                      {fmtDate(l.createdAt, true)}
-                    </td>
-                    <td className="px-4 py-2">
-                      {SYNC_TYPE[l.syncType] ?? l.syncType} ·{" "}
-                      {l.direction === "pull" ? "về BizOne" : "lên kênh"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          l.status === "success"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-red-50 text-red-700",
-                        )}
-                      >
-                        {l.status === "success"
-                          ? "Thành công"
-                          : l.status === "failed"
-                            ? "Lỗi"
-                            : "Một phần"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-slate-700">{l.message}</td>
-                  </tr>
-                ))}
-                {logs.data && logs.data.items.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
-                      Chưa có lượt đồng bộ
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {logs.data && logs.data.total > logs.data.limit && (
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-2 text-sm">
-              <button
-                className={btnSecondary}
-                disabled={logPage <= 1}
-                onClick={() => setLogPage(logPage - 1)}
-              >
-                Trước
-              </button>
-              <span>
-                {logPage} / {Math.ceil(logs.data.total / logs.data.limit)}
-              </span>
-              <button
-                className={btnSecondary}
-                disabled={logPage * logs.data.limit >= logs.data.total}
-                onClick={() => setLogPage(logPage + 1)}
-              >
-                Sau
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {data?.connected && <SyncHistory auth={auth} channel="website" />}
     </div>
   );
 }
-
-const SYNC_TYPE: Record<string, string> = {
-  order: "Đơn hàng",
-  payment: "Thanh toán",
-  stock: "Tồn kho",
-};
 
 function SettingsForm({
   auth,

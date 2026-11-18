@@ -34,6 +34,9 @@ interface OrderDetailProps {
 const PAYMENT_METHOD_NAME: Record<string, string> = {
   cod: "Thanh toán khi nhận hàng (COD)",
   payhub: "Thanh toán online (Payment Hub)",
+  // P6.2: collected by the marketplace
+  shopee: "Shopee thu hộ",
+  lazada: "Lazada thu hộ",
 };
 const ONLINE_PAYMENT_STATUS: Record<string, string> = {
   pending: "chờ thanh toán",

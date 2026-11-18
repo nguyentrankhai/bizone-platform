@@ -260,5 +260,7 @@ export const METHOD_LABEL: Record<string, string> = {
   qr: "QR",
   // P6.1: completed online orders
   online: "Online (Payment Hub)",
+  shopee: "Shopee",
+  lazada: "Lazada",
   cod: "COD (thu khi giao)",
 };
