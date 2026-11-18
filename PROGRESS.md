@@ -274,7 +274,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P6.1 | Omni Channel — Website | ✅ | _(xem kết quả)_ | Xem [kết quả P6.1](#p61--omni-channel--website) — app `source/storefront` (:3100) |
+| P6.1 | Omni Channel — Website | ✅ | `de63028` | Xem [kết quả P6.1](#p61--omni-channel--website) — app `source/storefront` (:3100) |
 | P6.2 | Omni Channel — Shopee/Lazada Connector | ⬜ | — | |
 | P6.3 | Omni Channel — TikTok Shop + Facebook/Instagram | ⬜ | — | |
 | P6.4 | PWA Mobile App | ⬜ | — | |
@@ -2426,7 +2426,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P6.1 — Omni Channel — Website
 
-- **Hoàn thành:** 2026-11-18 · **Commit:** _(điền sau commit)_ · **Vị trí:** `source/storefront/` (app mới), `source/bizone/` — `app/api/store/v1/[...path]`, `server/store/api.ts`, `server/services/omni/*`, `lib/omni/{website,secrets}.ts`, `lib/validators/store.ts`, `server/queue/omni.ts`, `server/routers/omni.ts`, `app/omni` + `components/omni/WebsiteChannel.tsx`, `prisma/migrations/7_omni_website`; sửa `order.service`, `invoice.service`, `pricing.service`, `payment/paymentHubClient`, `app/api/webhooks/payhub`, `OrderDetail`, `proxy.ts`, quyền `omni:manage`; `.github/workflows/ci.yml`
+- **Hoàn thành:** 2026-11-18 · **Commit:** `de63028` · **Vị trí:** `source/storefront/` (app mới), `source/bizone/` — `app/api/store/v1/[...path]`, `server/store/api.ts`, `server/services/omni/*`, `lib/omni/{website,secrets}.ts`, `lib/validators/store.ts`, `server/queue/omni.ts`, `server/routers/omni.ts`, `app/omni` + `components/omni/WebsiteChannel.tsx`, `prisma/migrations/7_omni_website`; sửa `order.service`, `invoice.service`, `pricing.service`, `payment/paymentHubClient`, `app/api/webhooks/payhub`, `OrderDetail`, `proxy.ts`, quyền `omni:manage`; `.github/workflows/ci.yml`
 - **Đã làm:**
   - **Website `source/storefront`** (NextJS 16 riêng, port 3100, không DB — `[store].bizone.vn`): `/` danh mục + tìm kiếm + lọc danh mục (gồm danh mục con) + sắp xếp + phân trang, badge flash sale / hết hàng / "chỉ còn N"; `/products/[slug]` (slug `{id}-{tên không dấu}`) ảnh, giá, phân loại, tồn kho hiện tại; `/cart` (BizOne tính lại giá, khuyến mãi tự động, ưu đãi hạng, mã giảm giá, phí ship / miễn phí ship, báo thiếu hàng); `/checkout` (người nhận điền sẵn từ hồ sơ, COD / thanh toán online); `/checkout/result` (return URL Payment Hub); `/orders` (đơn của tôi / tra cứu mã đơn + SĐT), `/orders/[code]` (theo dõi trạng thái, lịch sử, thanh toán lại, huỷ, tự làm mới khi chờ thanh toán); `/register` (OTP SMS), `/login`, `/account` (hạng, điểm, lịch sử điểm). `lib/bizone-sync.ts` (client Store API, server-only), `lib/paymentHubClient.ts` (luồng thanh toán phía website), `lib/store.ts` (sub-domain → store key `STORE_KEYS`), cookie httpOnly cho phiên / giỏ / đơn khách vãng lai, server actions giữ giá trị đã nhập khi lỗi
   - **Store API BizOne** `/api/store/v1/*` (`X-Store-Key` = `bzs.{tenant}.{secret}`, chỉ lưu SHA-256; `X-Customer-Token`; `X-Client-IP`): `store`, `categories`, `products`, `products/{slug}`, `cart/quote`, `auth/register/start|verify`, `auth/login|logout`, `me`, `me/points`, `orders` (GET danh sách / POST đặt — `Idempotency-Key` bắt buộc), `orders/{code}` (+ `/pay`, `/cancel`); định dạng `{success,data}` / `{success:false,error}`, lỗi Zod đọc được, rate limit (1200/phút/kênh, auth 10/phút, tra đơn 30/phút, đặt đơn 20/10 phút theo IP khách)
