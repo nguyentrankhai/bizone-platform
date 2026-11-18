@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { BranchSwitcher } from "@/components/branch/BranchSwitcher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import type { ApiAuth } from "@/components/inventory/shared";
@@ -11,18 +11,33 @@ interface TopBarProps {
   className?: string;
   /** Needed by the branch switcher; pages pass it through AppLayout */
   auth?: ApiAuth;
+  /** Opens the sidebar drawer on phones (P6.4) */
+  onMenu?: () => void;
 }
 
-export function TopBar({ className, auth }: TopBarProps) {
+export function TopBar({ className, auth, onMenu }: TopBarProps) {
   const [search, setSearch] = useState("");
 
   return (
     <header
       className={cn(
-        "flex h-14 items-center gap-4 border-b border-gray-200 bg-white px-4",
+        "flex h-14 items-center gap-2 border-b border-gray-200 bg-white px-2 sm:gap-4 sm:px-4",
         className,
       )}
     >
+      {onMenu && (
+        <button
+          type="button"
+          onClick={onMenu}
+          aria-label="Mở menu"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
+      <span className="text-lg font-black tracking-tight text-primary sm:hidden">
+        Biz<span className="text-gray-800">One</span>
+      </span>
       {/* Search */}
       <div className="relative hidden max-w-md flex-1 sm:block">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -35,7 +50,7 @@ export function TopBar({ className, auth }: TopBarProps) {
         />
       </div>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3">
         {/* Branch selector (P4.6) */}
         {auth && <BranchSwitcher auth={auth} />}
 
@@ -43,7 +58,7 @@ export function TopBar({ className, auth }: TopBarProps) {
         {auth && <NotificationBell auth={auth} />}
 
         {/* Avatar */}
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
+        <button className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white sm:flex">
           M
         </button>
       </div>

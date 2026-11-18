@@ -25,7 +25,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 }
 
 /** Explains empty pages while browser login (Keycloak) is not wired yet — see PROGRESS #7 */
-async function AuthNotice() {
+export async function AuthNotice() {
   await connection(); // evaluate per request, not frozen at build time
   const bypass = devBypassNotice();
   const problem = devAuthProblem();

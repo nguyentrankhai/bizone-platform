@@ -1,22 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BellRing, Save } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/Toast";
 import { apiContext, errorMessage, type ApiAuth } from "@/components/inventory/shared";
 import { ErrorBox, btnPrimary, btnSecondary, useLoad } from "@/components/staff/shared";
 import { NotificationHeader } from "./shared";
-
-function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
-type PushState = "unsupported" | "denied" | "off" | "on" | "loading";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 /** Personal preferences: mute event types in the bell / on push, Web Push on this device */
 export function NotificationPreferences({ auth }: { auth: ApiAuth }) {
@@ -24,37 +15,10 @@ export function NotificationPreferences({ auth }: { auth: ApiAuth }) {
   const prefs = useLoad("prefs", () =>
     trpc.notification.preferences.query(undefined, apiContext(auth)),
   );
-  const push = useLoad("push", () =>
-    trpc.notification.pushConfig.query(undefined, apiContext(auth)),
-  );
+  const push = usePushNotifications(auth);
+  const pushState = push.state;
   const [draft, setDraft] = useState<Record<string, { inApp: boolean; push: boolean }>>({});
   const [saving, setSaving] = useState(false);
-  const [pushState, setPushState] = useState<PushState>("loading");
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        if (!cancelled) setPushState("unsupported");
-        return;
-      }
-      if (Notification.permission === "denied") {
-        if (!cancelled) setPushState("denied");
-        return;
-      }
-      try {
-        const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-        const sub = await reg.pushManager.getSubscription();
-        if (cancelled) return;
-        setPushState(sub ? "on" : "off");
-      } catch {
-        if (!cancelled) setPushState("unsupported");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const rows = (prefs.data ?? []).map((p) => ({ ...p, ...(draft[p.eventType] ?? {}) }));
   const dirty = Object.keys(draft).length > 0;
@@ -77,59 +41,28 @@ export function NotificationPreferences({ auth }: { auth: ApiAuth }) {
   }
 
   async function enablePush() {
-    const key = push.data?.publicKey;
-    if (!key) return;
-    setPushState("loading");
     try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setPushState(permission === "denied" ? "denied" : "off");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key),
-      });
-      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      await trpc.notification.pushSubscribe.mutate(
-        { endpoint: json.endpoint, keys: json.keys, userAgent: navigator.userAgent.slice(0, 255) },
-        apiContext(auth),
-      );
-      setPushState("on");
-      push.reload();
-      toast.success("Đã bật thông báo đẩy trên thiết bị này");
+      await push.enable();
+      if (Notification.permission === "granted")
+        toast.success("Đã bật thông báo đẩy trên thiết bị này");
     } catch (e) {
-      setPushState("off");
       toast.error(`Không bật được thông báo đẩy: ${errorMessage(e)}`);
     }
   }
 
   async function disablePush() {
-    setPushState("loading");
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await trpc.notification.pushUnsubscribe.mutate(
-          { endpoint: sub.endpoint },
-          apiContext(auth),
-        );
-        await sub.unsubscribe();
-      }
-      setPushState("off");
-      push.reload();
+      await push.disable();
     } catch (e) {
-      setPushState("on");
       toast.error(errorMessage(e));
     }
   }
 
-  const pushKey = push.data?.publicKey ?? null;
+  const pushKey = push.publicKey;
   return (
     <div className="space-y-5">
       <NotificationHeader subtitle="Chọn loại thông báo bạn muốn nhận trên chuông và thông báo đẩy" />
-      <ErrorBox message={prefs.error || push.error} />
+      <ErrorBox message={prefs.error || push.configError} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-start gap-3">
@@ -161,13 +94,13 @@ export function NotificationPreferences({ auth }: { auth: ApiAuth }) {
             </button>
           )}
         </div>
-        {(push.data?.devices.length ?? 0) > 0 && (
+        {push.devices.length > 0 && (
           <div className="mt-4 border-t border-slate-100 pt-3">
             <p className="mb-2 text-xs font-medium text-slate-500 uppercase">
-              Thiết bị đã bật ({push.data!.devices.length})
+              Thiết bị đã bật ({push.devices.length})
             </p>
             <ul className="space-y-1 text-sm text-slate-600">
-              {push.data!.devices.map((d) => (
+              {push.devices.map((d) => (
                 <li key={d.id} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate">{d.userAgent ?? "Trình duyệt"}</span>
                   <span className="text-xs text-slate-400">
