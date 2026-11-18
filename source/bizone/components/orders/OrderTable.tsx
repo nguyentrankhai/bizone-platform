@@ -12,7 +12,7 @@ import {
   errorMessage,
   type ApiAuth,
 } from "@/components/inventory/shared";
-import { ORDER_STATUS, PAYMENT_STATUS, CHANNEL_LABEL } from "./shared";
+import { ORDER_STATUS, PAYMENT_STATUS, CHANNEL_LABEL, channelLabel } from "./shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 
@@ -302,7 +302,7 @@ export function OrderTable({ auth }: OrderTableProps) {
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                      {CHANNEL_LABEL[order.channel ?? ""] ?? order.channel ?? "—"}
+                      {channelLabel(order)}
                     </span>
                   </td>
                   <td className="px-4 py-3">

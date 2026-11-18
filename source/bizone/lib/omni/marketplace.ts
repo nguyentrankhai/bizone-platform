@@ -1,31 +1,131 @@
 import { z } from "zod";
 
 /**
- * Omni Channel — marketplaces (P6.2): pure rules shared by the connectors, the sync jobs, the
- * admin screen and tests. Safe to import from client components.
+ * Omni Channel — marketplaces (P6.2) and social / video commerce (P6.3): pure rules shared by
+ * the connectors, the sync jobs, the admin screen and tests. Safe to import from client
+ * components.
  *
- * A marketplace shop is one `channel_connections` row (channel_code "shopee" / "lazada") per
- * tenant: OAuth tokens (encrypted), `shop_id` (Shopee shop_id / Lazada seller_id) and the JSON
- * settings below in `config`. Listings live in `channel_product_mapping`, imported orders in
- * `order_channel_mapping` (one BizOne order per marketplace order).
+ * A connected shop is one `channel_connections` row (channel_code "shopee" / "lazada" /
+ * "tiktok" / "facebook") per tenant: OAuth tokens (encrypted), `shop_id` (Shopee shop_id /
+ * Lazada seller_id / TikTok shop id / Meta catalog id), `shop_ref` (TikTok shop_cipher, Meta
+ * business id) and the JSON settings below in `config`. Listings live in
+ * `channel_product_mapping`, imported orders in `order_channel_mapping` (one BizOne order per
+ * marketplace order).
  */
 
-export const MARKETPLACES = ["shopee", "lazada"] as const;
+export const MARKETPLACES = ["shopee", "lazada", "tiktok", "facebook"] as const;
 export type MarketplaceCode = (typeof MARKETPLACES)[number];
 
 export const MARKETPLACE_NAME: Record<MarketplaceCode, string> = {
   shopee: "Shopee",
   lazada: "Lazada",
+  tiktok: "TikTok Shop",
+  facebook: "Facebook / Instagram",
 };
 
-/** Order code prefix of imported orders: SHP-{order_sn} / LZD-{order_number} */
-export const ORDER_PREFIX: Record<MarketplaceCode, string> = { shopee: "SHP", lazada: "LZD" };
+/** Order code prefix of imported orders: SHP-{order_sn} / LZD-{order_number} / TTS-{order_id} */
+export const ORDER_PREFIX: Record<MarketplaceCode, string> = {
+  shopee: "SHP",
+  lazada: "LZD",
+  tiktok: "TTS",
+  facebook: "FB",
+};
 
 export const isMarketplace = (code: string | null | undefined): code is MarketplaceCode =>
   !!code && (MARKETPLACES as readonly string[]).includes(code);
 
 /** Most images a listing takes */
-export const MAX_IMAGES: Record<MarketplaceCode, number> = { shopee: 9, lazada: 8 };
+export const MAX_IMAGES: Record<MarketplaceCode, number> = {
+  shopee: 9,
+  lazada: 8,
+  tiktok: 9,
+  facebook: 10,
+};
+
+/**
+ * What a platform does (P6.3). Meta catalogs (Facebook / Instagram shopping) take image URLs,
+ * need no category map and sell through the product link — the website (P6.1) takes the order,
+ * tagged with its `source`; there is no order API to pull.
+ */
+export interface MarketplaceFeatures {
+  /** Listings need a platform category (category map tab) */
+  categories: boolean;
+  /** Orders are pulled from the platform (push + polling) */
+  orders: boolean;
+  /** Images are uploaded to the platform (else public URLs are sent) */
+  uploadsImages: boolean;
+  /** Listings link to the product page of the website channel */
+  linksToWebsite: boolean;
+}
+
+export const MARKETPLACE_FEATURES: Record<MarketplaceCode, MarketplaceFeatures> = {
+  shopee: { categories: true, orders: true, uploadsImages: true, linksToWebsite: false },
+  lazada: { categories: true, orders: true, uploadsImages: true, linksToWebsite: false },
+  tiktok: { categories: true, orders: true, uploadsImages: true, linksToWebsite: false },
+  facebook: { categories: false, orders: false, uploadsImages: false, linksToWebsite: true },
+};
+
+/** Marketplaces whose orders are imported */
+export const ORDER_MARKETPLACES = MARKETPLACES.filter((c) => MARKETPLACE_FEATURES[c].orders);
+
+/** Env variables holding BizOne's app credentials on each platform (shown when missing) */
+export const PLATFORM_ENV: Record<MarketplaceCode, string> = {
+  shopee: "SHOPEE_PARTNER_ID / SHOPEE_PARTNER_KEY",
+  lazada: "LAZADA_APP_KEY / LAZADA_APP_SECRET",
+  tiktok: "TIKTOK_APP_KEY / TIKTOK_APP_SECRET / TIKTOK_SERVICE_ID",
+  facebook: "FACEBOOK_APP_ID / FACEBOOK_APP_SECRET",
+};
+
+// ─── Order source (website orders) ───────────────────────────────────────────
+
+/** utm_source values kept on website orders (links shared on social channels) */
+export const ORDER_SOURCES = [
+  "facebook",
+  "instagram",
+  "zalo",
+  "tiktok",
+  "google",
+  "messenger",
+] as const;
+export type OrderSource = (typeof ORDER_SOURCES)[number];
+
+export const ORDER_SOURCE_LABEL: Record<OrderSource, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  zalo: "Zalo",
+  tiktok: "TikTok",
+  google: "Google",
+  messenger: "Messenger",
+};
+
+/** Sources counted as orders of the Facebook / Instagram channel */
+export const META_SOURCES: readonly OrderSource[] = ["facebook", "instagram", "messenger"];
+
+/** utm_source as sent by the browser → a known source (null = unknown / direct) */
+export function normalizeOrderSource(raw: string | null | undefined): OrderSource | null {
+  if (!raw) return null;
+  const v = raw.trim().toLowerCase();
+  const alias: Record<string, OrderSource> = {
+    fb: "facebook",
+    "facebook.com": "facebook",
+    "m.facebook.com": "facebook",
+    "l.facebook.com": "facebook",
+    ig: "instagram",
+    "instagram.com": "instagram",
+    "zalo.me": "zalo",
+    zalo_oa: "zalo",
+    tt: "tiktok",
+    "tiktok.com": "tiktok",
+  };
+  if (alias[v]) return alias[v];
+  return (ORDER_SOURCES as readonly string[]).includes(v) ? (v as OrderSource) : null;
+}
+
+/** Product link of a catalog item: the website product page, tagged with utm_source */
+export function catalogLink(storefrontUrl: string, slug: string, source: OrderSource = "facebook") {
+  const base = storefrontUrl.replace(/\/+$/, "");
+  return `${base}/products/${encodeURIComponent(slug)}?utm_source=${source}&utm_medium=catalog`;
+}
 
 /** Settings of a marketplace channel (`channel_connections.config`) */
 export const marketplaceConfigSchema = z.object({
@@ -219,6 +319,50 @@ export function plannedTransition(
   if (target === "cancelled")
     return ["pending", "confirmed", "preparing"].includes(current) ? "cancel" : "return";
   return STATUS_RANK[target] > STATUS_RANK[current] ? "advance" : "none";
+}
+
+/**
+ * TikTok Shop order status (202309) → BizOne status. ON_HOLD = paid, inside the buyer's
+ * cancellation window: the order is real (stock is taken) but not yet released for shipping.
+ */
+export function mapTiktokStatus(status: string): BizOrderStatus | null {
+  switch (status.toUpperCase()) {
+    case "UNPAID":
+      return "pending";
+    case "ON_HOLD":
+    case "AWAITING_SHIPMENT":
+      return "confirmed";
+    case "PARTIALLY_SHIPPING":
+    case "AWAITING_COLLECTION":
+      return "preparing";
+    case "IN_TRANSIT":
+      return "shipping";
+    case "DELIVERED":
+      return "delivered";
+    case "COMPLETED":
+      return "completed";
+    case "CANCELLED":
+      return "cancelled";
+    default:
+      return null;
+  }
+}
+
+/** Target BizOne status of a marketplace order */
+export function mapMarketStatus(
+  code: MarketplaceCode,
+  order: { rawStatus: string; statuses: readonly string[] },
+): BizOrderStatus | null {
+  switch (code) {
+    case "shopee":
+      return mapShopeeStatus(order.rawStatus);
+    case "lazada":
+      return mapLazadaStatus(order.statuses);
+    case "tiktok":
+      return mapTiktokStatus(order.rawStatus);
+    default:
+      return null;
+  }
 }
 
 /** Status label of a listing */

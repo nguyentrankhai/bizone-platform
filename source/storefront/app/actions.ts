@@ -9,6 +9,7 @@ import { normalizePhone } from "@/lib/format";
 import {
   customerToken,
   guestOrders,
+  orderSource,
   readCart,
   rememberGuestOrder,
   setCustomerToken,
@@ -109,6 +110,7 @@ export async function placeOrderAction(_: FormState, fd: FormData): Promise<Form
         note: str(fd, "note") || null,
         paymentMethod,
         ...(paymentMethod === "payhub" ? { returnUrl: paymentReturnUrl() } : {}),
+        source: await orderSource(),
       },
       { token, idempotencyKey: key },
     );

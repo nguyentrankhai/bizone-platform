@@ -26,7 +26,10 @@ import {
   markProductsForPush,
   setListingActive,
 } from "@/server/services/omni/productSync.service";
-import { requireConnectedChannel } from "@/server/services/omni/orderSync.service";
+import {
+  assertOrderImport,
+  requireConnectedChannel,
+} from "@/server/services/omni/orderSync.service";
 import { connectorFor } from "@/server/services/omni/marketplace/registry";
 import { enqueueOmniSync } from "@/server/queue/omniSync";
 import { ensureDbUserId } from "@/server/services/user.service";
@@ -36,7 +39,7 @@ const marketplace = z.enum(MARKETPLACES);
 /**
  * Omni Channel (admin only, `omni:manage`):
  * - P6.1 website: settings, store key, sync log
- * - P6.2 marketplaces (Shopee / Lazada): OAuth connect, settings + category map, listings,
+ * - P6.2 marketplaces (Shopee / Lazada) + P6.3 (TikTok Shop, Facebook / Instagram catalog): OAuth connect, settings + category map, listings,
  *   manual sync; background sync runs in the worker (`server/queue/omniSync.ts`)
  */
 export const omniRouter = router({
@@ -165,6 +168,7 @@ export const omniRouter = router({
     .input(z.object({ code: marketplace, what: z.enum(["orders", "stock"]) }))
     .mutation(async ({ input }) => {
       try {
+        if (input.what === "orders") assertOrderImport(input.code);
         const channelId = await requireConnectedChannel(input.code);
         await enqueueOmniSync(
           input.what === "orders"

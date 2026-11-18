@@ -145,7 +145,7 @@ export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: n
     shippingFee: Number(o.shippingFee),
   });
   const online = o.payments[0];
-  // P6.2: marketplace orders are collected by the marketplace (unless COD)
+  // P6.2: marketplace orders are collected by the marketplace (unless COD) — Shopee / Lazada / TikTok
   const marketplace = isMarketplace(o.channel) && o.paymentMethod !== "cod" ? o.channel : null;
   const invoice = await tx.invoice.create({
     data: {

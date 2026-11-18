@@ -5,9 +5,10 @@ import { currentTenantId } from "@/lib/tenant";
 import { fmtVnd } from "@/lib/notifications/template";
 import {
   MARKETPLACE_NAME,
+  MARKETPLACE_FEATURES,
+  ORDER_MARKETPLACES,
   ORDER_PREFIX,
-  mapLazadaStatus,
-  mapShopeeStatus,
+  mapMarketStatus,
   plannedTransition,
   type BizOrderStatus,
   type MarketplaceCode,
@@ -32,9 +33,9 @@ import {
 import { logSync, reportSyncFailure } from "./websiteChannel.service";
 
 /**
- * Marketplace orders → BizOne (P6.2).
+ * Marketplace orders → BizOne (P6.2; TikTok Shop P6.3 — the Meta catalog has no order API).
  *
- * Sources: push notifications (Shopee / Lazada call `/api/webhooks/{code}` → job with the order
+ * Sources: push notifications (Shopee / Lazada / TikTok Shop call `/api/webhooks/{code}` → job with the order
  * ids), polling every 2 minutes (orders updated since the last sync, 5 min overlap) and the
  * "Đồng bộ đơn" button. Orders that failed (unlinked SKU…) are kept in a Redis retry set and
  * tried again by every poll for 7 days.
@@ -53,7 +54,7 @@ const retryKey = (channelId: number) => `omni:retry:${currentTenantId()}:${chann
 class UnlinkedLineError extends Error {}
 
 function targetStatus(code: MarketplaceCode, mo: MarketOrder): BizOrderStatus | null {
-  return code === "shopee" ? mapShopeeStatus(mo.rawStatus) : mapLazadaStatus(mo.statuses);
+  return mapMarketStatus(code, mo);
 }
 
 /** Marketplace lines → BizOne product / variant (listing map first, then SKU) */
@@ -463,6 +464,7 @@ export async function pollOrders(channelId: number, opts: { manual?: boolean } =
   const ch = await channelById(channelId);
   if (!ch || channelState(ch) !== "connected") return { skipped: "not connected" };
   const code = ch.channelCode as MarketplaceCode;
+  if (!MARKETPLACE_FEATURES[code].orders) return { skipped: "no order api" };
   const cfg = requireConfig(ch, code);
   if (!opts.manual && !cfg.autoImportOrders) return { skipped: "auto import off" };
   const lockKey = `omni:poll:${currentTenantId()}:${channelId}`;
@@ -515,7 +517,7 @@ export async function pollOrders(channelId: number, opts: { manual?: boolean } =
 export async function pollAllChannels() {
   const rows = await getPrisma().channelConnection.findMany({
     where: {
-      channelCode: { in: ["shopee", "lazada"] },
+      channelCode: { in: [...ORDER_MARKETPLACES] },
       isActive: true,
       accessToken: { not: null },
     },
@@ -539,4 +541,13 @@ export async function requireConnectedChannel(code: MarketplaceCode) {
     throw bizoneError("CONFLICT", `${MARKETPLACE_NAME[code]} chưa kết nối hoặc đang tạm ngừng`);
   requireConfig(ch, code);
   return ch.id;
+}
+
+/** Admin "Đồng bộ đơn" of a platform without an order API (Meta: orders come via the website) */
+export function assertOrderImport(code: MarketplaceCode) {
+  if (!MARKETPLACE_FEATURES[code].orders)
+    throw bizoneError(
+      "VALIDATION_ERROR",
+      `${MARKETPLACE_NAME[code]} không có API đơn hàng — khách đặt qua link sản phẩm trên website`,
+    );
 }

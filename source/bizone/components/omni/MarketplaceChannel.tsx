@@ -59,7 +59,11 @@ const DEFAULTS: MarketplaceConfig = {
   categoryMap: {},
 };
 
-/** `/omni/{shopee|lazada}` — connect a shop, settings, category map, listings, sync log (P6.2) */
+/**
+ * `/omni/{shopee|lazada|tiktok|facebook}` — connect a shop, settings, category map, listings,
+ * sync log (P6.2; TikTok Shop + Facebook / Instagram catalog P6.3 — the Meta catalog has no
+ * category map and no order import: buyers order on the website through the product link)
+ */
 export function MarketplaceChannel({
   auth,
   code,
@@ -103,6 +107,15 @@ export function MarketplaceChannel({
 
   const state = d?.state ?? "disconnected";
   const connected = state === "connected" || state === "paused";
+  const features = d?.features;
+  const tabs = (
+    [
+      ["products", "Sản phẩm"],
+      ["categories", "Danh mục"],
+      ["settings", "Cài đặt"],
+      ["logs", "Lịch sử đồng bộ"],
+    ] as const
+  ).filter(([k]) => k !== "categories" || features?.categories !== false);
   return (
     <div className="space-y-5">
       <div>
@@ -111,13 +124,27 @@ export function MarketplaceChannel({
         </Link>
         <h1 className="text-xl font-bold text-slate-900">{d?.name ?? code}</h1>
         <p className="text-sm text-slate-500">
-          Đăng sản phẩm, đồng bộ giá / tồn kho (≤ 30 giây) và nhận đơn {d?.name} về BizOne
+          {features?.orders === false
+            ? `Đưa sản phẩm vào catalog ${d?.name ?? ""} (shop Facebook Page, mua sắm trên Instagram), đồng bộ giá / tồn kho (≤ 30 giây) — khách bấm mua được đưa tới website của cửa hàng`
+            : `Đăng sản phẩm, đồng bộ giá / tồn kho (≤ 30 giây) và nhận đơn ${d?.name ?? ""} về BizOne`}
         </p>
       </div>
+      {features?.linksToWebsite && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Meta không còn cho đặt hàng trực tiếp trên Facebook / Instagram tại Việt Nam: mỗi sản phẩm
+          trong catalog trỏ tới trang sản phẩm trên{" "}
+          <Link href="/omni/website" className="font-medium underline">
+            website
+          </Link>{" "}
+          (kèm <code className="text-xs">utm_source=facebook</code>). Đơn khách đặt từ đó là đơn
+          Website, ghi nguồn &quot;Facebook&quot; / &quot;Instagram&quot; trong danh sách đơn.
+        </div>
+      )}
       {flash.connected && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Đã kết nối shop thành công. Đơn hàng mới (lần đầu: 24 giờ gần nhất) sẽ được nhận về trong
-          ít phút.
+          {features?.orders === false
+            ? "Đã kết nối catalog thành công. Chọn sản phẩm ở tab Sản phẩm để đưa lên catalog."
+            : "Đã kết nối shop thành công. Đơn hàng mới (lần đầu: 24 giờ gần nhất) sẽ được nhận về trong ít phút."}
         </div>
       )}
       {flash.error && (
@@ -151,7 +178,9 @@ export function MarketplaceChannel({
               </div>
               <div className="mt-0.5 text-xs text-slate-500">
                 {d.exists && d.shopId
-                  ? `Shop ID ${d.shopId} · ${d.listings.synced} SKU đã đồng bộ · ${d.orders30d} đơn / 30 ngày · nhận đơn lần cuối ${d.lastOrderSyncAt ? fmtDate(d.lastOrderSyncAt, true) : "—"}`
+                  ? features?.orders === false
+                    ? `Catalog ID ${d.shopId} · ${d.listings.synced} SKU đã đồng bộ · ${d.orders30d} đơn website từ Facebook / Instagram / 30 ngày · token hết hạn ${d.tokenExpiresAt ? fmtDate(d.tokenExpiresAt, true) : "—"}`
+                    : `Shop ID ${d.shopId} · ${d.listings.synced} SKU đã đồng bộ · ${d.orders30d} đơn / 30 ngày · nhận đơn lần cuối ${d.lastOrderSyncAt ? fmtDate(d.lastOrderSyncAt, true) : "—"}`
                   : "Lưu cài đặt rồi bấm Kết nối để chủ shop đăng nhập và cấp quyền cho BizOne"}
               </div>
               {d.exists && d.lastError && (
@@ -172,18 +201,21 @@ export function MarketplaceChannel({
               )}
               {state === "connected" && (
                 <>
-                  <button
-                    className={btnSecondary}
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        () => trpc.omni.syncNow.mutate({ code, what: "orders" }, apiContext(auth)),
-                        "Đang nhận đơn mới — xem Lịch sử đồng bộ",
-                      )
-                    }
-                  >
-                    <ShoppingCart className="h-4 w-4" /> Đồng bộ đơn
-                  </button>
+                  {features?.orders !== false && (
+                    <button
+                      className={btnSecondary}
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          () =>
+                            trpc.omni.syncNow.mutate({ code, what: "orders" }, apiContext(auth)),
+                          "Đang nhận đơn mới — xem Lịch sử đồng bộ",
+                        )
+                      }
+                    >
+                      <ShoppingCart className="h-4 w-4" /> Đồng bộ đơn
+                    </button>
+                  )}
                   <button
                     className={btnSecondary}
                     disabled={busy}
@@ -242,22 +274,12 @@ export function MarketplaceChannel({
           </div>
           {!d.platformConfigured && (
             <div className="border-t border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-              BizOne chưa có thông tin ứng dụng {d.name} (
-              {code === "shopee"
-                ? "SHOPEE_PARTNER_ID / SHOPEE_PARTNER_KEY"
-                : "LAZADA_APP_KEY / LAZADA_APP_SECRET"}
-              , OMNI_TOKEN_KEY) — quản trị hệ thống cần đăng ký ứng dụng trên Open Platform của sàn.
+              BizOne chưa có thông tin ứng dụng {d.name} ({d.platformEnv}, OMNI_TOKEN_KEY) — quản
+              trị hệ thống cần đăng ký ứng dụng trên trang nhà phát triển của nền tảng.
             </div>
           )}
           <div className="flex gap-1 overflow-x-auto border-t border-slate-100 px-2">
-            {(
-              [
-                ["products", "Sản phẩm"],
-                ["categories", "Danh mục"],
-                ["settings", "Cài đặt"],
-                ["logs", "Lịch sử đồng bộ"],
-              ] as const
-            ).map(([k, label]) => (
+            {tabs.map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -295,6 +317,8 @@ function SettingsForm({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  // Meta catalog: no shipping package, no order import
+  const social = channel.features.orders === false;
   const [f, setF] = useState<MarketplaceConfig>(
     () =>
       channel.config ?? {
@@ -330,7 +354,7 @@ function SettingsForm({
       className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2"
     >
       <Field
-        label="Chi nhánh nhận đơn"
+        label={social ? "Chi nhánh lấy tồn kho" : "Chi nhánh nhận đơn"}
         htmlFor={id("branch")}
         hint="Tồn kho đẩy lên sàn = kho đầu tiên của chi nhánh"
       >
@@ -378,36 +402,40 @@ function SettingsForm({
           onChange={(e) => set("stockBuffer", num(e.target.value))}
         />
       </Field>
-      <Field
-        label="Cân nặng mặc định (kg)"
-        htmlFor={id("weight")}
-        hint="Dùng khi sản phẩm chưa có cân nặng"
-      >
-        <input
-          id={id("weight")}
-          type="number"
-          min={0.01}
-          step="0.01"
-          className={inputCls}
-          value={f.defaultWeightKg}
-          onChange={(e) => set("defaultWeightKg", num(e.target.value))}
-        />
-      </Field>
-      <Field label="Kích thước kiện mặc định (cm: dài × rộng × cao)">
-        <div className="flex gap-2">
-          {(["length", "width", "height"] as const).map((k) => (
+      {!social && (
+        <>
+          <Field
+            label="Cân nặng mặc định (kg)"
+            htmlFor={id("weight")}
+            hint="Dùng khi sản phẩm chưa có cân nặng"
+          >
             <input
-              key={k}
+              id={id("weight")}
               type="number"
-              min={1}
-              aria-label={k}
+              min={0.01}
+              step="0.01"
               className={inputCls}
-              value={f.packageCm[k]}
-              onChange={(e) => set("packageCm", { ...f.packageCm, [k]: num(e.target.value) })}
+              value={f.defaultWeightKg}
+              onChange={(e) => set("defaultWeightKg", num(e.target.value))}
             />
-          ))}
-        </div>
-      </Field>
+          </Field>
+          <Field label="Kích thước kiện mặc định (cm: dài × rộng × cao)">
+            <div className="flex gap-2">
+              {(["length", "width", "height"] as const).map((k) => (
+                <input
+                  key={k}
+                  type="number"
+                  min={1}
+                  aria-label={k}
+                  className={inputCls}
+                  value={f.packageCm[k]}
+                  onChange={(e) => set("packageCm", { ...f.packageCm, [k]: num(e.target.value) })}
+                />
+              ))}
+            </div>
+          </Field>
+        </>
+      )}
       <Field label="Tự động">
         <div className="space-y-1.5 pt-1 text-sm">
           <label className="flex items-center gap-2">
@@ -418,14 +446,16 @@ function SettingsForm({
             />
             Tự đẩy giá / tồn kho khi thay đổi (≤ 30 giây)
           </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={f.autoImportOrders}
-              onChange={(e) => set("autoImportOrders", e.target.checked)}
-            />
-            Tự nhận đơn mới (thông báo đẩy + quét 2 phút / lần)
-          </label>
+          {!social && (
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={f.autoImportOrders}
+                onChange={(e) => set("autoImportOrders", e.target.checked)}
+              />
+              Tự nhận đơn mới (thông báo đẩy + quét 2 phút / lần)
+            </label>
+          )}
         </div>
       </Field>
       <div className="space-y-2 sm:col-span-2">

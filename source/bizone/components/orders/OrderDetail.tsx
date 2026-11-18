@@ -16,7 +16,7 @@ import {
 import {
   ORDER_STATUS,
   PAYMENT_STATUS,
-  CHANNEL_LABEL,
+  channelLabel,
   NEXT_STATUS,
   NEXT_STATUS_LABEL,
 } from "./shared";
@@ -37,6 +37,7 @@ const PAYMENT_METHOD_NAME: Record<string, string> = {
   // P6.2: collected by the marketplace
   shopee: "Shopee thu hộ",
   lazada: "Lazada thu hộ",
+  tiktok: "TikTok Shop thu hộ",
 };
 const ONLINE_PAYMENT_STATUS: Record<string, string> = {
   pending: "chờ thanh toán",
@@ -217,10 +218,7 @@ export function OrderDetail({ orderId, auth }: OrderDetailProps) {
             </h3>
             <div className="space-y-2.5 text-sm">
               <InfoRow label="Mã đơn hàng" value={order.orderCode} />
-              <InfoRow
-                label="Kênh"
-                value={CHANNEL_LABEL[order.channel ?? ""] ?? order.channel ?? "—"}
-              />
+              <InfoRow label="Kênh" value={channelLabel(order)} />
               <InfoRow
                 label="Trạng thái"
                 value={

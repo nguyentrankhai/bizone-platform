@@ -3,8 +3,11 @@ import { getRedis } from "@/lib/redis";
 import { bizoneError } from "@/lib/errors";
 import { currentTenantId } from "@/lib/tenant";
 import {
+  MARKETPLACES,
+  MARKETPLACE_FEATURES,
   MARKETPLACE_NAME,
   MAX_IMAGES,
+  catalogLink,
   channelPrice,
   channelStock,
   resolveCategory,
@@ -24,10 +27,12 @@ import {
   withShop,
   type ChannelRow,
 } from "./marketplaceChannel.service";
-import { logSync, reportSyncFailure } from "./websiteChannel.service";
+import { logSync, reportSyncFailure, websiteChannel } from "./websiteChannel.service";
+import { parseWebsiteConfig, productSlug } from "@/lib/omni/website";
 
 /**
- * Products on marketplaces (P6.2).
+ * Products on marketplaces (P6.2) — and TikTok Shop / the Meta catalog (P6.3: no category and
+ * image URLs instead of uploads for Meta, see `MARKETPLACE_FEATURES`).
  *
  * - Push: the admin picks products → placeholder rows in `channel_product_mapping` (pending) →
  *   worker creates the listing (images uploaded, category from the category map, one variation
@@ -220,6 +225,19 @@ export async function setListingActive(
   return { isActive };
 }
 
+/** Absolute URL of a product image for platforms that fetch it themselves (Meta) */
+function publicImageUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url, process.env.APP_URL ?? "http://localhost:3000");
+  } catch {
+    throw new MarketplaceError("invalid", `Ảnh "${url}" không phải URL hợp lệ`);
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:")
+    throw new MarketplaceError("invalid", `Ảnh "${url}" phải là http/https`);
+  return u.href;
+}
+
 async function categoryParents() {
   const cats = await getPrisma().productCategory.findMany({ select: { id: true, parentId: true } });
   return new Map(cats.map((c) => [c.id, c.parentId]));
@@ -245,8 +263,11 @@ async function buildListing(
       },
     },
   });
-  const categoryId = resolveCategory(p.categoryId, parents, cfg.categoryMap);
-  if (!categoryId)
+  const features = MARKETPLACE_FEATURES[code];
+  const categoryId = features.categories
+    ? resolveCategory(p.categoryId, parents, cfg.categoryMap)
+    : "";
+  if (categoryId === null)
     throw new MarketplaceError(
       "invalid",
       `Danh mục của "${p.name}" chưa được ghép với danh mục ${MARKETPLACE_NAME[code]} (tab Danh mục)`,
@@ -262,10 +283,22 @@ async function buildListing(
   if (urls.length === 0)
     throw new MarketplaceError("invalid", `"${p.name}" chưa có ảnh — sàn yêu cầu ít nhất 1 ảnh`);
   const images = [];
-  for (const [i, url] of urls.entries()) {
-    const img = await fetchImage(url);
-    const ext = img.contentType.split("/")[1].replace("jpeg", "jpg");
-    images.push({ ...img, filename: `${p.sku}-${i + 1}.${ext}` });
+  if (features.uploadsImages)
+    for (const [i, url] of urls.entries()) {
+      const img = await fetchImage(url);
+      const ext = img.contentType.split("/")[1].replace("jpeg", "jpg");
+      images.push({ ...img, filename: `${p.sku}-${i + 1}.${ext}` });
+    }
+  const imageUrls = features.uploadsImages ? [] : urls.map(publicImageUrl);
+  let link: string | null = null;
+  if (features.linksToWebsite) {
+    const web = parseWebsiteConfig((await websiteChannel())?.config);
+    if (!web)
+      throw new MarketplaceError(
+        "invalid",
+        `${MARKETPLACE_NAME[code]} bán qua website — cài đặt kênh Website (địa chỉ website) trước`,
+      );
+    link = catalogLink(web.storefrontUrl, productSlug(p.id, p.name));
   }
   const stockRows = warehouseId
     ? await prisma.inventory.findMany({
@@ -291,6 +324,9 @@ async function buildListing(
     weightKg: Number(p.weight ?? 0) > 0 ? Number(p.weight) : cfg.defaultWeightKg,
     packageCm: cfg.packageCm,
     images,
+    imageUrls,
+    link,
+    brand: "NoBrand",
     variants: p.productVariants.map((v) => ({
       sku: v.sku,
       name:
@@ -587,7 +623,7 @@ export async function syncChannelStock(
 export async function syncAllChannelStock() {
   const rows = await getPrisma().channelConnection.findMany({
     where: {
-      channelCode: { in: ["shopee", "lazada"] },
+      channelCode: { in: [...MARKETPLACES] },
       isActive: true,
       accessToken: { not: null },
     },

@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
+import { ORDER_SOURCE_LABEL, normalizeOrderSource } from "@/lib/omni/marketplace";
 import { bizoneError } from "@/lib/errors";
 import { currentTenantId } from "@/lib/tenant";
 import {
@@ -126,6 +127,8 @@ export interface CreateStoreOrderInput {
   note?: string | null;
   paymentMethod: WebsitePaymentMethod;
   returnUrl?: string | null;
+  /** P6.3: utm_source of the link the buyer followed */
+  source?: string | null;
 }
 
 function orderCode(): string {
@@ -219,6 +222,7 @@ async function placeOrder(
           contactPhone: input.contact.phone,
           channel: WEBSITE_CHANNEL,
           channelOrderId: code,
+          source: normalizeOrderSource(input.source),
           branchId: cfg.branchId,
           subtotal,
           shippingFee: view.shippingFee,
@@ -277,6 +281,8 @@ async function placeOrder(
       reason: "order",
       orderId: order.id,
     });
+  const src = normalizeOrderSource(input.source);
+  const channelName = src ? `Website (${ORDER_SOURCE_LABEL[src]})` : "Website";
   await logSync({
     channelId: ch.id,
     syncType: "order",
@@ -287,18 +293,19 @@ async function placeOrder(
       orderId: order.id,
       items: order.orderItems.length,
       paymentMethod: input.paymentMethod,
+      ...(src ? { source: src } : {}),
     },
   });
   await notify({
     type: "order_new",
-    title: `Đơn hàng ${order.orderCode} từ Website - ${fmtVnd(String(view.total))}`,
+    title: `Đơn hàng ${order.orderCode} từ ${channelName} - ${fmtVnd(String(view.total))}`,
     content: `Khách ${input.contact.name} (${input.contact.phone})`,
     link: `/orders/${order.id}`,
     branchId: cfg.branchId,
     dedupeKey: `order:${order.id}`,
     vars: {
       order_code: order.orderCode,
-      channel: "Website",
+      channel: channelName,
       customer_name: input.contact.name,
       total_amount: fmtVnd(String(view.total)),
       branch_name: "",

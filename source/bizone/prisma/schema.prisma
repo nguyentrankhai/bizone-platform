@@ -131,6 +131,8 @@ model ChannelConnection {
   /// P6.2: refresh token expiry (marketplaces) — past it the shop must authorize again
   refreshExpiresAt      DateTime?               @map("refresh_expires_at") @db.DateTime(0)
   shopId                String?                 @map("shop_id") @db.VarChar(100)
+  /// P6.3: platform handle sent with the shop id (TikTok Shop shop_cipher, Meta business id)
+  shopRef               String?                 @map("shop_ref") @db.VarChar(255)
   isActive              Boolean                 @default(true) @map("is_active")
   lastSyncAt            DateTime?               @map("last_sync_at") @db.DateTime(0)
   /// P6.2: orders updated up to this instant have been pulled from the marketplace
@@ -783,6 +785,8 @@ model Order {
   contactPhone        String?               @map("contact_phone") @db.VarChar(20)
   channel             String?               @db.VarChar(50)
   channelOrderId      String?               @map("channel_order_id") @db.VarChar(100)
+  /// P6.3: where a website order came from (utm_source: facebook, instagram, zalo…)
+  source              String?               @db.VarChar(50)
   branchId            Int?                  @map("branch_id")
   /// P6.1: warehouse the order's stock was taken from (null = not taken yet)
   stockWarehouseId    Int?                  @map("stock_warehouse_id")
@@ -820,6 +824,7 @@ model Order {
   @@index([branchId], map: "fk_ord_branch")
   @@index([createdBy], map: "fk_ord_created")
   @@index([channel], map: "idx_ord_channel")
+  @@index([channel, source], map: "idx_ord_source")
   @@index([orderCode], map: "idx_ord_code")
   @@index([createdAt], map: "idx_ord_created")
   @@index([customerId], map: "idx_ord_customer")

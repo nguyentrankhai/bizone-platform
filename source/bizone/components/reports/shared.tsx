@@ -262,5 +262,6 @@ export const METHOD_LABEL: Record<string, string> = {
   online: "Online (Payment Hub)",
   shopee: "Shopee",
   lazada: "Lazada",
+  tiktok: "TikTok Shop",
   cod: "COD (thu khi giao)",
 };

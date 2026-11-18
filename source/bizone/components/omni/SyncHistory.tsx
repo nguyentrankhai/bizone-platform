@@ -6,11 +6,14 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { apiContext, fmtDate, type ApiAuth } from "@/components/inventory/shared";
 import { ErrorBox, btnSecondary, inputCls, useLoad } from "@/components/staff/shared";
+import type { MarketplaceCode } from "@/lib/omni/marketplace";
 
 export const CHANNEL_LABEL: Record<string, string> = {
   website: "Website",
   shopee: "Shopee",
   lazada: "Lazada",
+  tiktok: "TikTok Shop",
+  facebook: "Facebook / Instagram",
 };
 
 const SYNC_TYPE: Record<string, string> = {
@@ -21,7 +24,7 @@ const SYNC_TYPE: Record<string, string> = {
   auth: "Kết nối",
 };
 
-type Channel = "website" | "shopee" | "lazada";
+type Channel = "website" | MarketplaceCode;
 
 /** Sync log of one channel, or of every channel (P6.2 — shared by `/omni` screens) */
 export function SyncHistory({ auth, channel }: { auth: ApiAuth; channel?: Channel }) {

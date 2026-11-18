@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Globe, ShoppingBag, Store } from "lucide-react";
+import {
+  ChevronRight,
+  Globe,
+  MessageCircle,
+  Music2,
+  ShoppingBag,
+  Store,
+  ThumbsUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/components/inventory/shared";
 
@@ -14,14 +22,24 @@ const STATE: Record<ChannelCardState, { label: string; cls: string }> = {
   disconnected: { label: "Chưa kết nối", cls: "bg-slate-100 text-slate-600" },
   reconnect: { label: "Cần kết nối lại", cls: "bg-red-50 text-red-700" },
   not_configured: { label: "Chưa cấu hình ứng dụng", cls: "bg-amber-50 text-amber-700" },
-  soon: { label: "Sắp có (P6.3)", cls: "bg-slate-100 text-slate-500" },
+  soon: { label: "Sắp có", cls: "bg-slate-100 text-slate-500" },
 };
 
-const ICON = { website: Globe, shopee: ShoppingBag, lazada: Store } as const;
+const ICON = {
+  website: Globe,
+  shopee: ShoppingBag,
+  lazada: Store,
+  tiktok: Music2,
+  facebook: ThumbsUp,
+  zalo: MessageCircle,
+} as const;
 const TINT: Record<string, string> = {
   website: "bg-primary/10 text-primary",
   shopee: "bg-orange-50 text-orange-600",
   lazada: "bg-indigo-50 text-indigo-600",
+  tiktok: "bg-slate-900 text-white",
+  facebook: "bg-blue-50 text-blue-600",
+  zalo: "bg-sky-50 text-sky-600",
 };
 
 /** One sales channel on the Omni Channel overview (P6.2) */

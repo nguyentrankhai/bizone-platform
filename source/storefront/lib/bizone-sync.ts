@@ -156,6 +156,8 @@ export const bizone = {
       note?: string | null;
       paymentMethod: "cod" | "payhub";
       returnUrl?: string;
+      /** P6.3: utm_source of the link the buyer followed */
+      source?: string | null;
     },
     opts: { token: string | null; idempotencyKey: string },
   ) =>

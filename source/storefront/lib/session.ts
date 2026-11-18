@@ -9,6 +9,7 @@ import { cartCookieName, parseCart, serializeCart, type CartItem } from "./cart"
  *  - `bz_cart_{slug}`   cart lines
  *  - `bz_guest_{slug}`  orders placed without an account: `code:phone` pairs, so a guest can
  *                       come back from Payment Hub and follow the order without logging in
+ *  - `bz_src`           utm_source of the last social link followed (P6.3, set by `proxy.ts`)
  */
 
 const secure = () =>
@@ -26,6 +27,12 @@ export async function setCustomerToken(store: StoreRef, token: string | null) {
   const jar = await cookies();
   if (token) jar.set(tokenName(store.slug), token, { ...base(), maxAge: 30 * 86_400 });
   else jar.delete(tokenName(store.slug));
+}
+
+/** Where the buyer came from (utm_source), sent with the order */
+export async function orderSource(): Promise<string | null> {
+  const v = (await cookies()).get("bz_src")?.value ?? "";
+  return /^[a-z0-9._-]{1,40}$/.test(v) ? v : null;
 }
 
 export async function readCart(store: StoreRef): Promise<CartItem[]> {

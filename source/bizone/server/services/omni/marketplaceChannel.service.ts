@@ -4,7 +4,11 @@ import { getRedis } from "@/lib/redis";
 import { bizoneError } from "@/lib/errors";
 import { currentTenantId, runWithTenant, tenantRegistry } from "@/lib/tenant";
 import {
+  MARKETPLACES,
+  MARKETPLACE_FEATURES,
   MARKETPLACE_NAME,
+  META_SOURCES,
+  PLATFORM_ENV,
   parseMarketplaceConfig,
   type MarketplaceCode,
   type MarketplaceConfig,
@@ -20,7 +24,8 @@ import {
 import { logSync, reportSyncFailure } from "./websiteChannel.service";
 
 /**
- * Marketplace shops (P6.2): one `channel_connections` row per tenant and marketplace.
+ * Marketplace shops (P6.2, TikTok Shop / Facebook catalog P6.3): one `channel_connections` row
+ * per tenant and platform.
  *
  * Connecting = OAuth: the admin gets the platform's authorize URL with a one-time `state`
  * (Redis, 10 min, carries tenant + user), the platform redirects the browser to
@@ -101,6 +106,8 @@ export async function getMarketplaceChannel(code: MarketplaceCode) {
   const base = {
     code,
     name: MARKETPLACE_NAME[code],
+    features: MARKETPLACE_FEATURES[code],
+    platformEnv: PLATFORM_ENV[code],
     platformConfigured: connector.configured() && tokenKeyConfigured(),
     branches,
     categories,
@@ -115,7 +122,12 @@ export async function getMarketplaceChannel(code: MarketplaceCode) {
       where: { channelId: ch.id },
       _count: { _all: true },
     }),
-    prisma.order.count({ where: { channel: code, createdAt: { gte: since } } }),
+    // Facebook / Instagram sell through the website: count website orders from Meta links
+    prisma.order.count({
+      where: MARKETPLACE_FEATURES[code].orders
+        ? { channel: code, createdAt: { gte: since } }
+        : { channel: "website", source: { in: [...META_SOURCES] }, createdAt: { gte: since } },
+    }),
     prisma.syncLog.count({
       where: {
         channelId: ch.id,
@@ -212,7 +224,7 @@ export async function startConnect(code: MarketplaceCode, userId: number | null)
   if (!connector.configured())
     throw bizoneError(
       "SERVICE_UNAVAILABLE",
-      `BizOne chưa có thông tin ứng dụng ${connector.name} (${code === "shopee" ? "SHOPEE_PARTNER_ID / SHOPEE_PARTNER_KEY" : "LAZADA_APP_KEY / LAZADA_APP_SECRET"})`,
+      `BizOne chưa có thông tin ứng dụng ${connector.name} (${PLATFORM_ENV[code]})`,
     );
   if (!tokenKeyConfigured())
     throw bizoneError("SERVICE_UNAVAILABLE", "Chưa cấu hình OMNI_TOKEN_KEY");
@@ -280,7 +292,7 @@ export async function finishConnect(code: MarketplaceCode, query: URLSearchParam
       "invalid",
       `Chủ shop từ chối / huỷ uỷ quyền (${query.get("error")})`,
     );
-  const tokens = await connectorFor(code).exchangeCode(query);
+  const tokens = await connectorFor(code).exchangeCode(query, callbackUrl(code));
   const owner = await findShopTenant(code, tokens.shopId);
   return runWithTenant(saved.tenantId, async () => {
     const ch = await findChannel(code);
@@ -326,6 +338,7 @@ async function saveTokens(
       tokenExpiresAt: t.expiresAt,
       refreshExpiresAt: t.refreshExpiresAt,
       shopId: t.shopId,
+      ...(t.shopRef !== undefined ? { shopRef: t.shopRef } : {}),
       ...(t.shopName ? { channelName: t.shopName.slice(0, 255) } : {}),
       lastError: null,
       ...extra,
@@ -407,6 +420,7 @@ export async function refreshTokens(
       const t = await connectorFor(ch.channelCode as MarketplaceCode).refresh({
         refreshToken,
         shopId: ch.shopId!,
+        shopRef: ch.shopRef,
       });
       await saveTokens(ch.id, { ...t, shopId: ch.shopId!, shopName: null });
     } catch (e) {
@@ -426,7 +440,7 @@ async function contextOf(ch: ChannelRow): Promise<ShopContext> {
     row = await refreshTokens(row.id);
   const accessToken = decryptToken(row.accessToken);
   if (!accessToken || !row.shopId) throw new MarketplaceError("auth", "Shop chưa kết nối");
-  return { accessToken, shopId: row.shopId };
+  return { accessToken, shopId: row.shopId, shopRef: row.shopRef };
 }
 
 /**
@@ -469,7 +483,7 @@ export async function refreshExpiringTokens() {
   const soon = new Date(Date.now() + 60 * 60_000);
   const rows = await getPrisma().channelConnection.findMany({
     where: {
-      channelCode: { in: ["shopee", "lazada"] },
+      channelCode: { in: [...MARKETPLACES] },
       accessToken: { not: null },
       tokenExpiresAt: { lt: soon },
     },

@@ -1,3 +1,5 @@
+import { ORDER_SOURCE_LABEL } from "@/lib/omni/marketplace";
+
 export const ORDER_STATUS: Record<string, { label: string; className: string }> = {
   pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700" },
   confirmed: { label: "Đã xác nhận", className: "bg-blue-50 text-blue-700" },
@@ -24,6 +26,13 @@ export const CHANNEL_LABEL: Record<string, string> = {
   facebook: "Facebook",
   zalo: "Zalo",
 };
+
+/** Channel of an order, with where a website order came from (P6.3: "Website · Facebook") */
+export function channelLabel(o: { channel: string | null; source?: string | null }): string {
+  const ch = CHANNEL_LABEL[o.channel ?? ""] ?? o.channel ?? "—";
+  const src = o.source ? (ORDER_SOURCE_LABEL as Record<string, string>)[o.source] : null;
+  return src ? `${ch} · ${src}` : ch;
+}
 
 export const NEXT_STATUS: Record<string, string | null> = {
   pending: "confirmed",

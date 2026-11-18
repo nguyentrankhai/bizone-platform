@@ -2,7 +2,9 @@ import type { MarketplaceCode } from "@/lib/omni/marketplace";
 
 /**
  * Marketplace connector contract (P6.2). One implementation per platform (Shopee Open
- * Platform v2, Lazada Open Platform); the sync services only talk to this interface.
+ * Platform v2, Lazada Open Platform, TikTok Shop Partner API 202309, Meta catalog — P6.3); the
+ * sync services only talk to this interface. What a platform supports (categories, order
+ * import, image upload) is in `MARKETPLACE_FEATURES`.
  * Platform credentials (partner / app key + secret) are BizOne's own and come from env —
  * each tenant's shop authorizes BizOne through OAuth.
  */
@@ -15,12 +17,15 @@ export interface ShopTokens {
   refreshExpiresAt: Date | null;
   shopId: string;
   shopName: string | null;
+  /** P6.3: handle sent with the shop id (TikTok shop_cipher, Meta business id); undefined = keep */
+  shopRef?: string | null;
 }
 
 /** Signed-in shop a call runs for */
 export interface ShopContext {
   accessToken: string;
   shopId: string;
+  shopRef?: string | null;
 }
 
 export interface MarketCategory {
@@ -46,7 +51,13 @@ export interface ListingInput {
   stock: number;
   weightKg: number;
   packageCm: { length: number; width: number; height: number };
+  /** Uploaded to the platform (`uploadsImages`) — empty otherwise */
   images: ListingImage[];
+  /** Absolute public URLs of the same images (platforms that fetch them: Meta) */
+  imageUrls: string[];
+  /** Product page on the website channel (`linksToWebsite`), null otherwise */
+  link: string | null;
+  brand: string;
   /** Variations (one tier "Phân loại") — empty = single listing */
   variants: { sku: string; name: string; price: number; stock: number }[];
 }
@@ -125,9 +136,13 @@ export interface MarketplaceConnector {
   configured(): boolean;
   /** Page the shop owner opens to authorize BizOne; `state` comes back to the callback */
   authorizeUrl(callbackUrl: string, state: string): string;
-  /** Callback query (code, shop_id…) → tokens */
-  exchangeCode(query: URLSearchParams): Promise<ShopTokens>;
-  refresh(current: { refreshToken: string; shopId: string }): Promise<ShopTokens>;
+  /** Callback query (code, shop_id…) → tokens; `callbackUrl` = the redirect URI used above */
+  exchangeCode(query: URLSearchParams, callbackUrl: string): Promise<ShopTokens>;
+  refresh(current: {
+    refreshToken: string;
+    shopId: string;
+    shopRef?: string | null;
+  }): Promise<ShopTokens>;
   categories(ctx: ShopContext): Promise<MarketCategory[]>;
   createListing(ctx: ShopContext, input: ListingInput): Promise<ListingResult>;
   /** Price and/or stock of existing listings — result per sku */

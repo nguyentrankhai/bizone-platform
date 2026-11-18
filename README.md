@@ -136,6 +136,7 @@ npm run dev
 - Payment Hub: http://localhost:4000
 - Online store (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — `{store}.bizone.vn` in production. In BizOne go to **Omni Channel → Website**, save the settings and create a store key, then put it in the storefront's `.env.local` (`STORE_KEYS="demo=bzs.…"`, see `.env.example`). Online payment goes through Payment Hub with BizOne's merchant key (`PAYHUB_*`).
 - Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — save the settings, then **Connect** (OAuth on the marketplace). Needs BizOne's platform apps in BizOne's `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) and a public `APP_URL` for the OAuth return + push (`/api/webhooks/shopee|lazada`); listings, stock (≤ 30 s) and orders sync in `npm run dev:worker`.
+- TikTok Shop / Facebook – Instagram (P6.3): same flow at **Omni Channel → TikTok Shop / Facebook / Instagram** (`TIKTOK_APP_KEY/SECRET/SERVICE_ID`, `FACEBOOK_APP_ID/SECRET`; TikTok webhook `/api/webhooks/tiktok`). The Facebook catalog links each product to the website channel (`utm_source=facebook`), so those orders arrive as website orders tagged with their source.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
@@ -266,6 +267,7 @@ npm run dev
 - Payment Hub: http://localhost:4000
 - Website bán hàng (P6.1, `source/storefront`): http://localhost:3100 (`npm run dev`) — production là `{cửa-hàng}.bizone.vn`. Trong BizOne vào **Omni Channel → Website**, lưu cấu hình và tạo khoá kết nối, rồi đặt vào `.env.local` của storefront (`STORE_KEYS="demo=bzs.…"`, xem `.env.example`). Thanh toán online đi qua Payment Hub bằng merchant key của BizOne (`PAYHUB_*`).
 - Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — lưu cài đặt rồi bấm **Kết nối** (OAuth trên sàn). Cần ứng dụng của BizOne trên sàn trong `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) và `APP_URL` public cho OAuth + push (`/api/webhooks/shopee|lazada`); đăng SP, tồn kho (≤ 30 giây), đơn hàng đồng bộ trong `npm run dev:worker`.
+- TikTok Shop / Facebook – Instagram (P6.3): tương tự ở **Omni Channel → TikTok Shop / Facebook / Instagram** (`TIKTOK_APP_KEY/SECRET/SERVICE_ID`, `FACEBOOK_APP_ID/SECRET`; webhook TikTok `/api/webhooks/tiktok`). Catalog Facebook trỏ mỗi SP về website (`utm_source=facebook`) nên đơn đến là đơn website có ghi nguồn.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).

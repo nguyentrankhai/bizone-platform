@@ -6,7 +6,7 @@ import { ErrorBox, useLoad } from "@/components/staff/shared";
 import { ChannelCard } from "@/components/omni/ChannelCard";
 import { SyncHistory } from "@/components/omni/SyncHistory";
 
-/** `/omni` — every sales channel at a glance + the combined sync log (P6.2) */
+/** `/omni` — every sales channel at a glance + the combined sync log (P6.2, P6.3) */
 export function OmniOverview({ auth }: { auth: ApiAuth }) {
   const ch = useLoad("omni-channels", () => trpc.omni.channels.query(undefined, apiContext(auth)));
   const d = ch.data;
@@ -46,17 +46,9 @@ export function OmniOverview({ auth }: { auth: ApiAuth }) {
           />
         ))}
         <ChannelCard
-          code="tiktok"
-          name="TikTok Shop"
-          detail="Đồng bộ sản phẩm, đơn hàng"
-          state="soon"
-          lastSyncAt={null}
-          href={null}
-        />
-        <ChannelCard
-          code="facebook"
-          name="Facebook / Instagram / Zalo"
-          detail="Đăng bán và nhận đơn từ mạng xã hội"
+          code="zalo"
+          name="Zalo OA / Mini App"
+          detail="Chờ tài khoản Zalo OA — link website gắn utm_source=zalo đã được ghi nguồn"
           state="soon"
           lastSyncAt={null}
           href={null}
