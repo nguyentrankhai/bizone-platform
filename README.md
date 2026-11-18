@@ -138,6 +138,7 @@ npm run dev
 - Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — save the settings, then **Connect** (OAuth on the marketplace). Needs BizOne's platform apps in BizOne's `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) and a public `APP_URL` for the OAuth return + push (`/api/webhooks/shopee|lazada`); listings, stock (≤ 30 s) and orders sync in `npm run dev:worker`.
 - TikTok Shop / Facebook – Instagram (P6.3): same flow at **Omni Channel → TikTok Shop / Facebook / Instagram** (`TIKTOK_APP_KEY/SECRET/SERVICE_ID`, `FACEBOOK_APP_ID/SECRET`; TikTok webhook `/api/webhooks/tiktok`). The Facebook catalog links each product to the website channel (`utm_source=facebook`), so those orders arrive as website orders tagged with their source.
 - Owner mobile app / PWA (P6.4): open http://localhost:3000/mobile on a phone (dashboard, orders, reports, notifications; works offline with the last data) and install it ("Install app" on Chrome / Android, Share → "Add to Home Screen" on iPhone). Offline caching is on in production builds only (`npm run build && npm start`); push needs `VAPID_PUBLIC_KEY/PRIVATE_KEY` (`npx web-push generate-vapid-keys`), `npm run dev:worker` and HTTPS (or `localhost`).
+- Performance check (P6.5): `source/bizone/scripts/perf/README.md` — load a 200 000-invoice test database into a separate tenant and measure API P50 / P95 with `node scripts/perf/bench.mjs`; index review in `scripts/database-indexing.sql`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Dev login: browser sign-in (Keycloak) is not built yet — set `AUTH_DEV_BYPASS=true` in each app's `.env.local` to use the apps as a dev admin without a token (dev/test only; real tokens are still verified).
@@ -270,6 +271,7 @@ npm run dev
 - Shopee / Lazada (P6.2): **Omni Channel → Shopee / Lazada** — lưu cài đặt rồi bấm **Kết nối** (OAuth trên sàn). Cần ứng dụng của BizOne trên sàn trong `.env.local` (`SHOPEE_PARTNER_ID/KEY`, `LAZADA_APP_KEY/SECRET`, `OMNI_TOKEN_KEY`) và `APP_URL` public cho OAuth + push (`/api/webhooks/shopee|lazada`); đăng SP, tồn kho (≤ 30 giây), đơn hàng đồng bộ trong `npm run dev:worker`.
 - TikTok Shop / Facebook – Instagram (P6.3): tương tự ở **Omni Channel → TikTok Shop / Facebook / Instagram** (`TIKTOK_APP_KEY/SECRET/SERVICE_ID`, `FACEBOOK_APP_ID/SECRET`; webhook TikTok `/api/webhooks/tiktok`). Catalog Facebook trỏ mỗi SP về website (`utm_source=facebook`) nên đơn đến là đơn website có ghi nguồn.
 - App chủ cửa hàng / PWA (P6.4): mở http://localhost:3000/mobile trên điện thoại (tổng quan, đơn hàng, báo cáo, thông báo; mất mạng vẫn xem số liệu lần cuối) và cài lên màn hình chính ("Cài đặt ứng dụng" trên Chrome / Android, Chia sẻ → "Thêm vào MH chính" trên iPhone). Cache offline chỉ bật ở bản production (`npm run build && npm start`); thông báo đẩy cần `VAPID_PUBLIC_KEY/PRIVATE_KEY` (`npx web-push generate-vapid-keys`), `npm run dev:worker` và HTTPS (hoặc `localhost`).
+- Đo hiệu năng (P6.5): `source/bizone/scripts/perf/README.md` — nạp DB thử 200 000 hoá đơn vào tenant riêng và đo P50 / P95 API bằng `node scripts/perf/bench.mjs`; rà soát index ở `scripts/database-indexing.sql`.
 - Keycloak: http://localhost:8080
 - MinIO Console: http://localhost:9001
 - Đăng nhập khi dev: chưa có đăng nhập Keycloak trên trình duyệt — đặt `AUTH_DEV_BYPASS=true` trong `.env.local` của từng app để dùng app với quyền admin dev mà không cần token (chỉ dev/test; token thật vẫn được xác thực).
@@ -307,7 +309,7 @@ bizone/
 │   ├── bizone/                         # BizOne Core — NextJS 16 (P1.1)
 │   │   ├── app/                        # App Router (pages, layouts, /api/*)
 │   │   ├── components/ui/              # shadcn/ui components
-│   │   ├── prisma/                     # Prisma schema, migrations (0_init … 8_omni_marketplace), seed
+│   │   ├── prisma/                     # Prisma schema, migrations (0_init … 10_perf_indexes), seed
 │   │   ├── hooks/  lib/  server/  types/
 │   │   ├── server/ws/pos.ts            # POS 2-screen + notifications WebSocket (:3002/ws/pos/{sessionId}, /ws/notifications)
 │   │   ├── server/worker.ts            # BullMQ worker (inventory, commissions, report exports, notifications)

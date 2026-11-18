@@ -6,13 +6,24 @@ import { branchWarehouseId } from "@/server/services/invoice.service";
 import { applyPromotions } from "@/lib/pos/promotions";
 import { loadCartLines, loadPromoContext } from "@/server/services/pricing.service";
 import type { StoreChannel } from "./websiteChannel.service";
+import { cached, stableKey } from "@/lib/cache";
+import { createHash } from "node:crypto";
 
 /**
  * Store API — catalog (P6.1). Products, prices and stock are read live from BizOne, so the
  * website always shows the current stock of the channel's warehouse (SRS-OMNI-04 < 30 s).
  * Stock shown = quantity in the first active warehouse of the channel branch (what an order
  * will take); products that don't track inventory are always available.
+ *
+ * P6.5 (#133): catalog answers are cached in Redis (`storeCatalog`, 15 s — stock on the website
+ * stays < 30 s old; dropped at once when a product / category changes). The key carries the
+ * channel and a hash of its config (branch, price rules). Orders always re-read stock / prices.
  */
+
+/** Cache key part of a channel: its id + config (branch, pricing) */
+function channelKey(ch: StoreChannel): string {
+  return `${ch.id}:${createHash("sha1").update(stableKey(ch.config)).digest("base64url").slice(0, 16)}`;
+}
 
 export async function storeInfo(ch: StoreChannel) {
   const c = ch.config;
@@ -32,7 +43,11 @@ export async function storeInfo(ch: StoreChannel) {
   };
 }
 
-export async function storeCategories() {
+export function storeCategories() {
+  return cached("storeCatalog", "categories", loadCategories, 300);
+}
+
+async function loadCategories() {
   const rows = await getPrisma().productCategory.findMany({
     where: { isActive: true },
     select: { id: true, name: true, slug: true, parentId: true, sortOrder: true },
@@ -118,16 +133,21 @@ const SORTS = {
   name: [{ name: "asc" }],
 } satisfies Record<string, Prisma.ProductOrderByWithRelationInput[]>;
 
-export async function storeProducts(
-  ch: StoreChannel,
-  input: {
-    search?: string;
-    category?: string;
-    page: number;
-    limit: number;
-    sort: keyof typeof SORTS;
-  },
-) {
+type StoreProductsInput = {
+  search?: string;
+  category?: string;
+  page: number;
+  limit: number;
+  sort: keyof typeof SORTS;
+};
+
+export function storeProducts(ch: StoreChannel, input: StoreProductsInput) {
+  return cached("storeCatalog", `list:${channelKey(ch)}:${stableKey(input)}`, () =>
+    loadStoreProducts(ch, input),
+  );
+}
+
+async function loadStoreProducts(ch: StoreChannel, input: StoreProductsInput) {
   const prisma = getPrisma();
   const where: Prisma.ProductWhereInput = { status: "active" };
   const search = input.search?.trim();
@@ -200,7 +220,11 @@ export async function storeProducts(
   };
 }
 
-export async function storeProduct(ch: StoreChannel, id: number) {
+export function storeProduct(ch: StoreChannel, id: number) {
+  return cached("storeCatalog", `product:${channelKey(ch)}:${id}`, () => loadStoreProduct(ch, id));
+}
+
+async function loadStoreProduct(ch: StoreChannel, id: number) {
   const p = await getPrisma().product.findFirst({
     where: { id, status: "active" },
     select: {

@@ -23,6 +23,8 @@ import {
 } from "./cashSession.service";
 import { recordAudit } from "./auditLog.service";
 import { invalidateDashboardCache } from "./dashboard.service";
+import { invalidate } from "@/lib/cache";
+import { vnDayStart } from "@/lib/vn-time";
 import { settlePayments, type SalePayment, type Settlement } from "./payment.service";
 import { consumeIntents, validateIntentPayments } from "./payhubPayment.service";
 import { clearCart } from "./posCart";
@@ -480,9 +482,14 @@ export async function createInvoice(
   );
 }
 
-/** Revenue changed — drop this tenant's dashboard cache (best effort; TTL covers failures) */
-export async function refreshDashboard(): Promise<void> {
+/**
+ * Revenue changed — drop this tenant's dashboard cache (best effort; TTL covers failures).
+ * P6.5: `invoiceDate` = creation time of a cancelled / refunded invoice; when it is before today
+ * (VN) the cached report figures of past days are dropped too.
+ */
+export async function refreshDashboard(invoiceDate?: Date): Promise<void> {
   await invalidateDashboardCache().catch(() => undefined);
+  if (invoiceDate && invoiceDate < vnDayStart(0)) await invalidate("salesHistory");
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -847,7 +854,7 @@ export async function cancelInvoice(input: CancelInvoiceInput, actor: PosActor) 
     });
   }
   await enqueueCommissionRecalc(inv.userId, inv.createdAt);
-  await refreshDashboard();
+  await refreshDashboard(inv.createdAt);
   await recordAudit({
     userId: actor.userId,
     module: "pos",
@@ -1078,7 +1085,7 @@ async function finishRefund(
     });
   }
   await enqueueCommissionRecalc(inv.userId, inv.createdAt);
-  await refreshDashboard();
+  await refreshDashboard(inv.createdAt);
   await recordAudit({
     userId: actor.userId,
     module: "pos",

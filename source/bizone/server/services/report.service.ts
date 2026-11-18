@@ -1,4 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
+import { createHash } from "node:crypto";
+import { cached, stableKey } from "@/lib/cache";
 import { getPrisma } from "@/lib/prisma";
 import { dateKeysBetween, vnDateKey, vnDateKeyRange } from "@/lib/vn-time";
 import type {
@@ -148,6 +150,66 @@ const AGG = Prisma.sql`
 
 type RawAgg = Record<string, unknown>;
 
+/**
+ * Additive sums of a group of invoice lines. Every field sums across disjoint sets of invoices
+ * (an invoice lives on one VN day), so the totals of a period are the sum of its days and a
+ * cached "past days" part can be merged with a live "today" part — P6.5.
+ */
+export interface Sums {
+  gross: number;
+  discount: number;
+  refunds: number;
+  net: number;
+  cost: number;
+  qty: number;
+  invoices: number;
+  no_cost_lines: number;
+}
+
+const SUM_FIELDS = [
+  "gross",
+  "discount",
+  "refunds",
+  "net",
+  "cost",
+  "qty",
+  "invoices",
+  "no_cost_lines",
+] as const;
+
+export function emptySums(): Sums {
+  return {
+    gross: 0,
+    discount: 0,
+    refunds: 0,
+    net: 0,
+    cost: 0,
+    qty: 0,
+    invoices: 0,
+    no_cost_lines: 0,
+  };
+}
+
+function toSums(r: RawAgg | undefined): Sums {
+  const out = emptySums();
+  for (const f of SUM_FIELDS) out[f] = n(r?.[f]);
+  return out;
+}
+
+export function addSums(a: Sums, b: Sums): Sums {
+  const out = emptySums();
+  for (const f of SUM_FIELDS) out[f] = a[f] + b[f];
+  return out;
+}
+
+/** Merge grouped sums (same key → added) */
+export function mergeGroups(...parts: [string, Sums][][]): [string, Sums][] {
+  const map = new Map<string, Sums>();
+  for (const part of parts)
+    for (const [k, v] of part) map.set(k, addSums(map.get(k) ?? emptySums(), v));
+  return [...map.entries()];
+}
+
 export interface Totals {
   gross: number;
   discount: number;
@@ -165,7 +227,7 @@ export interface Totals {
 const n = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 const money = (v: number) => Math.round(v);
 
-export function toTotals(r: RawAgg | undefined): Totals {
+export function toTotals(r: RawAgg | Sums | undefined): Totals {
   const net = n(r?.net);
   const cost = n(r?.cost);
   const invoices = n(r?.invoices);
@@ -184,24 +246,68 @@ export function toTotals(r: RawAgg | undefined): Totals {
   };
 }
 
+/** SQL group keys. Month buckets and period totals are summed from the day rows. */
+type SqlGroup = "d" | "category_id" | "product_id" | "user_id" | "branch_id";
+
+async function queryGroups(s: Scope, by: SqlGroup): Promise<[string, Sums][]> {
+  const key = by === "d" ? Prisma.sql`DATE_FORMAT(l.d, '%Y-%m-%d')` : Prisma.raw(`l.${by}`);
+  const rows = await getPrisma().$queryRaw<RawAgg[]>`
+    SELECT ${key} AS k, ${AGG} FROM (${linesSql(s)}) l GROUP BY k`;
+  return rows.map((r) => [r.k === null ? "null" : String(r.k), toSums(r)]);
+}
+
+/** Cache key part of a scope (category lists can be long → hashed) */
+function scopeKey(s: Scope, by: string): string {
+  const raw = stableKey({ ...s, by });
+  return createHash("sha1").update(raw).digest("base64url");
+}
+
+/**
+ * Grouped values of a period, P6.5: the days before today (VN) never change except when an old
+ * invoice is cancelled / refunded or a product's category / cost changes — those bump the
+ * tenant's `salesHistory` cache version — so that part is cached and only today is queried live.
+ * Values of the same key in both parts are added (`add`), which is exact because every value
+ * sums over invoices and an invoice belongs to one day.
+ */
+async function periodGroups<V>(
+  s: Scope,
+  name: string,
+  query: (s: Scope) => Promise<[string, V][]>,
+  add: (a: V, b: V) => V,
+): Promise<[string, V][]> {
+  const today = vnDateKey(new Date());
+  if (s.from > today) return [];
+  const pastScope: Scope = { ...s, to: s.to < today ? s.to : shiftDateKey(today, -1) };
+  const [past, live] = await Promise.all([
+    s.from < today
+      ? cached("salesHistory", `rep:${scopeKey(pastScope, name)}`, () => query(pastScope))
+      : [],
+    s.to >= today ? query({ ...s, from: today }) : [],
+  ]);
+  const map = new Map<string, V>(past);
+  for (const [k, v] of live) {
+    const prev = map.get(k);
+    map.set(k, prev === undefined ? v : add(prev, v));
+  }
+  return [...map.entries()];
+}
+
+function groups(s: Scope, by: SqlGroup): Promise<[string, Sums][]> {
+  return periodGroups(s, by, (x) => queryGroups(x, by), addSums);
+}
+
 async function totals(s: Scope): Promise<Totals> {
-  const rows = await getPrisma().$queryRaw<RawAgg[]>`SELECT ${AGG} FROM (${linesSql(s)}) l`;
-  return toTotals(rows[0]);
+  const days = await groups(s, "d");
+  return toTotals(days.reduce((acc, [, v]) => addSums(acc, v), emptySums()));
 }
 
 async function grouped(
   s: Scope,
   by: "d" | "month" | "category_id" | "product_id" | "user_id" | "branch_id",
 ) {
-  const key =
-    by === "month"
-      ? Prisma.sql`DATE_FORMAT(l.d, '%Y-%m')`
-      : by === "d"
-        ? Prisma.sql`DATE_FORMAT(l.d, '%Y-%m-%d')`
-        : Prisma.raw(`l.${by}`);
-  const rows = await getPrisma().$queryRaw<RawAgg[]>`
-    SELECT ${key} AS k, ${AGG} FROM (${linesSql(s)}) l GROUP BY k`;
-  return new Map(rows.map((r) => [r.k === null ? "null" : String(r.k), toTotals(r)]));
+  if (by !== "month") return new Map((await groups(s, by)).map(([k, v]) => [k, toTotals(v)]));
+  const months = mergeGroups((await groups(s, "d")).map(([k, v]) => [k.slice(0, 7), v]));
+  return new Map(months.map(([k, v]) => [k, toTotals(v)]));
 }
 
 async function scopes(f: ReportFilter) {
@@ -272,26 +378,40 @@ async function categoryNames(ids: string[]) {
 // ─── Reports ─────────────────────────────────────────────────────────────────
 
 /** Net cash = cash received − change given (same rule as the dashboard) */
-async function paymentMethods(s: Scope) {
+async function queryPayments(s: Scope): Promise<[string, number][]> {
   const { start, end } = vnDateKeyRange(s.from, s.to);
-  const rows = await getPrisma().$queryRaw<{ method: string; amount: unknown }[]>`
-    SELECT ip.payment_method AS method, SUM(ip.amount) AS amount
-    FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
-    WHERE i.created_at >= ${start} AND i.created_at < ${end}
-      AND i.status IN ('active', 'refunded')
-      ${s.branchId ? Prisma.sql`AND i.branch_id = ${s.branchId}` : Prisma.empty}
-      ${s.userId ? Prisma.sql`AND i.user_id = ${s.userId}` : Prisma.empty}
-    GROUP BY ip.payment_method`;
-  const change = await getPrisma().$queryRaw<{ change: unknown }[]>`
-    SELECT COALESCE(SUM(i.change_amount), 0) AS \`change\` FROM invoices i
-    WHERE i.created_at >= ${start} AND i.created_at < ${end}
+  const filter = Prisma.sql`i.created_at >= ${start} AND i.created_at < ${end}
       AND i.status IN ('active', 'refunded')
       ${s.branchId ? Prisma.sql`AND i.branch_id = ${s.branchId}` : Prisma.empty}
       ${s.userId ? Prisma.sql`AND i.user_id = ${s.userId}` : Prisma.empty}`;
-  const items = rows.map((r) => ({
-    method: r.method,
-    amount: money(n(r.amount) - (r.method === "cash" ? n(change[0]?.change) : 0)),
-  }));
+  const [rows, change] = await Promise.all([
+    getPrisma().$queryRaw<{ method: string; amount: unknown }[]>`
+      SELECT ip.payment_method AS method, SUM(ip.amount) AS amount
+      FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
+      WHERE ${filter}
+      GROUP BY ip.payment_method`,
+    getPrisma().$queryRaw<{ change: unknown }[]>`
+      SELECT COALESCE(SUM(i.change_amount), 0) AS \`change\` FROM invoices i WHERE ${filter}`,
+  ]);
+  return [
+    ...rows.map((r): [string, number] => [r.method, n(r.amount)]),
+    [CHANGE, n(change[0]?.change)],
+  ];
+}
+
+/** Pseudo method holding the change given back (always cash) */
+const CHANGE = "__change";
+
+/** Net cash = cash received − change given (same rule as the dashboard) */
+async function paymentMethods(s: Scope) {
+  const sums = await periodGroups(s, "payments", queryPayments, (a, b) => a + b);
+  const change = sums.find(([m]) => m === CHANGE)?.[1] ?? 0;
+  const items = sums
+    .filter(([m]) => m !== CHANGE)
+    .map(([method, amount]) => ({
+      method,
+      amount: money(amount - (method === "cash" ? change : 0)),
+    }));
   const total = items.reduce((a, b) => a + b.amount, 0);
   return items
     .map((i) => ({ ...i, percent: total ? Math.round((i.amount / total) * 1000) / 10 : 0 }))
@@ -380,17 +500,24 @@ export async function profitReport(f: ReportFilter) {
     grouped(current, "category_id"),
     grouped(current, "product_id"),
   ]);
-  const productIds = [...byProduct.keys()].map(Number);
+  // P6.5: only the 10 + 10 products shown need a name (was: every sold product, matched with a
+  // nested find — O(n²) on a large catalogue)
+  const sold = [...byProduct.entries()].map(([k, t]) => ({ productId: Number(k), ...t }));
+  const top = [...sold].sort((a, b) => b.profit - a.profit).slice(0, 10);
+  const low = [...sold].sort((a, b) => a.profit - b.profit).slice(0, 10);
   const [names, products] = await Promise.all([
     categoryNames([...byCat.keys()]),
     getPrisma().product.findMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: [...new Set([...top, ...low].map((p) => p.productId))] } },
       select: { id: true, name: true, sku: true },
     }),
   ]);
-  const productRows = [...byProduct.entries()].map(([k, t]) => {
-    const p = products.find((x) => x.id === Number(k));
-    return { productId: Number(k), name: p?.name ?? `#${k}`, sku: p?.sku ?? "", ...t };
+  const info = new Map(products.map((p) => [p.id, p]));
+  const named = ({ productId, ...t }: (typeof sold)[number]) => ({
+    productId,
+    name: info.get(productId)?.name ?? `#${productId}`,
+    sku: info.get(productId)?.sku ?? "",
+    ...t,
   });
   return {
     range: { from: f.from, to: f.to },
@@ -404,8 +531,8 @@ export async function profitReport(f: ReportFilter) {
         ...t,
       }))
       .sort((a, b) => b.profit - a.profit),
-    topProfit: [...productRows].sort((a, b) => b.profit - a.profit).slice(0, 10),
-    lowProfit: [...productRows].sort((a, b) => a.profit - b.profit).slice(0, 10),
+    topProfit: top.map(named),
+    lowProfit: low.map(named),
   };
 }
 
@@ -442,14 +569,15 @@ export async function productReport(f: ReportFilter) {
       where: { id: { in: ids } },
       select: { id: true, name: true, sku: true, sellingPrice: true, costPrice: true },
     }),
-    prisma.invoiceItem.groupBy({
-      by: ["productId"],
-      where: {
-        productId: { in: slowIds.map((s) => s.productId) },
-        invoice: { status: { in: ["active", "refunded"] } },
-      },
-      _max: { createdAt: true },
-    }),
+    // P6.5: plain join (Prisma's relation filter materialised every active invoice id)
+    slowIds.length
+      ? prisma.$queryRaw<{ productId: number; last: Date }[]>`
+          SELECT ii.product_id AS productId, MAX(ii.created_at) AS last
+          FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
+          WHERE ii.product_id IN (${Prisma.join(slowIds.map((s) => s.productId))})
+            AND i.status IN ('active', 'refunded')
+          GROUP BY ii.product_id`
+      : [],
   ]);
   const info = (id: number) => products.find((p) => p.id === id);
   const today = vnDateKey(new Date());
@@ -461,7 +589,7 @@ export async function productReport(f: ReportFilter) {
       sku: info(b.productId)?.sku ?? "",
     })),
     slowMoving: slowIds.map((s) => {
-      const last = lastSales.find((l) => l.productId === s.productId)?._max.createdAt ?? null;
+      const last = lastSales.find((l) => Number(l.productId) === s.productId)?.last ?? null;
       const p = info(s.productId);
       return {
         ...s,
@@ -577,47 +705,57 @@ export async function inventoryReport(input: InventoryReportInput) {
     ...(input.warehouseId ? { id: input.warehouseId } : {}),
     ...(input.branchId ? { branchId: input.branchId } : {}),
   };
-  const rows = await prisma.inventory.findMany({
-    where: { warehouse: warehouseWhere },
-    select: {
-      quantity: true,
-      minQuantity: true,
-      warehouse: { select: { id: true, name: true } },
-      product: {
-        select: { id: true, name: true, sku: true, costPrice: true, minStock: true, status: true },
-      },
-    },
-  });
-  const byWarehouse = new Map<
-    number,
-    { warehouseId: number; name: string; skus: number; quantity: number; value: number }
-  >();
-  const lowStock = [];
-  for (const r of rows) {
-    const qty = n(r.quantity);
-    const w = byWarehouse.get(r.warehouse.id) ?? {
-      warehouseId: r.warehouse.id,
-      name: r.warehouse.name,
-      skus: 0,
-      quantity: 0,
-      value: 0,
-    };
-    if (qty > 0) w.skus++;
-    w.quantity += qty;
-    w.value += qty * n(r.product.costPrice);
-    byWarehouse.set(r.warehouse.id, w);
-    const min = Math.max(r.minQuantity, r.product.minStock);
-    if (r.product.status === "active" && min > 0 && qty <= min) {
-      lowStock.push({
-        productId: r.product.id,
-        name: r.product.name,
-        sku: r.product.sku,
-        warehouse: r.warehouse.name,
-        quantity: qty,
-        minQuantity: min,
-      });
-    }
-  }
+  // P6.5: aggregated in SQL (was: every inventory row of the scope loaded into memory)
+  const wh = Prisma.sql`w.is_active = 1
+    ${input.warehouseId ? Prisma.sql`AND w.id = ${input.warehouseId}` : Prisma.empty}
+    ${input.branchId ? Prisma.sql`AND w.branch_id = ${input.branchId}` : Prisma.empty}`;
+  const [perWarehouse, lowRows] = await Promise.all([
+    prisma.$queryRaw<
+      { warehouseId: number; name: string; skus: unknown; quantity: unknown; value: unknown }[]
+    >`
+      SELECT w.id AS warehouseId, w.name, SUM(i.quantity > 0) AS skus,
+        SUM(i.quantity) AS quantity, SUM(i.quantity * COALESCE(p.cost_price, 0)) AS value
+      FROM inventory i
+      JOIN warehouses w ON w.id = i.warehouse_id
+      JOIN products p ON p.id = i.product_id
+      WHERE ${wh}
+      GROUP BY w.id, w.name`,
+    prisma.$queryRaw<
+      {
+        productId: number;
+        name: string;
+        sku: string;
+        warehouse: string;
+        quantity: unknown;
+        minQuantity: unknown;
+      }[]
+    >`
+      SELECT p.id AS productId, p.name, p.sku, w.name AS warehouse, i.quantity,
+        GREATEST(COALESCE(i.min_quantity, 0), COALESCE(p.min_stock, 0)) AS minQuantity
+      FROM inventory i
+      JOIN warehouses w ON w.id = i.warehouse_id
+      JOIN products p ON p.id = i.product_id
+      WHERE ${wh} AND p.status = 'active'
+        AND GREATEST(COALESCE(i.min_quantity, 0), COALESCE(p.min_stock, 0)) > 0
+        AND i.quantity <= GREATEST(COALESCE(i.min_quantity, 0), COALESCE(p.min_stock, 0))
+      ORDER BY i.quantity ASC, i.id ASC
+      LIMIT 200`,
+  ]);
+  const warehouseRows = perWarehouse.map((w) => ({
+    warehouseId: Number(w.warehouseId),
+    name: w.name,
+    skus: n(w.skus),
+    quantity: n(w.quantity),
+    value: n(w.value),
+  }));
+  const lowStock = lowRows.map((r) => ({
+    productId: Number(r.productId),
+    name: r.name,
+    sku: r.sku,
+    warehouse: r.warehouse,
+    quantity: n(r.quantity),
+    minQuantity: n(r.minQuantity),
+  }));
   const todayKey = vnDateKey(new Date());
   const today = new Date(`${todayKey}T00:00:00Z`);
   const limit = new Date(today.getTime() + input.expiringDays * DAY_MS);
@@ -649,12 +787,12 @@ export async function inventoryReport(input: InventoryReportInput) {
     daysLeft: Math.round((b.expiryDate!.getTime() - today.getTime()) / DAY_MS),
     value: money(n(b.quantity) * n(b.costPrice ?? b.product.costPrice)),
   }));
-  const warehouses = [...byWarehouse.values()].map((w) => ({ ...w, value: money(w.value) }));
+  const warehouses = warehouseRows.map((w) => ({ ...w, value: money(w.value) }));
   return {
     totalValue: warehouses.reduce((s, w) => s + w.value, 0),
     totalQuantity: warehouses.reduce((s, w) => s + w.quantity, 0),
     warehouses: warehouses.sort((a, b) => b.value - a.value),
-    lowStock: lowStock.sort((a, b) => a.quantity - b.quantity).slice(0, 200),
+    lowStock,
     expired: batchRows.filter((b) => b.daysLeft < 0),
     expiring: batchRows.filter((b) => b.daysLeft >= 0),
   };

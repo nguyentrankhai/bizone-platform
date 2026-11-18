@@ -1,3 +1,4 @@
+import { parseMarketplaceConfig } from "@/lib/omni/marketplace-config";
 import { randomBytes } from "node:crypto";
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
@@ -9,7 +10,6 @@ import {
   MARKETPLACE_NAME,
   META_SOURCES,
   PLATFORM_ENV,
-  parseMarketplaceConfig,
   type MarketplaceCode,
   type MarketplaceConfig,
 } from "@/lib/omni/marketplace";

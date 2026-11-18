@@ -96,7 +96,7 @@ export const fundLedgerSchema = z
     /** Only movements of receipts / payments in this category (and its children) */
     categoryId: id.optional(),
     page: z.number().int().positive().default(1),
-    pageSize: z.number().int().positive().max(200).default(100),
+    pageSize: z.number().int().positive().max(100).default(100),
   })
   .refine((r) => r.from <= r.to, {
     message: "Từ ngày phải trước hoặc bằng đến ngày",

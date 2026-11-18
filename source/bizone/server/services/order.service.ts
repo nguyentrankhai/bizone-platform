@@ -69,12 +69,24 @@ export async function listOrders(input: ListOrdersInput) {
   } = input;
   const skip = (page - 1) * limit;
 
+  // P6.5: khách khớp tìm kiếm lấy trước bằng 1 truy vấn trên bảng khách (relation filter của
+  // Prisma chạy chậm với vài chục nghìn đơn); tìm thêm theo tên / SĐT người nhận của đơn (đơn
+  // website / sàn của khách vãng lai không gắn khách CRM)
+  const customerIds = search
+    ? (
+        await prisma.customer.findMany({
+          where: { OR: [{ fullName: { contains: search } }, { phone: { contains: search } }] },
+          select: { id: true },
+        })
+      ).map((c) => c.id)
+    : [];
   const where = {
     ...(search && {
       OR: [
         { orderCode: { contains: search } },
-        { customer: { fullName: { contains: search } } },
-        { customer: { phone: { contains: search } } },
+        { contactName: { contains: search } },
+        { contactPhone: { contains: search } },
+        ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
       ],
     }),
     ...(channel && { channel }),

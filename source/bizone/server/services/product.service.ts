@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
-import { getRedis } from "@/lib/redis";
+import { cached, invalidate, stableKey } from "@/lib/cache";
+import { currentTenantId } from "@/lib/tenant";
 import { notFound, conflict } from "@/lib/errors";
 import type {
   CreateProductInput,
@@ -8,8 +9,6 @@ import type {
   SearchProductsInput,
 } from "@/lib/validators/product";
 import type { Prisma } from "@/generated/prisma/client";
-
-const SEARCH_CACHE_TTL = 300; // 5 min
 
 // ─── Category ────────────────────────────────────────────────────────────────
 
@@ -67,7 +66,9 @@ export async function createCategory(data: {
   const prisma = getPrisma();
   const existing = await prisma.productCategory.findUnique({ where: { slug: data.slug } });
   if (existing) throw conflict(`Slug "${data.slug}" đã tồn tại`);
-  return prisma.productCategory.create({ data });
+  const created = await prisma.productCategory.create({ data });
+  await invalidateProductCache();
+  return created;
 }
 
 export async function updateCategory(
@@ -88,7 +89,9 @@ export async function updateCategory(
     const dup = await prisma.productCategory.findUnique({ where: { slug: data.slug } });
     if (dup) throw conflict(`Slug "${data.slug}" đã tồn tại`);
   }
-  return prisma.productCategory.update({ where: { id }, data });
+  const updated = await prisma.productCategory.update({ where: { id }, data });
+  await invalidateProductCache();
+  return updated;
 }
 
 export async function deleteCategory(id: number) {
@@ -102,7 +105,9 @@ export async function deleteCategory(id: number) {
     throw conflict(`Danh mục có ${cat._count.products} sản phẩm, không thể xoá`);
   if (cat._count.children > 0)
     throw conflict(`Danh mục có ${cat._count.children} danh mục con, không thể xoá`);
-  return prisma.productCategory.delete({ where: { id } });
+  const deleted = await prisma.productCategory.delete({ where: { id } });
+  await invalidateProductCache();
+  return deleted;
 }
 
 export async function reorderCategories(items: { id: number; sortOrder: number }[]) {
@@ -115,11 +120,17 @@ export async function reorderCategories(items: { id: number; sortOrder: number }
       }),
     ),
   );
+  await invalidateProductCache();
 }
 
 // ─── Product list ─────────────────────────────────────────────────────────────
 
-export async function listProducts(input: ListProductsInput) {
+/** P6.5: cache 5 phút theo input (không chứa tồn kho → chỉ đổi khi SP / danh mục đổi) */
+export function listProducts(input: ListProductsInput) {
+  return cached("products", `list:${stableKey(input)}`, () => loadProductList(input));
+}
+
+async function loadProductList(input: ListProductsInput) {
   const prisma = getPrisma();
   const { page, pageSize, search, categoryId, status, sortBy, sortDir } = input;
   const skip = (page - 1) * pageSize;
@@ -264,10 +275,16 @@ export async function updateProduct(id: number, input: UpdateProductInput, userI
     if (dup) throw conflict(`Barcode "${input.barcode}" đã tồn tại`);
   }
 
-  return prisma.product.update({
+  const updated = await prisma.product.update({
     where: { id },
     data: { ...input, updatedBy: userId },
   });
+  // Báo cáo cũ lấy danh mục của SP và giá vốn SP (dòng HĐ không có giá vốn) → đổi thì bỏ cache
+  const history =
+    updated.categoryId !== existing.categoryId ||
+    String(updated.costPrice) !== String(existing.costPrice);
+  await invalidateProductCache({ history });
+  return updated;
 }
 
 // ─── Delete product ───────────────────────────────────────────────────────────
@@ -289,16 +306,8 @@ export async function deleteProduct(id: number) {
 
 // ─── Search (Redis cache) ─────────────────────────────────────────────────────
 
-export async function searchProducts(input: SearchProductsInput, tenantId: string) {
-  const cacheKey = `search:products:${tenantId}:${JSON.stringify(input)}`;
-  const redis = getRedis();
-
-  const cached = await redis.get(cacheKey);
-  if (cached) return JSON.parse(cached) as ReturnType<typeof _doSearch>;
-
-  const result = await _doSearch(input);
-  await redis.setex(cacheKey, SEARCH_CACHE_TTL, JSON.stringify(result));
-  return result;
+export function searchProducts(input: SearchProductsInput) {
+  return cached("products", `search:${stableKey(input)}`, () => _doSearch(input));
 }
 
 async function _doSearch(input: SearchProductsInput) {
@@ -332,12 +341,16 @@ async function _doSearch(input: SearchProductsInput) {
 
 // ─── Redis cache invalidation ─────────────────────────────────────────────────
 
-export async function invalidateSearchCache(tenantId: string) {
-  const redis = getRedis();
-  const pattern = `search:products:${tenantId}:*`;
-  // SCAN (not KEYS): KEYS blocks Redis for every client while it walks the whole keyspace.
-  const stream = redis.scanStream({ match: pattern, count: 200 });
-  for await (const keys of stream as AsyncIterable<string[]>) {
-    if (keys.length > 0) await redis.unlink(...keys);
-  }
+/**
+ * Sản phẩm / danh mục đổi → bỏ cache danh sách + tìm kiếm SP và danh mục website. `history`:
+ * thay đổi làm đổi báo cáo của các ngày đã qua (danh mục, giá vốn của SP) → bỏ cả cache báo cáo.
+ */
+export async function invalidateProductCache(
+  opts: { history?: boolean } = {},
+  tenantId: string = currentTenantId(),
+) {
+  await invalidate(
+    opts.history ? ["products", "storeCatalog", "salesHistory"] : ["products", "storeCatalog"],
+    tenantId,
+  );
 }

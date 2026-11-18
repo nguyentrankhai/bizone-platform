@@ -6,7 +6,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
-  invalidateSearchCache,
+  invalidateProductCache,
 } from "@/server/services/product.service";
 import {
   listProductsSchema,
@@ -41,7 +41,7 @@ export const productRouter = router({
     .input(createProductSchema)
     .mutation(async ({ input, ctx }) => {
       const product = await createProduct(input, await resolveDbUserId(ctx.user!));
-      await invalidateSearchCache(ctx.tenantId!);
+      await invalidateProductCache();
       return product;
     }),
 
@@ -49,17 +49,16 @@ export const productRouter = router({
   update: permissionProcedure("product:write")
     .input(z.object({ id: z.number().int().positive(), data: updateProductSchema }))
     .mutation(async ({ input, ctx }) => {
-      const product = await updateProduct(input.id, input.data, await resolveDbUserId(ctx.user!));
-      await invalidateSearchCache(ctx.tenantId!);
-      return product;
+      // updateProduct bỏ cache SP (+ báo cáo khi đổi danh mục / giá vốn)
+      return updateProduct(input.id, input.data, await resolveDbUserId(ctx.user!));
     }),
 
   /** DELETE /trpc/product.delete */
   delete: permissionProcedure("product:write")
     .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       await deleteProduct(input.id);
-      await invalidateSearchCache(ctx.tenantId!);
+      await invalidateProductCache();
       return { success: true };
     }),
 
@@ -119,7 +118,7 @@ export const productRouter = router({
         }
       }
 
-      await invalidateSearchCache(ctx.tenantId!);
+      await invalidateProductCache({ history: true });
       errors.sort((a, b) => a.row - b.row);
       return { imported, errors };
     }),

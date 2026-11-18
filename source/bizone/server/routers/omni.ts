@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { router, permissionProcedure } from "@/server/trpc";
 import { websiteConfigSchema } from "@/lib/omni/website";
-import { MARKETPLACES, MARKETPLACE_NAME, marketplaceConfigSchema } from "@/lib/omni/marketplace";
+import { MARKETPLACES, MARKETPLACE_NAME } from "@/lib/omni/marketplace";
+import { marketplaceConfigSchema } from "@/lib/omni/marketplace-config";
 import {
   getWebsiteChannel,
   listSyncLogs,

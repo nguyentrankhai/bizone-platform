@@ -45,8 +45,9 @@ export function LedgerTable({ auth, fundId }: { auth: ApiAuth; fundId: number })
     try {
       const rows: Ledger["rows"] = [];
       let head: Ledger | null = null;
-      for (let p = 1; p <= 50; p++) {
-        const res = await trpc.accounting.ledger.query({ ...filter, page: p, pageSize: 200 }, ctx);
+      // P6.5: pages of 100 (API maximum) — up to 10 000 movements
+      for (let p = 1; p <= 100; p++) {
+        const res = await trpc.accounting.ledger.query({ ...filter, page: p, pageSize: 100 }, ctx);
         head ??= res;
         rows.push(...res.rows);
         if (p >= res.meta.totalPages) break;

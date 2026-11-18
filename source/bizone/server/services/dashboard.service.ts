@@ -1,11 +1,11 @@
 import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { getRedis } from "@/lib/redis";
+import { cached as cachedValue, CACHE_TTL, entryKey, invalidate } from "@/lib/cache";
 import { currentTenantId } from "@/lib/tenant";
 import { vnDateKey, vnDayRange, vnDayStart } from "@/lib/vn-time";
 
 /** PLAN P2.9: dữ liệu dashboard cũ không quá 30 s — TTL ngắn + xoá ngay khi có HĐ/đơn mới */
-export const DASHBOARD_CACHE_TTL = 20;
+export const DASHBOARD_CACHE_TTL = CACHE_TTL.dashboard;
 
 type CachePart =
   "today" | "revenue7d" | "top_products" | "payment_breakdown" | "pending_orders" | "low_stock";
@@ -14,25 +14,30 @@ type CachePart =
  * Keys are per tenant (own database) and per branch scope (P4.6: `all` or the branch id), so
  * cached numbers never leak across tenants or branches.
  */
-export function dashboardCacheKey(tenantId: string, part: CachePart, branchId?: number): string {
-  return `dashboard:${tenantId}:${branchId ?? "all"}:${part}`;
+export function dashboardCacheKey(
+  tenantId: string,
+  part: CachePart,
+  branchId?: number,
+  version = "0",
+): string {
+  return entryKey(tenantId, "dashboard", version, dashboardSuffix(part, branchId));
+}
+
+/** Phần đuôi khoá trong vùng cache `dashboard` (lib/cache thêm tenant + phiên bản) */
+export function dashboardSuffix(part: CachePart, branchId?: number): string {
+  return `${branchId ?? "all"}:${part}`;
 }
 
 /** Invoice / order filter of a branch scope (undefined = every branch) */
 const inBranch = (branchId?: number) => (branchId ? { branchId } : {});
 
-async function cached<T>(
+function cached<T>(
   part: CachePart,
   branchId: number | undefined,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const redis = getRedis();
-  const key = dashboardCacheKey(currentTenantId(), part, branchId);
-  const hit = await redis.get(key);
-  if (hit) return JSON.parse(hit) as T;
-  const result = await fn();
-  await redis.setex(key, DASHBOARD_CACHE_TTL, JSON.stringify(result));
-  return result;
+  // P6.5: lib/cache.ts — khoá theo tenant + phiên bản; phần đuôi giữ chi nhánh + phần số liệu
+  return cachedValue("dashboard", dashboardSuffix(part, branchId), fn, DASHBOARD_CACHE_TTL);
 }
 
 /** Hôm nay theo giờ VN: [start, end) */
@@ -147,18 +152,17 @@ export async function getRevenue7Days(branchId?: number) {
     const prisma = getPrisma();
     const { start } = last7Days();
 
-    const invoices = await prisma.invoice.findMany({
-      where: { createdAt: { gte: start }, status: "active", ...inBranch(branchId) },
-      select: { totalAmount: true, createdAt: true },
-    });
+    // P6.5: summed per VN day in SQL (was: every invoice of the 7 days loaded and added in JS)
+    const rows = await prisma.$queryRaw<{ d: string; revenue: unknown }[]>`
+      SELECT DATE_FORMAT(created_at + INTERVAL 7 HOUR, '%Y-%m-%d') AS d, SUM(total_amount) AS revenue
+      FROM invoices
+      WHERE created_at >= ${start} AND status = 'active'
+        ${branchId ? Prisma.sql`AND branch_id = ${branchId}` : Prisma.empty}
+      GROUP BY d`;
 
-    // Group by date
     const byDate: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) byDate[vnDateKey(vnDayStart(i))] = 0;
-    for (const inv of invoices) {
-      const key = vnDateKey(inv.createdAt);
-      if (key in byDate) byDate[key] += Number(inv.totalAmount);
-    }
+    for (const r of rows) if (r.d in byDate) byDate[r.d] += Number(r.revenue);
 
     return Object.entries(byDate).map(([date, revenue]) => ({ date, revenue }));
   });
@@ -252,7 +256,7 @@ export async function getLowStockItems(branchId?: number) {
       ${branchId ? Prisma.sql`JOIN warehouses w ON w.id = i.warehouse_id AND w.branch_id = ${branchId}` : Prisma.empty}
       WHERE i.quantity <= i.min_quantity
         AND i.min_quantity > 0
-      ORDER BY i.quantity ASC
+      ORDER BY i.quantity ASC, i.id ASC
       LIMIT 5
     `;
     return items.map((r) => ({
@@ -282,23 +286,12 @@ export async function getDashboardSummary(branchId?: number) {
 
 // ─── Invalidate cache (gọi sau khi có giao dịch mới) ─────────────────────────
 
-/** Drop every branch scope of the tenant (a sale changes its branch and "all") */
+/**
+ * Drop every branch scope of the tenant (a sale changes its branch and "all"). P6.5: bumps the
+ * namespace version instead of SCAN-ing the keyspace on every sale.
+ */
 export async function invalidateDashboardCache(tenantId: string = currentTenantId()) {
-  const redis = getRedis();
-  const keys: string[] = [];
-  let cursor = "0";
-  do {
-    const [next, batch] = await redis.scan(
-      cursor,
-      "MATCH",
-      `dashboard:${tenantId}:*`,
-      "COUNT",
-      200,
-    );
-    cursor = next;
-    keys.push(...batch);
-  } while (cursor !== "0");
-  if (keys.length) await redis.del(...keys);
+  await invalidate("dashboard", tenantId);
 }
 
 // ─── Drill-down: một ngày trên biểu đồ doanh thu ─────────────────────────────

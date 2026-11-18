@@ -20,7 +20,6 @@ model Attendance {
 
   @@unique([userId, date], map: "uq_attendance")
   @@index([date], map: "idx_att_date")
-  @@index([userId], map: "idx_att_user")
   @@map("attendance")
 }
 
@@ -148,7 +147,6 @@ model ChannelConnection {
   orderChannelMapping   OrderChannelMapping[]
   syncLogs              SyncLog[]
 
-  @@index([channelCode], map: "idx_cc_channel")
   @@index([channelCode, shopId], map: "idx_cc_shop")
   @@map("channel_connections")
 }
@@ -176,7 +174,6 @@ model ChannelProductMapping {
 
   @@index([productId], map: "fk_cpm_product")
   @@index([variantId], map: "fk_cpm_variant")
-  @@index([channelId], map: "idx_cpm_channel")
   @@index([channelId, channelProductId], map: "idx_cpm_listing")
   @@index([channelId, channelSku], map: "idx_cpm_sku")
   @@map("channel_product_mapping")
@@ -219,7 +216,6 @@ model Commission {
   @@index([invoiceId], map: "fk_comm_inv")
   @@index([commissionRuleId], map: "fk_comm_rule")
   @@index([status], map: "idx_comm_status")
-  @@index([userId], map: "idx_comm_user")
   @@map("commissions")
 }
 
@@ -285,7 +281,6 @@ model Coupon {
 
   @@index([createdBy], map: "fk_coupon_created")
   @@index([isActive], map: "idx_coupon_active")
-  @@index([code], map: "idx_coupon_code")
   @@index([startDate, endDate], map: "idx_coupon_dates")
   @@map("coupons")
 }
@@ -389,8 +384,8 @@ model Customer {
   @@index([groupId], map: "fk_cust_group")
   @@index([isActive], map: "idx_cust_active")
   @@index([fullName], map: "idx_cust_name")
-  @@index([phone], map: "idx_cust_phone")
   @@index([ranking], map: "idx_cust_ranking")
+  @@index([createdAt], map: "idx_cust_created")
   @@map("customers")
 }
 
@@ -471,9 +466,8 @@ model Inventory {
 
   @@unique([productId, warehouseId, variantId], map: "uq_inventory")
   @@index([variantId], map: "fk_inv_variant")
-  @@index([productId], map: "idx_inv_product")
   @@index([quantity], map: "idx_inv_quantity")
-  @@index([warehouseId], map: "idx_inv_warehouse")
+  @@index([warehouseId, productId], map: "idx_inv_wh_product")
   @@map("inventory")
 }
 
@@ -577,7 +571,7 @@ model InvoiceItem {
 
   @@index([productId], map: "fk_ii_product")
   @@index([variantId], map: "fk_ii_variant")
-  @@index([invoiceId], map: "idx_ii_invoice")
+  @@index([invoiceId, productId, quantity, totalAmount, costPrice], map: "idx_ii_report")
   @@map("invoice_items")
 }
 
@@ -591,7 +585,7 @@ model InvoicePayment {
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(0)
   invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ip_invoice")
 
-  @@index([invoiceId], map: "idx_ip_invoice")
+  @@index([invoiceId, paymentMethod, amount], map: "idx_ip_report")
   @@map("invoice_payments")
 }
 
@@ -664,8 +658,7 @@ model Invoice {
 
   @@index([cashSessionId], map: "fk_inv_session")
   @@index([branchId], map: "idx_inv_branch")
-  @@index([invoiceCode], map: "idx_inv_code")
-  @@index([createdAt], map: "idx_inv_created")
+  @@index([createdAt, status, branchId, userId, totalAmount], map: "idx_inv_report")
   @@index([customerId], map: "idx_inv_customer")
   @@index([status], map: "idx_inv_status")
   @@index([userId], map: "idx_inv_user")
@@ -702,7 +695,6 @@ model OrderChannelMapping {
   order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_ocm_order")
 
   @@unique([channelId, channelOrderId], map: "uq_ocm_channel_order")
-  @@index([channelId], map: "idx_ocm_channel")
   @@index([orderId], map: "idx_ocm_order")
   @@map("order_channel_mapping")
 }
@@ -823,12 +815,9 @@ model Order {
 
   @@index([branchId], map: "fk_ord_branch")
   @@index([createdBy], map: "fk_ord_created")
-  @@index([channel], map: "idx_ord_channel")
   @@index([channel, source], map: "idx_ord_source")
-  @@index([orderCode], map: "idx_ord_code")
   @@index([createdAt], map: "idx_ord_created")
   @@index([customerId], map: "idx_ord_customer")
-  @@index([status], map: "idx_ord_status")
   @@index([status, paymentDueAt], map: "idx_ord_payment_due")
   @@index([stockWarehouseId], map: "fk_ord_stock_wh")
   @@map("orders")
@@ -960,7 +949,6 @@ model ProductVariant {
   stockTakeItems            StockTakeItem[]
 
   @@index([productId], map: "idx_pv_product")
-  @@index([sku], map: "idx_pv_sku")
   @@map("product_variants")
 }
 
@@ -1013,10 +1001,9 @@ model Product {
   @@index([categoryId], map: "fk_prod_category")
   @@index([createdBy], map: "fk_prod_cby")
   @@index([updatedBy], map: "fk_prod_uby")
-  @@index([barcode], map: "idx_product_barcode")
   @@index([name], map: "idx_product_name")
-  @@index([sku], map: "idx_product_sku")
   @@index([status], map: "idx_product_status")
+  @@index([createdAt], map: "idx_product_created")
   @@map("products")
 }
 
@@ -1491,7 +1478,6 @@ model Voucher {
   couponUsage CouponUsage[]
 
   @@index([couponId], map: "fk_v_coupon")
-  @@index([code], map: "idx_v_code")
   @@index([customerId], map: "idx_v_customer")
   @@index([status], map: "idx_v_status")
   @@map("vouchers")

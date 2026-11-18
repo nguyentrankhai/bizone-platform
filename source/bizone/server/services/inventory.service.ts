@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/prisma";
 import { bizoneError } from "@/lib/errors";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { getRedis } from "@/lib/redis";
 import type {
   CreateWarehouseInput,
@@ -110,6 +110,36 @@ export async function deleteWarehouse(id: number) {
 
 // ─── Inventory (tồn kho hiện tại) ─────────────────────────────────────────
 
+/** SQL filter "at or below the product's minimum stock" (+ the list's other filters), P6.5 */
+function lowStockFilter(
+  f: { warehouseId?: number; productId?: number; search?: string },
+  scope?: WarehouseScope,
+): Prisma.Sql {
+  const filters = [Prisma.sql`p.min_stock > 0`, Prisma.sql`i.quantity <= p.min_stock`];
+  const warehouses = f.warehouseId ? [f.warehouseId] : scope;
+  if (warehouses)
+    filters.push(
+      warehouses.length
+        ? Prisma.sql`i.warehouse_id IN (${Prisma.join(warehouses)})`
+        : Prisma.sql`FALSE`,
+    );
+  if (f.productId) filters.push(Prisma.sql`i.product_id = ${f.productId}`);
+  const q = f.search?.trim();
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    filters.push(Prisma.sql`(p.name LIKE ${like} OR p.sku LIKE ${like} OR p.barcode LIKE ${like})`);
+  }
+  return Prisma.join(filters, " AND ");
+}
+
+/** Ids of inventory rows at or below the product's minimum stock (same filters as the list) */
+async function lowStockIds(input: ListInventoryInput, scope?: WarehouseScope): Promise<number[]> {
+  const rows = await getPrisma().$queryRaw<{ id: number }[]>`
+    SELECT i.id FROM inventory i JOIN products p ON p.id = i.product_id
+    WHERE ${lowStockFilter(input, scope)}`;
+  return rows.map((r) => Number(r.id));
+}
+
 export async function listInventory(input: ListInventoryInput, scope?: WarehouseScope) {
   const prisma = getPrisma();
   const q = input.search?.trim();
@@ -126,15 +156,9 @@ export async function listInventory(input: ListInventoryInput, scope?: Warehouse
   };
 
   // quantity <= product.minStock compares two tables, which Prisma cannot express in `where`.
-  // Resolve the matching ids first so that count and pagination stay correct.
+  // P6.5: resolve the matching ids in SQL (was: load every inventory row and filter in JS).
   if (input.lowStock) {
-    const candidates = await prisma.inventory.findMany({
-      where: { AND: [where, { product: { minStock: { gt: 0 } } }] },
-      select: { id: true, quantity: true, product: { select: { minStock: true } } },
-    });
-    where.id = {
-      in: candidates.filter((c) => Number(c.quantity) <= c.product.minStock).map((c) => c.id),
-    };
+    where.id = { in: await lowStockIds(input, scope) };
   }
 
   const [items, total] = await prisma.$transaction([
@@ -204,22 +228,14 @@ export async function getInventorySummary(warehouseId?: number, scope?: Warehous
   const prisma = getPrisma();
   const where = warehouseId ? { warehouseId } : whIn(scope);
 
-  // Count products with low stock using Prisma relation filter
-  // quantity <= product.minStock is approximated by fetching low-stock items
-  const [totalProducts, lowStockItems] = await prisma.$transaction([
+  // P6.5: counted in SQL (was: every inventory row loaded and compared in JS)
+  const [totalProducts, low] = await Promise.all([
     prisma.inventory.count({ where }),
-    prisma.inventory.findMany({
-      where: {
-        ...where,
-        product: { minStock: { gt: 0 } },
-      },
-      select: { quantity: true, product: { select: { minStock: true } } },
-    }),
+    prisma.$queryRaw<{ c: bigint }[]>`
+      SELECT COUNT(*) AS c FROM inventory i JOIN products p ON p.id = i.product_id
+      WHERE ${lowStockFilter({ warehouseId }, scope)}`,
   ]);
-
-  const lowStock = lowStockItems.filter(
-    (i) => Number(i.quantity) <= (i.product?.minStock ?? 0),
-  ).length;
+  const lowStock = Number(low[0]?.c ?? 0);
 
   return { totalProducts, lowStock };
 }

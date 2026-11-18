@@ -19,8 +19,10 @@ import {
   useLoad,
 } from "@/components/staff/shared";
 import { renderTemplate, smsText } from "@/lib/notifications/template";
-import { RANKINGS } from "@/lib/validators/notification";
 import { RANKING_LABEL, localIn } from "./shared";
+
+/** Same list as `RANKINGS` of lib/validators/notification — copied so the form doesn't ship Zod */
+const RANKINGS = ["silver", "gold", "vip", "diamond"] as const;
 
 type Campaign = RouterOutputs["campaign"]["list"]["items"][number];
 type Audience = Campaign["audience"];

@@ -9,7 +9,7 @@ export const productSearchRouter = router({
    */
   search: permissionProcedure("product:read")
     .input(searchProductsSchema)
-    .query(async ({ input, ctx }) => {
-      return searchProducts(input, ctx.tenantId!);
+    .query(({ input }) => {
+      return searchProducts(input);
     }),
 });

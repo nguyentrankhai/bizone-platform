@@ -5,10 +5,10 @@ import {
   channelStock,
   mapLazadaStatus,
   mapShopeeStatus,
-  marketplaceConfigSchema,
   plannedTransition,
   resolveCategory,
 } from "@/lib/omni/marketplace";
+import { marketplaceConfigSchema } from "@/lib/omni/marketplace-config";
 import { decryptToken, encryptToken, tokenKeyConfigured } from "@/lib/omni/crypto";
 import {
   shopeePublicSign,

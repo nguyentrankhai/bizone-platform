@@ -175,8 +175,8 @@ CREATE TABLE IF NOT EXISTS products (
 ) ENGINE=InnoDB;
 CREATE INDEX idx_product_status ON products(status);
 CREATE INDEX idx_product_name   ON products(name);
-CREATE INDEX idx_product_sku    ON products(sku);
-CREATE INDEX idx_product_barcode ON products(barcode);
+-- P6.5: sku / barcode đã có UNIQUE — bỏ idx_product_sku, idx_product_barcode trùng lặp
+CREATE INDEX idx_product_created ON products(created_at);
 
 -- 2.3 Product Images
 CREATE TABLE IF NOT EXISTS product_images (
@@ -220,7 +220,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
   CONSTRAINT fk_pv_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 CREATE INDEX idx_pv_product ON product_variants(product_id);
-CREATE INDEX idx_pv_sku     ON product_variants(sku);
+-- P6.5: sku đã có UNIQUE — bỏ idx_pv_sku
 
 -- 2.6 Variant Attributes (Thuộc tính biến thể)
 CREATE TABLE IF NOT EXISTS product_variant_attributes (
@@ -289,8 +289,8 @@ CREATE TABLE IF NOT EXISTS inventory (
   CONSTRAINT fk_inv_variant   FOREIGN KEY (variant_id)   REFERENCES product_variants(id) ON DELETE CASCADE,
   UNIQUE KEY uq_inventory (product_id, warehouse_id, variant_id)
 ) ENGINE=InnoDB;
-CREATE INDEX idx_inv_product   ON inventory(product_id);
-CREATE INDEX idx_inv_warehouse ON inventory(warehouse_id);
+-- P6.5: product_id dùng uq_inventory (cột đầu); danh sách tồn sắp theo kho + SP
+CREATE INDEX idx_inv_wh_product ON inventory(warehouse_id, product_id);
 CREATE INDEX idx_inv_quantity  ON inventory(quantity);
 
 -- 3.3 Inventory Batches (Lô / HSD)
@@ -430,7 +430,7 @@ CREATE TABLE IF NOT EXISTS customers (
   CONSTRAINT fk_cust_group   FOREIGN KEY (group_id)   REFERENCES customer_groups(id) ON DELETE SET NULL,
   CONSTRAINT fk_cust_created FOREIGN KEY (created_by) REFERENCES users(id)            ON DELETE SET NULL
 ) ENGINE=InnoDB;
-CREATE INDEX idx_cust_phone  ON customers(phone);
+CREATE INDEX idx_cust_created ON customers(created_at); -- P6.5 (phone đã UNIQUE)
 CREATE INDEX idx_cust_name   ON customers(full_name);
 CREATE INDEX idx_cust_ranking ON customers(ranking);
 CREATE INDEX idx_cust_active ON customers(is_active);
@@ -531,8 +531,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   CONSTRAINT fk_inv_user     FOREIGN KEY (user_id)         REFERENCES users(id)          ON DELETE RESTRICT,
   CONSTRAINT fk_inv_branch   FOREIGN KEY (branch_id)       REFERENCES branches(id)       ON DELETE RESTRICT
 ) ENGINE=InnoDB;
-CREATE INDEX idx_inv_code     ON invoices(invoice_code);
-CREATE INDEX idx_inv_created  ON invoices(created_at);
+-- P6.5: index phủ cho báo cáo (thay idx_inv_created; invoice_code đã UNIQUE)
+CREATE INDEX idx_inv_report   ON invoices(created_at, status, branch_id, user_id, total_amount);
 CREATE INDEX idx_inv_user     ON invoices(user_id);
 CREATE INDEX idx_inv_branch   ON invoices(branch_id);
 CREATE INDEX idx_inv_customer ON invoices(customer_id);
@@ -557,7 +557,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   CONSTRAINT fk_ii_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ii_variant FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
-CREATE INDEX idx_ii_invoice ON invoice_items(invoice_id);
+CREATE INDEX idx_ii_report ON invoice_items(invoice_id, product_id, quantity, total_amount, cost_price); -- P6.5
 
 -- 5.4 Invoice Payments
 CREATE TABLE IF NOT EXISTS invoice_payments (
@@ -570,7 +570,7 @@ CREATE TABLE IF NOT EXISTS invoice_payments (
   created_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_ip_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
-CREATE INDEX idx_ip_invoice ON invoice_payments(invoice_id);
+CREATE INDEX idx_ip_report ON invoice_payments(invoice_id, payment_method, amount); -- P6.5
 
 -- 5.5 Invoice Refunds (Đổi trả)
 CREATE TABLE IF NOT EXISTS invoice_refunds (
@@ -632,7 +632,6 @@ CREATE TABLE IF NOT EXISTS orders (
   CONSTRAINT fk_ord_branch   FOREIGN KEY (branch_id)   REFERENCES branches(id)   ON DELETE SET NULL,
   CONSTRAINT fk_ord_created  FOREIGN KEY (created_by)  REFERENCES users(id)      ON DELETE SET NULL
 ) ENGINE=InnoDB;
-CREATE INDEX idx_ord_code     ON orders(order_code);
 CREATE INDEX idx_ord_status   ON orders(status);
 CREATE INDEX idx_ord_channel  ON orders(channel);
 CREATE INDEX idx_ord_created  ON orders(created_at);
@@ -1064,7 +1063,6 @@ CREATE TABLE IF NOT EXISTS coupons (
   updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_coupon_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
-CREATE INDEX idx_coupon_code    ON coupons(code);
 CREATE INDEX idx_coupon_active  ON coupons(is_active);
 CREATE INDEX idx_coupon_dates   ON coupons(start_date, end_date);
 
@@ -1107,7 +1105,6 @@ CREATE TABLE IF NOT EXISTS vouchers (
   CONSTRAINT fk_v_coupon   FOREIGN KEY (coupon_id)   REFERENCES coupons(id)   ON DELETE SET NULL,
   CONSTRAINT fk_v_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
-CREATE INDEX idx_v_code     ON vouchers(code);
 CREATE INDEX idx_v_status   ON vouchers(status);
 CREATE INDEX idx_v_customer ON vouchers(customer_id);
 ALTER TABLE coupon_usage ADD CONSTRAINT fk_cu_voucher FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE SET NULL;

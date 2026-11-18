@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -37,11 +38,41 @@ import { ProductGrid, type ProductGridHandle } from "./ProductGrid";
 import { CartPanel, type CartPanelHandle } from "./CartPanel";
 import { PaymentModal } from "./PaymentModal";
 import { Receipt } from "./Receipt";
-import { ReturnForm } from "./ReturnForm";
-import { SplitInvoiceModal } from "./SplitInvoiceModal";
-import { PreOrderForm } from "./PreOrderForm";
-import { PairDisplayModal } from "./PairDisplayModal";
-import { PrinterSettingsModal } from "./PrinterSettingsModal";
+
+// P6.5: dialogs used now and then are split out of the POS bundle — loaded in the background once
+// the screen is idle (so they still open instantly) and mounted on first open
+const loaders = {
+  ReturnForm: () => import("./ReturnForm").then((m) => m.ReturnForm),
+  SplitInvoiceModal: () => import("./SplitInvoiceModal").then((m) => m.SplitInvoiceModal),
+  PreOrderForm: () => import("./PreOrderForm").then((m) => m.PreOrderForm),
+  PairDisplayModal: () => import("./PairDisplayModal").then((m) => m.PairDisplayModal),
+  PrinterSettingsModal: () => import("./PrinterSettingsModal").then((m) => m.PrinterSettingsModal),
+};
+const ReturnForm = dynamic(loaders.ReturnForm, { ssr: false });
+const SplitInvoiceModal = dynamic(loaders.SplitInvoiceModal, { ssr: false });
+const PreOrderForm = dynamic(loaders.PreOrderForm, { ssr: false });
+const PairDisplayModal = dynamic(loaders.PairDisplayModal, { ssr: false });
+const PrinterSettingsModal = dynamic(loaders.PrinterSettingsModal, { ssr: false });
+
+/** Prefetch the lazy dialogs when the browser is idle */
+function usePreloadDialogs() {
+  useEffect(() => {
+    const run = () => Object.values(loaders).forEach((load) => void load().catch(() => {}));
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(run, { timeout: 5000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(run, 2000);
+    return () => clearTimeout(t);
+  }, []);
+}
+
+/** A lazily mounted dialog stays mounted after its first open (keeps its state like before) */
+function useMountOnce(open: boolean): boolean {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+  return mounted || open;
+}
 
 type Session = NonNullable<RouterOutputs["pos"]["currentSession"]>;
 type StoreInfo = RouterOutputs["pos"]["storeInfo"];
@@ -82,6 +113,14 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
   const [printerOpen, setPrinterOpen] = useState(false);
   const [printer, setPrinter] = useState<PrinterSettings | null>(null);
   const [payhubEvent, setPayhubEvent] = useState<PayhubIntentView | null>(null);
+  usePreloadDialogs();
+  const show = {
+    returnForm: useMountOnce(returnOpen),
+    split: useMountOnce(split !== null),
+    preorder: useMountOnce(preorder !== null),
+    pair: useMountOnce(pairOpen),
+    printer: useMountOnce(printerOpen),
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -382,81 +421,91 @@ export function PosClient({ auth }: { auth: ApiAuth }) {
         </p>
       </Modal>
 
-      <ReturnForm
-        open={returnOpen}
-        auth={auth}
-        sessionId={session.id}
-        branchId={session.branch.id}
-        store={store}
-        payhubEvent={payhubEvent}
-        onShowQr={pos.showQr}
-        onClose={() => {
-          setReturnOpen(false);
-          gridRef.current?.focusSearch();
-        }}
-        onDone={done}
-        onPrint={(id) => void print(id)}
-      />
+      {show.returnForm && (
+        <ReturnForm
+          open={returnOpen}
+          auth={auth}
+          sessionId={session.id}
+          branchId={session.branch.id}
+          store={store}
+          payhubEvent={payhubEvent}
+          onShowQr={pos.showQr}
+          onClose={() => {
+            setReturnOpen(false);
+            gridRef.current?.focusSearch();
+          }}
+          onDone={done}
+          onPrint={(id) => void print(id)}
+        />
+      )}
 
-      <SplitInvoiceModal
-        open={split !== null}
-        initialTab={split ?? "split"}
-        cart={pos.cart}
-        held={pos.held}
-        online={pos.mode === "ws"}
-        onClose={() => {
-          setSplit(null);
-          gridRef.current?.focusSearch();
-        }}
-        onSplit={async (items, label) => {
-          await pos.split(items, label);
-          toast.success("Đã tách — hoá đơn mới nằm trong Đơn chờ");
-        }}
-        onHold={async (label) => {
-          await pos.hold(label);
-          toast.success("Đã lưu tạm đơn");
-        }}
-        onResume={pos.resume}
-        onMerge={async (ids) => {
-          await pos.merge(ids);
-          toast.success(`Đã gộp ${ids.length} đơn vào đơn hiện tại`);
-        }}
-        onDiscard={pos.discardHeld}
-      />
+      {show.split && (
+        <SplitInvoiceModal
+          open={split !== null}
+          initialTab={split ?? "split"}
+          cart={pos.cart}
+          held={pos.held}
+          online={pos.mode === "ws"}
+          onClose={() => {
+            setSplit(null);
+            gridRef.current?.focusSearch();
+          }}
+          onSplit={async (items, label) => {
+            await pos.split(items, label);
+            toast.success("Đã tách — hoá đơn mới nằm trong Đơn chờ");
+          }}
+          onHold={async (label) => {
+            await pos.hold(label);
+            toast.success("Đã lưu tạm đơn");
+          }}
+          onResume={pos.resume}
+          onMerge={async (ids) => {
+            await pos.merge(ids);
+            toast.success(`Đã gộp ${ids.length} đơn vào đơn hiện tại`);
+          }}
+          onDiscard={pos.discardHeld}
+        />
+      )}
 
-      <PreOrderForm
-        open={preorder !== null}
-        initialTab={preorder ?? "create"}
-        auth={auth}
-        sessionId={session.id}
-        cart={pos.cart}
-        store={store}
-        payhubEvent={payhubEvent}
-        onShowQr={pos.showQr}
-        onClose={() => {
-          setPreorder(null);
-          gridRef.current?.focusSearch();
-        }}
-        onDone={done}
-        onPrint={(id) => void print(id)}
-      />
+      {show.preorder && (
+        <PreOrderForm
+          open={preorder !== null}
+          initialTab={preorder ?? "create"}
+          auth={auth}
+          sessionId={session.id}
+          cart={pos.cart}
+          store={store}
+          payhubEvent={payhubEvent}
+          onShowQr={pos.showQr}
+          onClose={() => {
+            setPreorder(null);
+            gridRef.current?.focusSearch();
+          }}
+          onDone={done}
+          onPrint={(id) => void print(id)}
+        />
+      )}
 
-      <PairDisplayModal
-        open={pairOpen}
-        auth={auth}
-        sessionId={session.id}
-        pairedAt={pairedAt}
-        onClose={() => setPairOpen(false)}
-      />
+      {show.pair && (
+        <PairDisplayModal
+          open={pairOpen}
+          auth={auth}
+          sessionId={session.id}
+          pairedAt={pairedAt}
+          onClose={() => setPairOpen(false)}
+        />
+      )}
 
-      <PrinterSettingsModal
-        open={printerOpen}
-        onClose={() => setPrinterOpen(false)}
-        onSaved={(s) => {
-          setPrinter(s);
-          toast.success("Đã lưu cài đặt máy in");
-        }}
-      />
+      {show.printer && (
+        <PrinterSettingsModal
+          open={printerOpen}
+          onClose={() => setPrinterOpen(false)}
+          onSaved={(s) => {
+            setPrinter(s);
+            toast.success("Đã lưu cài đặt máy in");
+          }}
+        />
+      )}
 
       <Receipt data={printData} />
     </>
