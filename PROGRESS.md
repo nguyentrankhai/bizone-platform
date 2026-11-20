@@ -325,7 +325,7 @@
 
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
-| P7.1 | Connector Plugin Architecture | ✅ | _(xem commit)_ | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
+| P7.1 | Connector Plugin Architecture | ✅ | `cfd3959` | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
 | P7.2 | Audit Log — Payment Hub | ⬜ | — | |
 | P7.3 | Notification System | ⬜ | — | |
 | P7.4 | Scale & Performance | ⬜ | — | |
@@ -2871,7 +2871,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P7.1 — Connector Plugin Architecture
 
-- **Hoàn thành:** 2026-11-20 · **Commit:** _(xem commit)_ · **Vị trí:** `source/payment-hub/` — `services/connectors/` (`interface.ts`, `manifest.ts`, `package.ts`, `sandbox.ts` + `sandbox-host.mjs` / `sandbox-host-source.ts`, `loader.ts`, `plugin-connector.ts`, `registry.ts`), `services/routing/routes.ts`, `server/services/connector.service.ts`, `server/routes/connectors.ts` + `plugin-ipn.ts`, `app/api/internal/connectors/**`, `app/api/ipn/plugin/[code]`, `app/pay/plugin/[code]/return`, `app/connectors/`, `components/ph/Connector*.tsx` + `connector-api.ts`, `PHLayout` / `PHSidebar` / `PHHeader` / `mobile-nav.ts` (#27), `prisma/migrations/9_connector_plugins`, `scripts/connector-plugin.mjs`, `examples/connector-plugins/demopay/`, `tests/connector-plugin.test.ts`; `documents/Connector-Plugin-Guide.md`
+- **Hoàn thành:** 2026-11-20 · **Commit:** `cfd3959` · **Vị trí:** `source/payment-hub/` — `services/connectors/` (`interface.ts`, `manifest.ts`, `package.ts`, `sandbox.ts` + `sandbox-host.mjs` / `sandbox-host-source.ts`, `loader.ts`, `plugin-connector.ts`, `registry.ts`), `services/routing/routes.ts`, `server/services/connector.service.ts`, `server/routes/connectors.ts` + `plugin-ipn.ts`, `app/api/internal/connectors/**`, `app/api/ipn/plugin/[code]`, `app/pay/plugin/[code]/return`, `app/connectors/`, `components/ph/Connector*.tsx` + `connector-api.ts`, `PHLayout` / `PHSidebar` / `PHHeader` / `mobile-nav.ts` (#27), `prisma/migrations/9_connector_plugins`, `scripts/connector-plugin.mjs`, `examples/connector-plugins/demopay/`, `tests/connector-plugin.test.ts`; `documents/Connector-Plugin-Guide.md`
 - **Đã làm:**
   - **`IConnector`** (`interface.ts`): hợp đồng chuẩn SRS §3.3.2 (`createTransaction`, `processResult`, `verifySignature`, `refund`, `getStatus`, `getConfigSchema`, `healthCheck` + tuỳ chọn `queryRefund`, `generateQR`, `submitDispute`, `queryDispute`); `processResult` / `verifySignature` có thể trả Promise (plugin) → mọi chỗ gọi trong core `await`. VNPay / MoMo / ZaloPay `implements IConnector`. `CONNECTOR_API_VERSION = 1.0.0`.
   - **Gói plugin** = zip `manifest.json` + module ES `.mjs` tự chứa + `SIGNATURE.json`. `manifest.ts`: schema Zod (mã, `connectorType`, semver, `coreCompatibility` theo dải semver, phương thức thanh toán + hạn mức, schema form đối tác, khả năng hoàn tiền / tra cứu, câu trả lời HTTP của IPN theo kết quả, `network.allowedHosts`, changelog bắt buộc có bản hiện tại). `package.ts`: đọc zip (fflate) ≤ 5 MB / 100 tệp / giải nén ≤ 20 MB theo kích thước khai báo, đường dẫn an toàn, chữ ký **Ed25519** trên danh sách `đường-dẫn + sha256` mọi tệp, chỉ khoá trong `CONNECTOR_TRUSTED_KEYS` (quyết định người dùng: ký số + sandbox).
