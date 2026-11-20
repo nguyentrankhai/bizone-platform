@@ -1,4 +1,5 @@
 import { sendNotification, WebPushError } from "web-push";
+import { isPushServiceEndpoint } from "@/lib/notifications/push-endpoint";
 
 /**
  * Web Push (VAPID). Keys from env VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY (generate once with
@@ -30,6 +31,9 @@ export async function sendPush(
 ): Promise<{ ok: true } | { ok: false; gone: boolean; error: string }> {
   const publicKey = vapidPublicKey();
   if (!publicKey) return { ok: false, gone: false, error: "Chưa cấu hình VAPID" };
+  // P6.6: subscriptions saved before the host allowlist — never call a non-push host (SSRF)
+  if (!isPushServiceEndpoint(target.endpoint))
+    return { ok: false, gone: true, error: "Endpoint không thuộc dịch vụ push được hỗ trợ" };
   try {
     await sendNotification(
       { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },

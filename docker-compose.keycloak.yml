@@ -4,14 +4,16 @@ services:
     container_name: bizone-keycloak
     command: start-dev --import-realm
     environment:
-      # Bootstrap admin: only created if the master realm has no admin yet
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: "Bizone@2026!"
+      # Bootstrap admin: only created if the master realm has no admin yet.
+      # P6.6 (#53): secrets come from the env file, never from this file —
+      #   docker compose --env-file .env.development -f docker-compose.keycloak.yml up -d
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?set KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
       # Database: local MariaDB 10.11 (container mariadbtest, on default bridge network)
       KC_DB: mariadb
       KC_DB_URL: jdbc:mariadb://mariadbtest:3306/keycloakdb?characterEncoding=UTF-8&useUnicode=true
-      KC_DB_USERNAME: root
-      KC_DB_PASSWORD: mypass
+      KC_DB_USERNAME: ${DB_USER:-root}
+      KC_DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
       KC_DB_SCHEMA: keycloakdb
       # Dev mode settings
       KC_HOSTNAME_STRICT: "false"

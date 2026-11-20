@@ -1,3 +1,4 @@
+import { isPushServiceEndpoint } from "@/lib/notifications/push-endpoint";
 import { z } from "zod";
 import { EVENT_TYPES } from "@/lib/notifications/events";
 import { VN_PHONE, normalizePhone } from "@/lib/notifications/template";
@@ -43,7 +44,8 @@ export const pushSubscribeSchema = z.object({
   endpoint: z
     .url("Endpoint không hợp lệ")
     .max(1000)
-    .startsWith("https://", "Endpoint phải là https"),
+    .startsWith("https://", "Endpoint phải là https")
+    .refine(isPushServiceEndpoint, "Endpoint không thuộc dịch vụ push được hỗ trợ"),
   keys: z.object({ p256dh: z.string().min(10).max(255), auth: z.string().min(8).max(255) }),
   userAgent: z.string().max(255).optional(),
 });

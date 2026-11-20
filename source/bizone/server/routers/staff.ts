@@ -39,6 +39,11 @@ import * as attendance from "@/server/services/attendance.service";
 import * as commission from "@/server/services/commission.service";
 import { resolveDbUserId } from "@/server/services/user.service";
 import { getStaffAccess } from "@/server/services/rbac.service";
+import {
+  assertCanEditRole,
+  assertCanGrantRoles,
+  assertCanManageStaff,
+} from "@/server/services/staffPrivilege.service";
 import type { AuthUser } from "@/types/auth";
 
 const idInput = z.object({ id: z.number().int().positive() });
@@ -59,15 +64,25 @@ async function guardSelfDemotion(actor: AuthUser, targetId: number, roleIds: num
 const roleRouter = router({
   list: permissionProcedure("staff:read").query(() => staff.listRoles()),
   permissions: permissionProcedure("staff:read").query(() => staff.permissionCatalog()),
+  // P6.6 (#98): a role can't carry (or have had) a capability its editor lacks
   create: permissionProcedure("staff:write")
     .input(roleInputSchema)
-    .mutation(({ input }) => staff.createRole(input)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanEditRole(ctx.user, { permissionCodes: input.permissions });
+      return staff.createRole(input);
+    }),
   update: permissionProcedure("staff:write")
     .input(updateRoleSchema)
-    .mutation(({ input }) => staff.updateRole(input)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanEditRole(ctx.user, { roleId: input.id, permissionCodes: input.permissions });
+      return staff.updateRole(input);
+    }),
   delete: permissionProcedure("staff:write")
     .input(idInput)
-    .mutation(({ input }) => staff.deleteRole(input.id)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanEditRole(ctx.user, { roleId: input.id });
+      return staff.deleteRole(input.id);
+    }),
 });
 
 /** QA-3 (#96): the shift belongs to a branch in scope (store-wide shifts: admins only) */
@@ -194,15 +209,30 @@ export const staffRouter = router({
     .input(idInput)
     .query(({ input }) => staff.getStaff(input.id)),
   branches: permissionProcedure("staff:read").query(() => activeBranches()),
+  // P6.6 (#98): no privilege escalation — see lib/staff/privilege.ts
   create: permissionProcedure("staff:write")
     .input(createStaffSchema)
-    .mutation(({ input }) => staff.createStaff(input)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanGrantRoles(
+        ctx.user,
+        input.roles.map((r) => r.roleId),
+      );
+      return staff.createStaff(input);
+    }),
   update: permissionProcedure("staff:write")
     .input(updateStaffSchema)
-    .mutation(({ input }) => staff.updateStaff(input)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanManageStaff(ctx.user, input.id); // email change → password reset takeover
+      return staff.updateStaff(input);
+    }),
   setRoles: permissionProcedure("staff:write")
     .input(setStaffRolesSchema)
     .mutation(async ({ ctx, input }) => {
+      await assertCanManageStaff(ctx.user, input.id);
+      await assertCanGrantRoles(
+        ctx.user,
+        input.roles.map((r) => r.roleId),
+      );
       await guardSelfDemotion(
         ctx.user,
         input.id,
@@ -212,10 +242,16 @@ export const staffRouter = router({
     }),
   setActive: permissionProcedure("staff:write")
     .input(setStaffActiveSchema)
-    .mutation(({ ctx, input }) => staff.setStaffActive(input.id, input.active, ctx.user)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanManageStaff(ctx.user, input.id);
+      return staff.setStaffActive(input.id, input.active, ctx.user);
+    }),
   resetPassword: permissionProcedure("staff:write")
     .input(resetPasswordSchema)
-    .mutation(({ input }) => staff.resetStaffPassword(input.id, input.password, input.temporary)),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanManageStaff(ctx.user, input.id);
+      return staff.resetStaffPassword(input.id, input.password, input.temporary);
+    }),
   /** Sales performance per seller (revenue, invoices, average); top products when userId given */
   sales: permissionProcedure("staff:read")
     .input(salesSchema)

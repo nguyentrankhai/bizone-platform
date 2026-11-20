@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // P6.6: don't advertise the framework; security headers are set per request in proxy.ts
+  poweredByHeader: false,
   cacheComponents: true,
   partialPrefetching: true,
   // P6.4: the service worker must never be served from an HTTP cache, or updates stall

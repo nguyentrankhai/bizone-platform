@@ -26,8 +26,13 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
 
   function handleFile(f: File | null) {
     if (!f) return;
-    if (!f.name.endsWith(".xlsx") && !f.name.endsWith(".xls")) {
-      alert("Vui lòng chọn file Excel (.xlsx hoặc .xls)");
+    if (!f.name.toLowerCase().endsWith(".xlsx")) {
+      alert("Vui lòng chọn file Excel (.xlsx)");
+      return;
+    }
+    // same limit as the server (lib/upload.ts) — saves uploading a file that will be refused
+    if (f.size > 50 * 1024 * 1024) {
+      alert("File vượt quá 50 MB");
       return;
     }
     setFile(f);
@@ -41,7 +46,7 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
       const res = await onImport(file);
       setResult(res);
     } catch (e) {
-      alert("Lỗi khi import: " + String(e));
+      alert("Lỗi khi import: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setLoading(false);
     }
@@ -130,7 +135,7 @@ export function ImportDialog({ open, onClose, onDownloadTemplate, onImport }: Im
           <input
             ref={fileRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
           />

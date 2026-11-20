@@ -119,6 +119,8 @@ cp documents/env.txt .env.local
 
 # Start infrastructure
 docker compose up -d mariadb redis minio keycloak
+# Keycloak — secrets come from the env file (P6.6, no passwords in compose files)
+docker compose --env-file .env.development -f docker-compose.keycloak.yml up -d
 
 # Install dependencies
 npm install
@@ -252,6 +254,8 @@ cp documents/env.txt .env.local
 
 # Khởi động hạ tầng
 docker compose up -d mariadb redis minio keycloak
+# Keycloak — secret lấy từ env file (P6.6, compose không chứa mật khẩu)
+docker compose --env-file .env.development -f docker-compose.keycloak.yml up -d
 
 # Cài đặt dependencies
 npm install

@@ -34,3 +34,49 @@ export async function rateLimit(
 
 // 100 req/min per API key
 export const rateLimitApiKey = (apiKey: string) => rateLimit(`rl:payhub:${apiKey}`, 100, 60);
+
+// ─── Brute-force lockout (P6.6) ───────────────────────────────────────────────
+// N failures inside a window lock the key (an IP, an account…) for a fixed time — PLAN: 5 wrong
+// attempts → locked 15 minutes. Callers check `lockoutRemaining` before trying credentials and
+// call `registerFailure` / `clearFailures` after.
+
+export const BRUTE_FORCE = { maxFailures: 5, windowSeconds: 900, lockSeconds: 900 } as const;
+
+/** Seconds the key stays locked (0 = not locked). Redis errors → 0 (fail open, logged). */
+export async function lockoutRemaining(key: string): Promise<number> {
+  try {
+    const ttl = await getRedis().ttl(`bf:lock:${key}`);
+    return ttl > 0 ? ttl : 0;
+  } catch (err) {
+    console.error("[lockout] redis error", err);
+    return 0;
+  }
+}
+
+/** Count one failure; returns the lock time in seconds when this failure locked the key, else 0. */
+export async function registerFailure(
+  key: string,
+  opts: { maxFailures: number; windowSeconds: number; lockSeconds: number } = BRUTE_FORCE,
+): Promise<number> {
+  try {
+    const redis = getRedis();
+    const failKey = `bf:fail:${key}`;
+    const [[, count]] = (await redis
+      .multi()
+      .incr(failKey)
+      .expire(failKey, opts.windowSeconds, "NX")
+      .exec()) as [[unknown, number], unknown];
+    if (count < opts.maxFailures) return 0;
+    await redis.multi().set(`bf:lock:${key}`, "1", "EX", opts.lockSeconds).del(failKey).exec();
+    return opts.lockSeconds;
+  } catch (err) {
+    console.error("[lockout] redis error", err);
+    return 0;
+  }
+}
+
+export async function clearFailures(key: string): Promise<void> {
+  await getRedis()
+    .del(`bf:fail:${key}`)
+    .catch(() => undefined);
+}

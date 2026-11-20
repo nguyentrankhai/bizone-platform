@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** P6.6: links only — no javascript:/data: URLs in product images */
+const httpUrl = z.url({ protocol: /^https?$/, error: "Link ảnh phải là http(s)" });
+
 // ─── Category ───────────────────────────────────────────────────────────────
 
 export const createCategorySchema = z.object({
@@ -37,7 +40,7 @@ export const productUnitSchema = z.object({
 export const productVariantSchema = z.object({
   sku: z.string().min(1).max(100),
   barcode: z.string().max(100).nullable().optional(),
-  image: z.string().url().max(500).nullable().optional(),
+  image: httpUrl.max(500).nullable().optional(),
   costPrice: z.number().nonnegative().default(0),
   sellingPrice: z.number().nonnegative().default(0),
   weight: z.number().nonnegative().nullable().optional(),
@@ -66,12 +69,12 @@ export const createProductSchema = z.object({
   weight: z.number().nonnegative().nullable().optional(),
   minStock: z.number().int().nonnegative().default(0),
   maxStock: z.number().int().positive().nullable().optional(),
-  image: z.string().url().max(500).nullable().optional(),
+  image: httpUrl.max(500).nullable().optional(),
   status: z.enum(["active", "inactive", "discontinued"]).default("active"),
   trackInventory: z.boolean().default(true),
   variants: z.array(productVariantSchema).default([]),
   units: z.array(productUnitSchema).default([]),
-  images: z.array(z.string().url().max(500)).default([]),
+  images: z.array(httpUrl.max(500)).default([]),
   barcodes: z.array(z.string().max(100)).default([]),
 });
 

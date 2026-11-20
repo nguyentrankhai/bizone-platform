@@ -38,7 +38,8 @@ Health checks: `GET /api/health` (checks MariaDB + Redis, 503 if either is down)
 ## Docker
 
 ```bash
-docker compose up -d --build   # app :4000, realtime :4001, worker, MariaDB 10.11 :3308, Redis 7 :6381
+# P6.6: DB / Redis passwords come from an env file (no defaults in the compose file)
+docker compose --env-file ../../.env.development up -d --build   # app :4000, realtime :4001, worker, MariaDB 10.11 :3308, Redis 7 :6381
 docker compose down            # add -v to drop db/cache volumes
 ```
 

@@ -26,7 +26,27 @@ const getJWKS = (() => {
   };
 })();
 
-export type JwtVerifyResult = { ok: true; user: PayhubAuthUser } | { ok: false; reason: string };
+export type JwtVerifyResult =
+  | { ok: true; user: PayhubAuthUser }
+  | {
+      ok: false;
+      reason: string;
+      /** forged / foreign token (P6.6 brute-force count) */ suspicious?: boolean;
+    };
+
+/**
+ * jose error codes that mean "this is not a token we issued" — as opposed to an expired token
+ * (normal: the client refreshes) or Keycloak being unreachable (our problem, not the caller's).
+ */
+const SUSPICIOUS_JOSE_CODES = new Set([
+  "ERR_JWS_SIGNATURE_VERIFICATION_FAILED",
+  "ERR_JWS_INVALID",
+  "ERR_JWT_INVALID",
+  "ERR_JWKS_NO_MATCHING_KEY",
+  "ERR_JWT_CLAIM_VALIDATION_FAILED",
+  "ERR_JOSE_ALG_NOT_ALLOWED",
+  "ERR_JOSE_NOT_SUPPORTED",
+]);
 
 export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
   try {
@@ -37,7 +57,7 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
     const claims = payload as unknown as PayhubKeycloakToken;
 
     if (!claims.azp || !ALLOWED_CLIENTS.has(claims.azp)) {
-      return { ok: false, reason: "client_not_allowed" };
+      return { ok: false, reason: "client_not_allowed", suspicious: true };
     }
 
     const realmRoles = claims.realm_access?.roles ?? [];
@@ -61,7 +81,8 @@ export async function verifyJwt(token: string): Promise<JwtVerifyResult> {
     return { ok: true, user };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
-    return { ok: false, reason: msg };
+    const code = (err as { code?: string } | null)?.code;
+    return { ok: false, reason: msg, suspicious: !!code && SUSPICIOUS_JOSE_CODES.has(code) };
   }
 }
 
@@ -103,4 +124,42 @@ export async function authenticateToken(token: string | null): Promise<JwtVerify
     return { ok: false, reason: "session_revoked" };
   }
   return result;
+}
+
+/** P6.6: does this failed authentication count towards the per-IP brute-force lockout? */
+export function isTokenAttackFailure(result: JwtVerifyResult): boolean {
+  return !result.ok && result.suspicious === true;
+}
+
+// ─── Back-channel logout (P6.6, #146) ─────────────────────────────────────────
+// Keycloak POSTs a signed logout token when a session ends anywhere else (admin "sign out",
+// user disabled / deleted, session expired by policy). Its `sid` is revoked like an app logout,
+// for as long as an access token of that session can still be valid.
+
+const BACKCHANNEL_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+const ACCESS_TOKEN_MAX_SECONDS = Number(process.env.ACCESS_TOKEN_MAX_SECONDS ?? 1800);
+
+export type LogoutTokenResult = { ok: true; sessionId: string } | { ok: false; reason: string };
+
+export async function verifyLogoutToken(token: string): Promise<LogoutTokenResult> {
+  try {
+    const { payload } = await jwtVerify(token, getJWKS(), {
+      issuer: ISSUER,
+      audience: [...ALLOWED_CLIENTS],
+    });
+    const events = payload.events as Record<string, unknown> | undefined;
+    if (!events || typeof events !== "object" || !(BACKCHANNEL_EVENT in events))
+      return { ok: false, reason: "not_a_logout_token" };
+    if ("nonce" in payload) return { ok: false, reason: "nonce_not_allowed" };
+    const sid = typeof payload.sid === "string" ? payload.sid : null;
+    if (!sid) return { ok: false, reason: "missing_sid" };
+    return { ok: true, sessionId: sid };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "invalid_token" };
+  }
+}
+
+/** Revoke a session ended on Keycloak's side (its tokens live at most ACCESS_TOKEN_MAX_SECONDS). */
+export async function revokeSessionFromKeycloak(sessionId: string): Promise<void> {
+  await revokeSession(sessionId, Math.floor(Date.now() / 1000) + ACCESS_TOKEN_MAX_SECONDS);
 }

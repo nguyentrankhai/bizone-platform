@@ -33,7 +33,16 @@ const STATUSES = ["Active", "Inactive", "Error"] as const;
 const ENVS = ["Sandbox", "Production"] as const;
 
 const optionalUrl = z
-  .union([z.string().trim().url("URL không hợp lệ").max(500), z.literal(""), z.null()])
+  .union([
+    // P6.6: http(s) only — no javascript:/file: endpoints
+    z
+      .string()
+      .trim()
+      .max(500)
+      .pipe(z.url({ protocol: /^https?$/, error: "URL không hợp lệ" })),
+    z.literal(""),
+    z.null(),
+  ])
   .optional();
 
 const partnerSchema = z.object({

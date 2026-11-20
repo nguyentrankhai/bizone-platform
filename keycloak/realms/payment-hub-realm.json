@@ -7,7 +7,15 @@
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "bruteForceProtected": true,
-  "failureFactor": 10,
+  "bruteForceStrategy": "MULTIPLE",
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 900,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(8) and maxLength(128) and notUsername and notEmail",
   "accessTokenLifespan": 1800,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
@@ -59,13 +67,12 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+"
+        "post.logout.redirect.uris": "+",
+        "backchannel.logout.url": "http://host.docker.internal:4000/api/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
       },
-      "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email"
-      ],
+      "defaultClientScopes": ["openid", "profile", "email"],
       "protocolMappers": [
         {
           "name": "realm roles",
@@ -110,7 +117,8 @@
             "introspection.token.claim": "true"
           }
         }
-      ]
+      ],
+      "frontchannelLogout": false
     }
   ],
   "users": [
@@ -128,9 +136,7 @@
           "temporary": false
         }
       ],
-      "realmRoles": [
-        "payhub-admin"
-      ]
+      "realmRoles": ["payhub-admin"]
     },
     {
       "username": "payhub.viewer@bizone.vn",
@@ -146,9 +152,7 @@
           "temporary": false
         }
       ],
-      "realmRoles": [
-        "payhub-viewer"
-      ]
+      "realmRoles": ["payhub-viewer"]
     }
   ]
 }

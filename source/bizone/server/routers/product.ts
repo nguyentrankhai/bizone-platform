@@ -13,11 +13,7 @@ import {
   createProductSchema,
   updateProductSchema,
 } from "@/lib/validators/product";
-import {
-  parseProductImport,
-  exportProductsToExcel,
-  generateProductTemplate,
-} from "@/lib/excel/product";
+import { exportProductsToExcel, generateProductTemplate } from "@/lib/excel/product";
 import { getPrisma } from "@/lib/prisma";
 import { resolveDbUserId } from "@/server/services/user.service";
 
@@ -62,66 +58,7 @@ export const productRouter = router({
       return { success: true };
     }),
 
-  /** POST /trpc/product.importExcel — nhận base64 buffer, trả kết quả parse */
-  importExcel: permissionProcedure("product:write")
-    .input(z.object({ fileBase64: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const buffer = Buffer.from(input.fileBase64, "base64");
-      // Small base64 strings decode into Node's shared pool: copy out exactly this file's bytes
-      const bytes = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-      const result = await parseProductImport(bytes as ArrayBuffer);
-      if (result.success.length === 0) {
-        return { imported: 0, errors: result.errors };
-      }
-
-      const prisma = getPrisma();
-      const userId = await resolveDbUserId(ctx.user!);
-      let imported = 0;
-      const errors = [...result.errors];
-
-      // Insert valid rows — skip duplicates
-      for (const row of result.success) {
-        try {
-          const existing = await prisma.product.findUnique({ where: { sku: row.sku } });
-          if (existing) {
-            errors.push({
-              row: row.rowNumber,
-              sku: row.sku,
-              errors: [`SKU "${row.sku}" đã tồn tại, bỏ qua`],
-            });
-            continue;
-          }
-          let categoryId: number | null = null;
-          if (row.category) {
-            const cat = await prisma.productCategory.findFirst({ where: { name: row.category } });
-            categoryId = cat?.id ?? null;
-          }
-          await prisma.product.create({
-            data: {
-              name: row.name,
-              sku: row.sku,
-              barcode: row.barcode ?? null,
-              categoryId,
-              description: row.description ?? null,
-              costPrice: row.costPrice,
-              sellingPrice: row.sellingPrice,
-              unit: row.unit,
-              minStock: row.minStock,
-              status: row.status,
-              createdBy: userId,
-              updatedBy: userId,
-            },
-          });
-          imported++;
-        } catch {
-          errors.push({ row: row.rowNumber, sku: row.sku, errors: ["Lỗi khi lưu sản phẩm"] });
-        }
-      }
-
-      await invalidateProductCache({ history: true });
-      errors.sort((a, b) => a.row - b.row);
-      return { imported, errors };
-    }),
+  // Excel import: POST /api/uploads/products (P6.6 — streamed + size / type checked, not base64 tRPC)
 
   /** GET /trpc/product.exportExcel — trả base64 xlsx */
   exportExcel: permissionProcedure("product:read")

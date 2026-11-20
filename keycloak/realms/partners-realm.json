@@ -6,6 +6,15 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "bruteForceProtected": true,
+  "bruteForceStrategy": "MULTIPLE",
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 900,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(8) and maxLength(128) and notUsername and notEmail",
   "accessTokenLifespan": 3600,
   "ssoSessionIdleTimeout": 2592000,
   "ssoSessionMaxLifespan": 2592000,
@@ -40,7 +49,11 @@
         "client.session.idle.timeout": "2592000"
       },
       "defaultClientScopes": ["openid", "profile"],
-      "optionalClientScopes": ["bizone.omni", "bizone.products", "bizone.orders"]
+      "optionalClientScopes": [
+        "bizone.omni",
+        "bizone.products",
+        "bizone.orders"
+      ]
     },
     {
       "clientId": "lazada-connector",
@@ -59,7 +72,11 @@
         "access.token.lifespan": "3600"
       },
       "defaultClientScopes": ["openid", "profile"],
-      "optionalClientScopes": ["bizone.omni", "bizone.products", "bizone.orders"]
+      "optionalClientScopes": [
+        "bizone.omni",
+        "bizone.products",
+        "bizone.orders"
+      ]
     }
   ],
   "clientScopes": [

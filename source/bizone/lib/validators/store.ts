@@ -47,7 +47,10 @@ export const createOrderSchema = z.object({
   }),
   note: z.string().trim().max(1000).nullish(),
   paymentMethod: z.enum(WEBSITE_PAYMENT_METHODS),
-  returnUrl: z.string().url().max(1000).nullish(),
+  returnUrl: z
+    .url({ protocol: /^https?$/ })
+    .max(1000)
+    .nullish(),
   /** P6.3: utm_source of the link the buyer followed (unknown values are dropped) */
   source: z.string().trim().max(60).nullish(),
 });
@@ -77,6 +80,6 @@ export const pageSchema = z.object({
 
 export const orderLookupSchema = z.object({ phone: phone.optional() });
 
-export const payOrderSchema = z.object({ returnUrl: z.string().url().max(1000) });
+export const payOrderSchema = z.object({ returnUrl: z.url({ protocol: /^https?$/ }).max(1000) });
 
 export const cancelOrderSchema = z.object({ reason: z.string().trim().max(500).nullish() });

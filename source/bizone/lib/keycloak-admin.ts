@@ -217,6 +217,12 @@ export async function realmRolesOf(id: string): Promise<string[]> {
   return roles.map((r) => r.name);
 }
 
+/** Effective realm roles (direct + via composites / groups) — what the user's tokens carry. */
+export async function effectiveRealmRolesOf(id: string): Promise<string[]> {
+  const roles = await admin<KcRole[]>("GET", `/users/${id}/role-mappings/realm/composite`);
+  return roles.map((r) => r.name);
+}
+
 /**
  * Make the user's `bizone-*` realm roles exactly `wanted`; realm roles outside that prefix
  * (default-roles, offline_access…) are left alone.

@@ -227,7 +227,10 @@ export async function startConnect(code: MarketplaceCode, userId: number | null)
       `BizOne chưa có thông tin ứng dụng ${connector.name} (${PLATFORM_ENV[code]})`,
     );
   if (!tokenKeyConfigured())
-    throw bizoneError("SERVICE_UNAVAILABLE", "Chưa cấu hình OMNI_TOKEN_KEY");
+    throw bizoneError(
+      "SERVICE_UNAVAILABLE",
+      "Chưa cấu hình khoá mã hoá (DATA_ENCRYPTION_KEY / OMNI_TOKEN_KEY)",
+    );
   const ch = await findChannel(code);
   if (!ch || !parseMarketplaceConfig(ch.config))
     throw bizoneError("CONFLICT", "Lưu cài đặt kênh (chi nhánh nhận đơn) trước khi kết nối");

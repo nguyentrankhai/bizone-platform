@@ -3,6 +3,9 @@ import { getRedis } from "@/lib/redis";
 import type { NextRequest } from "next/server";
 import { decryptSecret, isEncrypted } from "@/lib/crypto";
 import { isTimestampFresh, verifyRequestSignature } from "@/lib/hmac";
+import { clientIp } from "@/lib/client-ip";
+import { createHash } from "node:crypto";
+import { clearFailures, lockoutRemaining, registerFailure } from "@/lib/rate-limit";
 
 const RATE_WINDOW_SECONDS = 60;
 
@@ -51,10 +54,26 @@ export async function verifyApiRequest(
     );
   }
 
-  // Timestamp drift check (±5 minutes)
+  // Timestamp drift check (±5 minutes) — a clock problem, not a guess: not counted below
   if (!isTimestampFresh(timestamp)) {
     throw new ApiAuthError("UNAUTHORIZED", "Timestamp expired or invalid");
   }
+
+  // P6.6 brute force: 5 wrong keys / signatures → locked 15 minutes. Per client IP when it is
+  // known (TRUST_PROXY) — catches key enumeration; otherwise per presented key (secret guessing).
+  const lockKey = bruteForceKey(req, apiKey);
+  const locked = await lockoutRemaining(lockKey);
+  if (locked > 0) {
+    throw new ApiAuthError(
+      "RATE_LIMITED",
+      `Too many failed authentication attempts — retry in ${Math.ceil(locked / 60)} minutes`,
+      429,
+    );
+  }
+  const fail = async (message: string): Promise<never> => {
+    await registerFailure(lockKey);
+    throw new ApiAuthError("UNAUTHORIZED", message);
+  };
 
   const prisma = getPrisma();
   const key = await prisma.apiKey.findUnique({
@@ -63,7 +82,7 @@ export async function verifyApiRequest(
   });
 
   if (!key || key.status !== "Active") {
-    throw new ApiAuthError("UNAUTHORIZED", "Invalid or revoked API key");
+    return fail("Invalid or revoked API key");
   }
   if (key.merchant.status !== "Active") {
     throw new ApiAuthError("FORBIDDEN", "Merchant account is inactive", 403);
@@ -87,9 +106,8 @@ export async function verifyApiRequest(
     rawBody,
     signature,
   );
-  if (!sigValid) {
-    throw new ApiAuthError("UNAUTHORIZED", "Invalid signature");
-  }
+  if (!sigValid) return fail("Invalid signature");
+  await clearFailures(lockKey);
 
   // Rate limiting (per API key, 1-minute sliding window)
   await enforceRateLimit(apiKey, key.rateLimit);
@@ -108,6 +126,13 @@ export async function verifyApiRequest(
     apiKeyId: key.id,
     rateLimit: key.rateLimit,
   };
+}
+
+function bruteForceKey(req: NextRequest, apiKey: string): string {
+  const ip = clientIp(req.headers);
+  return ip
+    ? `payhub:apikey:ip:${ip}`
+    : `payhub:apikey:key:${createHash("sha256").update(apiKey).digest("hex").slice(0, 32)}`;
 }
 
 async function enforceRateLimit(apiKey: string, limit: number): Promise<void> {

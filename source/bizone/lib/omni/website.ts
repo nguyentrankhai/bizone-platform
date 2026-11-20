@@ -46,7 +46,11 @@ export const websiteConfigSchema = z.object({
   /** Unpaid online-payment orders are cancelled (stock released) after this many minutes */
   paymentMinutes: z.number().int().min(5).max(1440).default(30),
   /** Public URL of the storefront — Payment Hub sends the customer back to it only */
-  storefrontUrl: z.string().trim().url("URL website không hợp lệ").default("http://localhost:3100"),
+  storefrontUrl: z
+    .string()
+    .trim()
+    .pipe(z.url({ protocol: /^https?$/, error: "URL website không hợp lệ" }))
+    .default("http://localhost:3100"),
 });
 export type WebsiteConfig = z.infer<typeof websiteConfigSchema>;
 

@@ -1,8 +1,8 @@
 name: bizone-payhub
 
 x-app-env: &app-env
-  DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/paymentdb
-  REDIS_URL: redis://:${REDIS_PASSWORD:-123456}@cache:6379
+  DATABASE_URL: mysql://root:${DB_PASSWORD:?set DB_PASSWORD — docker compose --env-file ../../.env.development}@db:3306/paymentdb
+  REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@cache:6379
   # Dispute evidence: the dev MinIO (`S3_ENDPOINT=http://localhost:9000` in .env.local) is not
   # reachable from a container → local volume unless S3_ENDPOINT is given for compose
   S3_ENDPOINT: ${COMPOSE_S3_ENDPOINT:-}
@@ -23,7 +23,7 @@ services:
     container_name: payhub-migrate
     command: ["npx", "prisma", "migrate", "deploy"]
     environment:
-      DATABASE_URL: mysql://root:${DB_PASSWORD:-mypass}@db:3306/paymentdb
+      DATABASE_URL: mysql://root:${DB_PASSWORD:?set DB_PASSWORD — docker compose --env-file ../../.env.development}@db:3306/paymentdb
     depends_on:
       db:
         condition: service_healthy
@@ -95,7 +95,7 @@ services:
     image: mariadb:10.11
     container_name: payhub-db
     environment:
-      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:-mypass}
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD — docker compose --env-file ../../.env.development}
       MARIADB_DATABASE: paymentdb
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     # Host port 3308: 3306 is the local MariaDB, 3307 is the BizOne Core stack
@@ -113,7 +113,7 @@ services:
   cache:
     image: redis:7-alpine
     container_name: payhub-cache
-    command: redis-server --requirepass ${REDIS_PASSWORD:-123456} --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD} --appendonly yes
     # Host port 6381: 6379 is the local Redis, 6380 is the BizOne Core stack
     ports:
       - "${REDIS_HOST_PORT:-6381}:6379"
@@ -121,7 +121,10 @@ services:
       - cache-data:/data
     healthcheck:
       test:
-        ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD:-123456} --no-auth-warning ping | grep PONG"]
+        [
+          "CMD-SHELL",
+          "redis-cli -a ${REDIS_PASSWORD:?set REDIS_PASSWORD} --no-auth-warning ping | grep PONG",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10

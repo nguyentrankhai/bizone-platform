@@ -145,11 +145,26 @@ export function ProductsClient() {
   }
 
   async function handleImport(file: File) {
-    const buffer = await file.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
-    const result = await trpc.product.importExcel.mutate({ fileBase64: base64 }, apiContext(auth));
+    // P6.6: raw bytes to the streaming upload route (≤ 50 MB, .xlsx checked by content)
+    const res = await fetch("/api/uploads/products", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.authToken}`,
+        "X-Tenant-ID": auth.tenantId,
+        "X-File-Name": encodeURIComponent(file.name),
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    });
+    const json = (await res.json().catch(() => null)) as {
+      success: boolean;
+      data?: { imported: number; errors: { row: number; sku?: string; errors: string[] }[] };
+      error?: { message: string };
+    } | null;
+    if (!res.ok || !json?.success || !json.data)
+      throw new Error(json?.error?.message ?? `Tải tệp thất bại (HTTP ${res.status})`);
     await loadProducts();
-    return result;
+    return json.data;
   }
 
   async function handleBulkDelete() {

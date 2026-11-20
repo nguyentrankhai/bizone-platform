@@ -1,3 +1,4 @@
+import { clientIp as trustedClientIp, UNTRUSTED_CLIENT } from "@/lib/client-ip";
 import { recordAudit } from "@/server/services/auditLog.service";
 import { resolveDbUserId } from "@/server/services/user.service";
 import type { AuthUser } from "@/types/auth";
@@ -17,7 +18,6 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "product.create": { module: "product", action: "create", entityType: "product" },
   "product.update": { module: "product", action: "update", entityType: "product" },
   "product.delete": { module: "product", action: "delete", entityType: "product" },
-  "product.importExcel": { module: "product", action: "import", entityType: "product" },
   "category.create": { module: "product", action: "create", entityType: "category" },
   "category.update": { module: "product", action: "update", entityType: "category" },
   "category.delete": { module: "product", action: "delete", entityType: "category" },
@@ -43,6 +43,11 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "stockTake.create": {
     module: "inventory",
     action: "create_stock_take",
+    entityType: "stock_take",
+  },
+  "stockTake.updateItems": {
+    module: "inventory",
+    action: "stock_take_count",
     entityType: "stock_take",
   },
   "stockTake.complete": {
@@ -113,6 +118,10 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   "customer.createDebt": { module: "crm", action: "create_debt", entityType: "customer_debt" },
   "customer.payDebt": { module: "crm", action: "pay_debt", entityType: "customer_debt" },
   "customer.merge": { module: "crm", action: "merge", entityType: "customer" },
+  // P6.6: bulk exports of business / personal data are audited like changes
+  "customer.exportExcel": { module: "crm", action: "export", entityType: "customer" },
+  "order.exportExcel": { module: "order", action: "export", entityType: "order" },
+  "auditLog.export": { module: "staff", action: "export_audit_log", entityType: "audit_log" },
   "staff.create": { module: "staff", action: "create", entityType: "user" },
   "staff.update": { module: "staff", action: "update", entityType: "user" },
   "staff.setRoles": { module: "staff", action: "set_roles", entityType: "user" },
@@ -269,6 +278,31 @@ const AUDIT_ROUTES: Record<string, AuditMeta | undefined> = {
   },
 };
 
+/**
+ * P6.6 — mutations deliberately not in AUDIT_ROUTES (tests/audit-coverage.test.ts fails on any
+ * other): the service writes the audit row itself (also reached from WebSocket / worker), or the
+ * call only changes the caller's own inbox / device settings.
+ */
+export const SELF_AUDITED_MUTATIONS: readonly string[] = [
+  "pos.createInvoice", // invoice.service: create
+  "pos.cancelInvoice", // invoice.service: cancel
+  "pos.refundInvoice", // invoice.service: refund
+  "pos.exchange", // invoice.service: refund + create
+  "pos.createPreorder", // preorder.service: preorder_create
+  "pos.completePreorder", // invoice.service: create (delivery invoice)
+  "pos.cancelPreorder", // preorder.service: preorder_cancel
+  "staff.attendance.checkIn", // attendance.service: check_in
+  "staff.attendance.checkOut", // attendance.service: check_out
+];
+export const PERSONAL_MUTATIONS: readonly string[] = [
+  "notification.markRead",
+  "notification.markUnread",
+  "notification.markAllRead",
+  "notification.setPreferences",
+  "notification.pushSubscribe",
+  "notification.pushUnsubscribe",
+];
+
 export function isAudited(path: string): boolean {
   return AUDIT_ROUTES[path] !== undefined;
 }
@@ -321,12 +355,10 @@ export function entityIdOf(result: unknown, input: unknown): number | null {
   return null;
 }
 
+/** P6.6: same trust rule as rate limits — forwarded headers only behind TRUST_PROXY */
 export function clientIp(req: Request): string | undefined {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    undefined
-  );
+  const ip = trustedClientIp(req.headers);
+  return ip === UNTRUSTED_CLIENT ? undefined : ip;
 }
 
 /**

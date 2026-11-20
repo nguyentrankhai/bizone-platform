@@ -25,8 +25,9 @@ Health check: `GET /api/health`
 ## Docker
 
 ```bash
-docker compose up -d --build              # app :3000, MariaDB 10.11 :3307, Redis 7 :6380
-APP_PORT=3010 docker compose up -d --build
+# P6.6: DB / Redis passwords come from an env file (no defaults in the compose file)
+docker compose --env-file ../../.env.development up -d --build   # app :3000, MariaDB 10.11 :3307, Redis 7 :6380
+APP_PORT=3010 docker compose --env-file ../../.env.development up -d --build
 docker compose down                       # add -v to drop db/cache volumes
 ```
 

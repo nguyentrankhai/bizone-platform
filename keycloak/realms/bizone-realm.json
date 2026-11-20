@@ -8,13 +8,15 @@
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
+  "bruteForceStrategy": "MULTIPLE",
   "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 900,
   "maxFailureWaitSeconds": 900,
   "minimumQuickLoginWaitSeconds": 60,
-  "waitIncrementSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
-  "failureFactor": 15,
+  "passwordPolicy": "length(8) and maxLength(128) and notUsername and notEmail",
   "accessTokenLifespan": 900,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
@@ -92,7 +94,10 @@
         "post.logout.redirect.uris": "+",
         "use.refresh.tokens": "true",
         "access.token.lifespan": "900",
-        "client.session.idle.timeout": "28800"
+        "client.session.idle.timeout": "28800",
+        "backchannel.logout.url": "http://host.docker.internal:3000/api/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
       },
       "protocolMappers": [
         {
@@ -164,11 +169,7 @@
           }
         }
       ],
-      "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email"
-      ],
+      "defaultClientScopes": ["openid", "profile", "email"],
       "optionalClientScopes": [
         "bizone.pos",
         "bizone.products",
@@ -179,7 +180,8 @@
         "bizone.staff",
         "bizone.omni",
         "bizone.webhooks"
-      ]
+      ],
+      "frontchannelLogout": false
     },
     {
       "clientId": "bizone-api",
@@ -215,11 +217,7 @@
           }
         }
       ],
-      "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email"
-      ]
+      "defaultClientScopes": ["openid", "profile", "email"]
     },
     {
       "clientId": "bizone-public",
@@ -233,21 +231,14 @@
       "serviceAccountsEnabled": false,
       "consentRequired": true,
       "secret": "bizone-public-secret-change-in-prod",
-      "redirectUris": [
-        "http://localhost:*/*",
-        "https://*.example.com/*"
-      ],
+      "redirectUris": ["http://localhost:*/*", "https://*.example.com/*"],
       "webOrigins": ["+"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "access.token.lifespan": "3600",
         "client.session.idle.timeout": "2592000"
       },
-      "defaultClientScopes": [
-        "openid",
-        "profile",
-        "email"
-      ],
+      "defaultClientScopes": ["openid", "profile", "email"],
       "optionalClientScopes": [
         "bizone.pos",
         "bizone.products",
