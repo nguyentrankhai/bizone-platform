@@ -23,7 +23,22 @@ export default function AuthCallbackPage() {
       exchanges.set(key, job);
     }
     job.then(
-      (returnTo) => router.replace(returnTo),
+      (returnTo) => {
+        // P7.2: let Payment Hub record the sign-in (once per Keycloak session) — best effort
+        void oidc
+          .getAccessToken()
+          .then((token) =>
+            token
+              ? fetch("/api/auth/session", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}` },
+                  keepalive: true,
+                })
+              : null,
+          )
+          .catch(() => {});
+        router.replace(returnTo);
+      },
       (e: unknown) =>
         setError(e instanceof LoginError ? e.message : "Không đăng nhập được — vui lòng thử lại."),
     );

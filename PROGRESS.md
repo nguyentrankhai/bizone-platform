@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-20 (P7.1 — Connector Plugin Architecture: plugin ký Ed25519 + sandbox tiến trình riêng, hot-plug, màn hình `/connectors`, plugin mẫu DemoPay + hướng dẫn bên thứ ba; Payment Hub 176 test, e2e 47/47. Kế tiếp: P7.2)
+**Cập nhật lần cuối:** 2026-11-20 (P7.2 — Audit Log Payment Hub: nhật ký hệ thống + nhật ký giao dịch append-only bằng trigger DB, 29 thao tác admin + đăng nhập / đăng xuất được ghi, `/audit-log` lọc / xem raw / xuất CSV-Excel; Payment Hub 184 test, e2e 34/34. Kế tiếp: P7.3)
 
 ---
 
@@ -19,8 +19,8 @@
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
 | 5 — Payment Hub Mở rộng | 6 | 4 | 2 | 0 |
 | 6 — BizOne Nâng cao | 7 | 5 | 2 | 0 |
-| 7 — Payment Hub Nâng cao | 5 | 1 | 0 | 4 |
-| **Tổng** | **53** | **42** | **7** | **4** |
+| 7 — Payment Hub Nâng cao | 5 | 2 | 0 | 3 |
+| **Tổng** | **53** | **43** | **7** | **3** |
 
 ---
 
@@ -66,7 +66,7 @@
 | 35 | Route Engine chỉ có API admin (`/api/internal/routes/*`), chưa có màn hình cấu hình ưu tiên đối tác theo merchant / xem circuit. P7.1 thêm màn hình **Connector** (bật / tắt, sức khoẻ) nhưng chưa có màn hình ưu tiên đối tác theo merchant | P3.8 | Module Merchant (P7.x) |
 | 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá. **P7.1**: đã có Health Monitor định kỳ (worker, `connector_health_logs`, trạng thái trên `connectors`) + kiểm tra tay; chưa tự vô hiệu hoá connector sau 3 lần lỗi / chưa cảnh báo (SRS §3.3.9) | P3.8 | P7.3 (cảnh báo) / P7.5 |
 | 37 | `payment_url` khi không chọn phương thức lấy từ `NEXT_PUBLIC_APP_URL` (`transaction.service`, giá trị lúc build) còn trang QR/ảnh QR/return URL dùng `APP_URL` (lúc chạy) — cần thống nhất một biến khi triển khai | P3.8 (phát hiện) | Khi triển khai (P6.5 không xử lý) |
-| 38 | Đổi cấu hình định tuyến (PUT routes, reset circuit) mới ghi `console`, chưa vào audit log | P3.8 | P7.2 |
+| ~~38~~ | ~~Đổi cấu hình định tuyến (PUT routes, reset circuit) mới ghi `console`, chưa vào audit log~~ | ~~P3.8~~ | ✅ P7.2 (`route.update` có dữ liệu cũ / mới, `route.reset_circuit`) |
 | ~~39~~ | ~~**[Cao]** Dashboard BizOne: cache Redis không theo tenant; số liệu cũ tới 5 phút; ngày theo giờ máy chủ~~ | ~~QA-2 (P2.9)~~ | ✅ QA-2 fix |
 | ~~40~~ | ~~**[Cao]** Audit Log: HĐ POS không ghi log, `user_id` luôn NULL, nhiều module không được ghi~~ | ~~QA-2 (P2.10)~~ | ✅ QA-2 fix |
 | ~~41~~ | ~~**[Cao]** Idempotency Payment Hub: sai tên header so với spec; request đồng thời cùng key tạo nhiều GD~~ | ~~QA-2 (P3.1)~~ | ✅ QA-2 fix |
@@ -138,7 +138,7 @@
 | 107 | Thời hạn hoàn tiền mặc định **30 ngày cho mọi đối tác** (`REFUND_WINDOW_DAYS`, một giá trị chung) — tài liệu công khai VNPay / MoMo / ZaloPay không nêu rõ; cần đối chiếu hợp đồng từng đối tác rồi đặt `windowDays` riêng trong `registry.ts`. Phí hoàn tiền (ZaloPay `refund_fee_amount`) chưa dùng | P5.3 | Khi có hợp đồng / sandbox thật |
 | 108 | Hoàn tiền VNPay / MoMo không có kết quả tin cậy (timeout, HTTP 5xx, VNPay `00` sai chữ ký, `94`, MoMo `7000`/`43`…) nằm ở `Processing` (giữ số tiền) tới khi vận hành **xác nhận thủ công** trong chi tiết GD — chưa gọi API tra cứu hoàn tiền của VNPay (`querydr` loại hoàn) / MoMo (`/v2/gateway/api/refund/query`). Dashboard cảnh báo sau 15 phút | P5.3 | P5.4 Đối soát / P7.1 |
 | 109 | Chỉ phát webhook `refund.completed` (theo SRS / API-Design; OpenAPI cũ ghi `refund.success`/`refund.failed` — đã sửa). Hoàn tiền bất đồng bộ (ZaloPay) **thất bại sau đó** không có webhook — merchant thấy qua `GET /api/v1/transactions/{id}` (`refunds[]`) | P5.3 | Khi merchant cần (thêm sự kiện `refund.failed`) |
-| 110 | Hoàn tiền / xác nhận thủ công ghi `transaction_logs` + `refunds.requested_by` (username token), chưa vào `audit_logs` (SRS-PH-AUDIT-02-01) — cùng #38. `refunds.processed_by` (FK `users`) không dùng vì user Keycloak không có trong bảng `users`. Chưa tách quyền "hoàn tiền" khỏi `payhub-admin` (SRS: Admin + Operations) | P5.3 | P7.2 Audit Log / phân quyền vận hành |
+| 110 | ~~Hoàn tiền / xác nhận thủ công chưa vào `audit_logs`~~ ✅ P7.2 (`refund.create` / `refund.check` / `refund.resolve` có người thực hiện, IP, dữ liệu cũ / mới). Còn lại: `refunds.processed_by` (FK `users`) không dùng vì user Keycloak không có trong bảng `users`; chưa tách quyền "hoàn tiền" khỏi `payhub-admin` (SRS: Admin + Operations) | P5.3 | Phân quyền vận hành (khi có vai trò Operations) |
 | ~~111~~ | ~~Chi tiết GD hiện "Tên merchant: —"~~ | ~~P5.3~~ | ✅ P5.6 (trang chi tiết nạp tên merchant + đối tác) |
 | 112 | Đối soát (P5.4) chỉ đối chiếu **thanh toán**; hoàn tiền (`refunds`) và phí giao dịch chưa đối soát với đối tác — yêu cầu hoàn `Processing` (#108) vẫn xác nhận tay. P5.5: báo cáo doanh thu có cột "đã hoàn" + phí **ước tính** (#117), vẫn chưa đối chiếu với số đối tác | P5.4 | Khi có file đối soát hoàn tiền / phí của đối tác |
 | 113 | Nguồn `Api` = 1 lệnh tra cứu / GD (VNPay `querydr`, MoMo `query`, ZaloPay `query`) — không thấy được tiền đối tác thu cho đơn Hub không biết (chỉ nhập file mới thấy). ZaloPay trả `-101` (không có đơn) cho GD Hub ghi đã trả → `Unverified` thay vì "đối tác thiếu". **Chưa có file đối soát thật** của VNPay / MoMo / ZaloPay / ngân hàng: cột nhận theo tên tiêu đề phổ biến (`statement.ts`), cần kiểm lại với file mẫu thật khi có tài khoản merchant (#16, #100, #104) | P5.4 | Khi có credential / file mẫu đối tác |
@@ -195,10 +195,13 @@
 | ~~164~~ | ~~Store API rate limit 1200/phút/kênh dùng chung mọi khách → một client ~400 lượt tải trang/phút làm cả cửa hàng nhận 429~~ | ~~QA-5 (P6.1)~~ | ✅ QA-5 fix (300/phút/khách + trần 6000/phút/kênh) |
 | ~~165~~ | ~~Công cụ kiểm thử: `scripts/perf/bench.mjs` gắn cứng chi nhánh #1 cho `pos.catalog` (403 trên `bizonedb`); `pentest.mjs` ca 100/phút sai 1 nếu token đã gọi API trong 60 s trước; chuông thông báo log 1 lỗi WS ở lần kết nối đầu (effect chạy lại, sau đó kết nối được)~~ | ~~QA-5~~ | ✅ QA-5 fix (`--branch` / `branch.mine`, pentest chờ cửa sổ + `--only`, WS mở ở tick sau) |
 | 166 | Sandbox plugin (P7.1) chặn mạng ở mức `fetch` + chặn import `node:net/http/https/tls/dgram` (Node 24 permission model không lọc mạng): plugin ký hợp lệ vẫn có thể cố vượt qua bằng kỹ thuật cấp thấp — production nên thêm chặn egress ở hạ tầng (network policy / proxy ra ngoài chỉ tới host PSP); process plugin chạy cùng user OS với app | P7.1 | P7.5 (triển khai) |
-| 167 | Thao tác connector (tải lên, nâng cấp, bật / tắt, gỡ, kiểm tra) chỉ ghi `connectors.updated_by`, `connector_packages.uploaded_by` + log máy chủ — chưa vào audit log | P7.1 | P7.2 |
+| ~~167~~ | ~~Thao tác connector chưa vào audit log~~ | ~~P7.1~~ | ✅ P7.2 (`connector.upload` / `status` / `remove` / `health_check`) |
 | 168 | Health Monitor chỉ ghi trạng thái: chưa cảnh báo admin / tự vô hiệu hoá khi lỗi 3 lần liên tiếp, chưa có metrics TPS / latency / tỷ lệ lỗi theo connector (bảng `connector_metrics`, `connector_events` của migration_001 chưa dùng) | P7.1 | P7.3 / P7.5 |
 | 169 | Plugin 1.0.0: chỉ kiểu thanh toán chuyển hướng (không có kiểu core tự sinh QR như VietQR), cấu hình đối tác chỉ 3 trường credential + endpoint, chưa có API tra soát cho plugin, chỉ giao thức HTTP (`fetch` — SOAP qua HTTP được, MQ / SFTP thì không). Bộ lọc phương thức ở danh sách giao dịch + nhãn trong báo cáo / file xuất hiện mã phương thức của plugin (nhãn tĩnh `ROUTE_MAP`); trang `/pay`, API, báo cáo vẫn nhận phương thức plugin | P7.1 | Khi có PSP thật cần |
 | 170 | Khoá ký dev `payhub-dev` (riêng máy này: `.secrets/payhub-dev.private.pem`, không commit; public key trong `.env.local` / `.env.development`). Production: mỗi nhà phát hành tự tạo khoá (`scripts/connector-plugin.mjs keygen`), đơn vị vận hành thêm public key vào `CONNECTOR_TRUSTED_KEYS` sau khi thẩm định | P7.1 | Người dùng / P7.5 |
+| 171 | 32 dòng `audit_logs` do kiểm thử P7.2 (2026-11-20, người thực hiện `payhub.admin` / `payhub.viewer` / `cli:steve`, kể cả dòng `test.trigger`) **không xoá được** — đúng quy tắc append-only; sẽ tự bị dọn sau 90 ngày | P7.2 | Tự hết hạn (2027-02-18) |
+| 172 | Append-only dựa trên trigger DB: chặn mọi client SQL (app, script, console) nhưng tài khoản có quyền `TRIGGER` / `DROP` (root dev) vẫn gỡ được trigger. Production: app dùng user DB **không** có `TRIGGER`, `DROP`, `ALTER` trên `paymentdb` (migration chạy bằng user riêng); cân nhắc đẩy audit ra kho chỉ ghi (SIEM / object lock) | P7.2 | P7.5 (triển khai) |
+| 173 | Đăng nhập được ghi khi trang quản trị gọi `POST /api/auth/session` sau khi Keycloak trả về (1 lần / phiên `sid`) — đăng nhập Keycloak mà không mở trang quản trị, **đăng nhập sai** và khoá tài khoản chỉ có trong event của Keycloak (chưa bật lưu event / chưa kéo về). Nhật ký giao dịch giữ cùng giao dịch (không dọn theo 90 ngày); API merchant (`/api/v1/*` — tạo GD, hoàn tiền) ghi vào nhật ký giao dịch, không vào `audit_logs` | P7.2 | Khi cần (Keycloak events → audit) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -326,7 +329,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P7.1 | Connector Plugin Architecture | ✅ | `cfd3959` | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
-| P7.2 | Audit Log — Payment Hub | ⬜ | — | |
+| P7.2 | Audit Log — Payment Hub | ✅ | _(xem commit)_ | Xem [kết quả P7.2](#p72--audit-log--payment-hub) — `audit_logs` + `transaction_logs` append-only (trigger DB), `/audit-log` |
 | P7.3 | Notification System | ⬜ | — | |
 | P7.4 | Scale & Performance | ⬜ | — | |
 | P7.5 | Disaster Recovery & Monitoring | ⬜ | — | |
@@ -2915,3 +2918,40 @@ Ngoài plan, theo yêu cầu người dùng.
   - **Lỗi gặp khi kiểm thật, đã sửa:** (1) macOS `/var` → `/private/var`: permission model so đường dẫn thật → dùng `realpath`; (2) `next start source/payment-hub` chạy với cwd = gốc repo → không tìm thấy host theo `process.cwd()` → nhúng mã host, ghi ra thư mục plugin lúc chạy (bỏ COPY trong Dockerfile); (3) `fflate` cũng import `createRequire` → trùng tên với banner `build:jobs` → đổi alias banner.
   - #166 (lọc mạng ở `fetch`), #167 (audit — P7.2), #168 (cảnh báo / metrics — P7.3, P7.5), #169 (giới hạn plugin 1.0.0), #170 (khoá ký dev). #36 cập nhật (đã có Health Monitor), #27 đóng, #35 / #102 cập nhật.
   - Env mới (Payment Hub): `CONNECTOR_TRUSTED_KEYS` (bắt buộc để cài plugin), tuỳ chọn `CONNECTOR_PLUGIN_DIR`, `CONNECTOR_SANDBOX_MAX_HEAP_MB`, `CONNECTOR_HEALTH_INTERVAL_S`, `CONNECTOR_DEGRADED_LATENCY_MS`, `CONNECTOR_SANDBOX_HOST`. Production chạy `npm run db:migrate` (migration `9_connector_plugins`).
+
+### P7.2 — Audit Log — Payment Hub
+
+- **Hoàn thành:** 2026-11-20 · **Commit:** _(xem commit)_ · **Vị trí:** `source/payment-hub/` — `services/audit/logger.ts` (+ `snapshots.ts`), `server/services/audit.service.ts`, `server/routes/audit.ts`, `app/api/internal/audit-logs/**`, `app/api/auth/session/`, `app/audit-log/page.tsx`, `components/ph/AuditLogClient.tsx` + `AuditTable.tsx` + `RawDataModal.tsx` + `audit-api.ts`, 28 route `app/api/internal/**` (bọc `withAudit`), `app/api/auth/logout` + `backchannel-logout`, `app/auth/callback`, `server/routes/transactions.ts`, `scripts/create-api-key.ts`, `services/worker.ts`, `prisma/migrations/10_audit_log`, `tests/audit.test.ts`
+- **Đã làm:**
+  - **Append-only ở DB** (migration `10_audit_log`): trigger `BEFORE UPDATE` từ chối mọi sửa và `BEFORE DELETE` từ chối xoá bản ghi < 90 ngày trên `audit_logs`, `transaction_logs`, `transaction_raw_data`, `partner_config_logs` — áp cho mọi client (app, script, console SQL), không chỉ API. `audit_logs` thêm `actor_id` (Keycloak sub), `result` (`success` / `failure` / `denied`), `http_method`, `request_path` + index người thực hiện / loại đối tượng theo thời gian.
+  - **Logger** `services/audit/logger.ts` (event-driven): `recordAudit()` ghi rồi phát `auditEvents` "recorded"; không bao giờ làm hỏng nghiệp vụ (lỗi ghi → log console). `sanitize` che mọi khoá dạng secret / password / token / api key / signature / authorization ở mọi tầng, cắt chuỗi / mảng / tổng 16 KB, chuyển `Decimal` / Date / bigint. `withAudit(req, spec, handler)`: bọc route admin — ghi người thực hiện (header do proxy đặt), IP (`clientIp`, chỉ khi `TRUST_PROXY`), User-Agent, method + path, **dữ liệu cũ** (`before()` — `snapshots.ts`) và **mới** (body yêu cầu + `data` trả về), kết quả theo HTTP (2xx success, 403 denied, khác failure kèm thông điệp lỗi; 401 bỏ qua).
+  - **Thao tác được ghi (29 + đăng nhập)**: đối tác (thêm, sửa, bật / tắt, test), connector (tải lên, bật / tắt, gỡ, kiểm tra — #167), webhook (thêm, sửa, xoá, bật / tắt, đổi secret, gửi thử, gửi lại), định tuyến merchant + đóng circuit (#38), hoàn tiền thủ công / hỏi lại / xác nhận (#110), đối soát (chạy, nhập sao kê, xử lý dòng), tra soát (tạo, cập nhật, gửi, hỏi, thêm / xoá chứng từ), cấp API key qua CLI, xuất nhật ký; **đăng nhập** (`POST /api/auth/session` do trang `/auth/callback` gọi — xác thực token, 1 lần / phiên `sid` qua Redis NX), **đăng xuất** (`/api/auth/logout`) và kết thúc phiên từ Keycloak (back-channel).
+  - **Nhật ký giao dịch**: vòng đời GD đã có ở `transaction_logs` + dữ liệu thô đối tác / IPN ở `transaction_raw_data`; thêm request + response của API merchant `POST /api/v1/transactions` (ảnh QR bỏ bớt).
+  - **API** `/api/internal/audit-logs` (chỉ `payhub-admin`, token gắn merchant → 403; không có endpoint ghi / xoá): danh sách `kind=system|transaction` lọc theo ngày VN (≤ 366 ngày), hành động (chính xác hoặc tiền tố `partner.`), người, loại + mã đối tượng, kết quả, mã GD; chi tiết (`oldData` / `newData`; với GD: dữ liệu sự kiện + ≤ 50 request / response API của GD); `options`; `export?format=csv|xlsx` ≤ 50 000 dòng (CSV có BOM + chống CSV injection, 10 lần / phút) — **việc xuất cũng được ghi audit**.
+  - **Lưu trữ**: worker xoá `audit_logs` cũ hơn `AUDIT_RETENTION_DAYS` (tối thiểu / mặc định 90) mỗi ngày; nhật ký giao dịch giữ cùng giao dịch.
+  - **UI** `/audit-log` (thay trang tĩnh P1.8): 2 tab Nhật ký hệ thống / Nhật ký giao dịch, bộ lọc, bảng (thẻ ở < 768 px), phân trang, nút CSV / Excel, modal dữ liệu thô (người, IP, trình duyệt, yêu cầu, trường thay đổi, dữ liệu cũ ↔ mới; với GD: link tới giao dịch + từng request / response). Viewer → thông báo chỉ quản trị viên.
+  - Test `tests/audit.test.ts` (8): che secret nhiều tầng, cắt kích thước, Decimal / class, `withAudit` success / denied / failure / bỏ 401, id từ response, body nhị phân chỉ ghi kích thước, không ném lỗi khi DB lỗi, hạn lưu ≥ 90, CSV.
+
+- **Kiểm thử** (build production `next start :4000`, token Keycloak thật admin / viewer, API key merchant tạm; e2e 34 ca + trình duyệt):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | Tạo GD → log | ✅ `POST /api/v1/transactions` (vietqr) → nhật ký giao dịch có `created` + `status_changed:pending`; chi tiết có request của merchant (`amount 75000`) và response 201 (QR bỏ ảnh) |
+  | Sửa partner config → log | ✅ thêm cấu hình MoMo tạm → `partner.create` (mã lấy từ response); sửa tên + secret → `partner.update` success, người thực hiện `payhub.admin@bizone.vn`, `PUT /api/internal/partners/{id}`, dữ liệu cũ (tên cũ) ↔ mới (tên mới), phí Decimal đúng; **không chứa secret** (`••••`, không `enc:v1`, không giá trị mới) |
+  | Không thể xoá / sửa log | ✅ API: `POST` / `DELETE /api/internal/audit-logs` → 405, không có endpoint ghi; DB: `UPDATE audit_logs` → `audit_logs is append-only`, `DELETE` bản ghi mới → `kept at least 90 days`, `UPDATE transaction_logs` / `partner_config_logs` bị từ chối |
+  | Thao tác hệ thống khác | ✅ viewer bật đối tác → 403 + audit `denied`; bật đối tác chưa test → 409 + audit `failure` kèm lý do; bật / tắt connector, đổi định tuyến merchant (#38), đóng circuit, thêm (secret che) / xoá webhook (dữ liệu cũ có URL) |
+  | Đăng nhập / đăng xuất | ✅ `auth.login` 1 lần / phiên (gọi lần 2 → `recorded:false`), token giả → 401 không ghi; đăng xuất → `auth.logout` |
+  | UI: lọc / xem raw / export | ✅ API lọc theo tiền tố hành động + kết quả, người, đối tượng, khoảng ngày (tương lai → 0), ngày sai → 400; viewer đọc → 403; CSV (BOM) / Excel tải được, việc xuất được ghi `audit.export`; xuất nhật ký giao dịch theo mã GD. Trình duyệt: lọc `partner.update` → modal dữ liệu cũ / mới; tab giao dịch ở 375 px dạng thẻ, không cuộn ngang |
+  | format / lint / typecheck / test / build / build:jobs | ✅ Payment Hub; test 184 (thêm 8) |
+  | Dọn dẹp | ✅ dừng server; xoá GD `P72-*`, cấu hình MoMo tạm, định tuyến merchant 1 (trước đó trống), webhook thử, API key tạm, trả connector MoMo về như cũ. 32 dòng `audit_logs` thử **không xoá được** (#171) |
+
+- **Khác biệt so với plan:**
+  - "Lưu 90 ngày" + "không thể xoá / sửa" làm bằng **trigger DB** (chặn cả SQL ngoài app) thay vì chỉ không mở API; xoá chỉ được bản ghi quá hạn.
+  - "Transaction log (request/response API)": dùng lại `transaction_logs` / `transaction_raw_data` sẵn có (P3.x) — thêm request / response của API merchant; UI hiển thị thành tab riêng thay vì chép sang `audit_logs`.
+  - "User login": đăng nhập diễn ra ở Keycloak → ghi khi trang quản trị nhận phiên (`/api/auth/session`); đăng nhập sai chưa ghi (#173).
+  - Đọc audit chỉ `payhub-admin` (SRS: Audit → Admin) — viewer không xem được.
+- **Quyết định thiết kế:** ghi ở lớp route (`withAudit`) để mọi thao tác admin có cùng dạng (người, IP, đường dẫn, kết quả, cũ / mới) mà không sửa từng service; trạng thái trước lấy thẳng từ DB, logger che secret theo tên khoá nên bản ghi thô (có cột mã hoá) vẫn an toàn. Lỗi ghi audit không chặn nghiệp vụ (đã ghi log máy chủ).
+- **Vấn đề / lưu ý:**
+  - **Lỗi gặp khi kiểm thật, đã sửa:** `Decimal` của Prisma (`fee_percent`) không serialize được → audit đầu tiên không ghi (nghiệp vụ vẫn chạy) → `sanitize` dùng `toJSON()` của đối tượng không thuần + test; danh sách "trường thay đổi" so sánh số dạng chuỗi / số. Lượt e2e đầu sửa nhầm cấu hình VNPay seed (đổi tên, secret, xoá kết quả test) → đã khôi phục (secret mã hoá lại từ `VNPAY_HASH_SECRET`, kết quả test cũ); kịch bản chuyển sang cấu hình tạm.
+  - #171 (dòng audit thử), #172 (trigger vs quyền DB — P7.5), #173 (đăng nhập sai / Keycloak events). Đóng #38, #167; #110 còn phần phân quyền Operations.
+  - Env mới: `AUDIT_RETENTION_DAYS` (≥ 90). Production chạy `npm run db:migrate` (`10_audit_log` — cần quyền tạo trigger cho user chạy migration).

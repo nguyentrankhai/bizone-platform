@@ -40,6 +40,18 @@ async function main() {
         name,
       },
     });
+    // P7.2: issuing a key is an audited admin action (secret never stored in the log)
+    await prisma.auditLog.create({
+      data: {
+        action: "apikey.create",
+        entityType: "api_key",
+        entityId: String(key.id),
+        actorId: "system:cli",
+        username: `cli:${process.env.USER ?? "unknown"}`,
+        newData: { merchant: merchant.code, name, api_key_prefix: issued.apiKey.slice(0, 12) },
+        description: "npm run apikey:create",
+      },
+    });
     console.log(
       JSON.stringify({
         id: key.id,

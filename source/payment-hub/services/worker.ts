@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { describeError, getRedis } from "@/lib/redis";
 import { runHealthMonitor } from "@/server/services/connector.service";
 import { disposeCatalog } from "@/services/connectors/loader";
+import { purgeAuditLogs, retentionDays } from "@/services/audit/logger";
 import { queueConnection } from "./queue/connection";
 import { WEBHOOK_QUEUE, webhookBackoff, type WebhookJob } from "./webhook/queue";
 import { processWebhookJob } from "./webhook/deliver";
@@ -153,6 +154,22 @@ async function runConnectorHealth(): Promise<void> {
 }
 setInterval(() => void runConnectorHealth(), HEALTH_INTERVAL_MS);
 setTimeout(() => void runConnectorHealth(), 15_000).unref();
+
+// Audit retention (P7.2, SRS-PH-AUDIT-01-04): audit_logs older than AUDIT_RETENTION_DAYS (≥ 90)
+// are deleted once a day — the DB triggers refuse anything younger. Transaction journals are kept
+// with their transactions.
+const AUDIT_PURGE_INTERVAL_MS = 24 * 3600 * 1000;
+async function runAuditRetention(): Promise<void> {
+  try {
+    const n = await purgeAuditLogs();
+    if (n > 0)
+      console.log(`[audit-retention] deleted ${n} entries older than ${retentionDays()} days`);
+  } catch (err) {
+    console.error("[audit-retention] error:", err instanceof Error ? err.message : err);
+  }
+}
+setInterval(() => void runAuditRetention(), AUDIT_PURGE_INTERVAL_MS);
+setTimeout(() => void runAuditRetention(), 60_000).unref();
 
 let shuttingDown = false;
 

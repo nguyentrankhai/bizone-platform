@@ -23,6 +23,7 @@ const PUBLIC_PATHS = [
   "/api/v1/webhooks", // inbound partner webhooks (verified by HMAC, not JWT)
   "/api/ipn/", // PSP IPN callbacks (verified by the connector's signature, not JWT)
   "/api/auth/logout", // verifies the bearer token itself (P6.7)
+  "/api/auth/session", // sign-in audit entry, verifies the bearer token itself (P7.2)
   "/api/auth/backchannel-logout", // Keycloak logout token, verified by signature (P6.6)
   "/_next",
   "/favicon.ico",

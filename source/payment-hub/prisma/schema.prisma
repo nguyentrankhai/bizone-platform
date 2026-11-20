@@ -51,6 +51,12 @@ enum ConnectorStatus {
   Error
 }
 
+enum AuditResult {
+  success
+  failure
+  denied
+}
+
 enum ConnectorSource {
   builtin
   plugin
@@ -672,21 +678,29 @@ model DisputeLog {
   @@map("dispute_logs")
 }
 
+/// P7.2: append-only (DB triggers refuse UPDATE and DELETE of rows younger than 90 days)
 model AuditLog {
-  id          BigInt   @id @default(autoincrement())
-  userId      Int?     @map("user_id")
-  username    String?  @db.VarChar(100)
-  action      String   @db.VarChar(50)
-  entityType  String   @map("entity_type") @db.VarChar(50)
-  entityId    String?  @map("entity_id") @db.VarChar(100)
-  oldData     Json?    @map("old_data")
-  newData     Json?    @map("new_data")
-  ipAddress   String?  @map("ip_address") @db.VarChar(45)
-  userAgent   String?  @map("user_agent") @db.VarChar(500)
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(0)
+  id          BigInt      @id @default(autoincrement())
+  userId      Int?        @map("user_id")
+  /// Keycloak subject of the admin
+  actorId     String?     @map("actor_id") @db.VarChar(64)
+  username    String?     @db.VarChar(100)
+  action      String      @db.VarChar(50)
+  result      AuditResult @default(success)
+  entityType  String      @map("entity_type") @db.VarChar(50)
+  entityId    String?     @map("entity_id") @db.VarChar(100)
+  oldData     Json?       @map("old_data")
+  newData     Json?       @map("new_data")
+  ipAddress   String?     @map("ip_address") @db.VarChar(45)
+  userAgent   String?     @map("user_agent") @db.VarChar(500)
+  httpMethod  String?     @map("http_method") @db.VarChar(10)
+  requestPath String?     @map("request_path") @db.VarChar(255)
+  description String?     @db.Text
+  createdAt   DateTime    @default(now()) @map("created_at") @db.DateTime(0)
 
   @@index([entityType, entityId], map: "idx_audit_entity")
+  @@index([username], map: "idx_audit_username")
+  @@index([entityType, createdAt], map: "idx_audit_entity_type_created")
   @@index([userId], map: "idx_audit_user")
   @@index([action], map: "idx_audit_action")
   @@index([createdAt], map: "idx_audit_created")

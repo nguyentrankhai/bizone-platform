@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handleGetDispute, handleUpdateDispute } from "@/server/routes/dispute";
+import { withAudit } from "@/services/audit/logger";
+import { disputeSnapshot } from "@/services/audit/snapshots";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,5 +12,14 @@ export async function GET(req: NextRequest, { params }: Ctx): Promise<Response> 
 
 export async function PUT(req: NextRequest, { params }: Ctx): Promise<Response> {
   const { id } = await params;
-  return handleUpdateDispute(req, id);
+  return withAudit(
+    req,
+    {
+      action: "dispute.update",
+      entityType: "dispute",
+      entityId: id,
+      before: () => disputeSnapshot(id),
+    },
+    () => handleUpdateDispute(req, id),
+  );
 }

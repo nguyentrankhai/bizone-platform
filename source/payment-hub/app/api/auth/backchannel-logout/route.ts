@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { revokeSessionFromKeycloak, verifyLogoutToken } from "@/lib/auth";
+import { recordAudit, requestContext } from "@/services/audit/logger";
 
 /**
  * POST /api/auth/backchannel-logout (P6.6, #146) — OpenID Connect Back-Channel Logout.
@@ -21,6 +22,14 @@ export async function POST(req: NextRequest) {
   }
   try {
     await revokeSessionFromKeycloak(result.sessionId);
+    await recordAudit({
+      ...requestContext(req),
+      actor: { id: "system:keycloak", username: "keycloak" },
+      action: "auth.logout",
+      entityType: "session",
+      entityId: result.sessionId,
+      description: "Phiên bị kết thúc từ Keycloak (back-channel logout)",
+    });
   } catch (err) {
     console.error("[auth] back-channel logout: revoke failed", err);
     return Response.json({ error: "temporarily_unavailable" }, { status: 503, headers: noStore });

@@ -11,6 +11,8 @@ import {
   requestFingerprint,
 } from "@/server/middleware/idempotency";
 import { requireAdmin } from "@/server/middleware/adminAuth";
+import { getPrisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { isTxnStatus } from "@/server/services/stateMachine";
 import {
   createTransaction,
@@ -282,6 +284,41 @@ async function createAndInitiate(
     expired_at: txn.expiredAt?.toISOString(),
     created_at: txn.createdAt.toISOString(),
   };
+
+  // P7.2 transaction log: the merchant API call that created the transaction (request + answer).
+  // The QR image is left out (large, rebuilt from qr_codes); nothing secret is in either body.
+  await getPrisma()
+    .transactionRawData.createMany({
+      data: [
+        {
+          transactionId: txn.id,
+          direction: "Request",
+          source: "Merchant",
+          endpoint: "POST /api/v1/transactions",
+          headers: {
+            "x-api-key-id": String(merchant.apiKeyId ?? ""),
+            "idempotency-key": idempotencyKey ?? "",
+          },
+          body: input as Prisma.InputJsonValue,
+        },
+        {
+          transactionId: txn.id,
+          direction: "Response",
+          source: "PaymentHub",
+          endpoint: "POST /api/v1/transactions",
+          httpStatus: 201,
+          body: {
+            ...response,
+            qr_code: qr ? { ...response.qr_code, image_base64: "(omitted)" } : null,
+          } as Prisma.InputJsonValue,
+        },
+      ],
+    })
+    .catch((e: unknown) =>
+      console.error(
+        `[transactions] raw data not stored for ${txn.txnCode}: ${e instanceof Error ? e.message : e}`,
+      ),
+    );
 
   return { ok: true, data: response };
 }
