@@ -329,7 +329,7 @@
 | ID | Task | Trạng thái | Commit | Ghi chú |
 |----|------|------------|--------|---------|
 | P7.1 | Connector Plugin Architecture | ✅ | `cfd3959` | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
-| P7.2 | Audit Log — Payment Hub | ✅ | _(xem commit)_ | Xem [kết quả P7.2](#p72--audit-log--payment-hub) — `audit_logs` + `transaction_logs` append-only (trigger DB), `/audit-log` |
+| P7.2 | Audit Log — Payment Hub | ✅ | `d8b3f68` | Xem [kết quả P7.2](#p72--audit-log--payment-hub) — `audit_logs` + `transaction_logs` append-only (trigger DB), `/audit-log` |
 | P7.3 | Notification System | ⬜ | — | |
 | P7.4 | Scale & Performance | ⬜ | — | |
 | P7.5 | Disaster Recovery & Monitoring | ⬜ | — | |
@@ -2921,7 +2921,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P7.2 — Audit Log — Payment Hub
 
-- **Hoàn thành:** 2026-11-20 · **Commit:** _(xem commit)_ · **Vị trí:** `source/payment-hub/` — `services/audit/logger.ts` (+ `snapshots.ts`), `server/services/audit.service.ts`, `server/routes/audit.ts`, `app/api/internal/audit-logs/**`, `app/api/auth/session/`, `app/audit-log/page.tsx`, `components/ph/AuditLogClient.tsx` + `AuditTable.tsx` + `RawDataModal.tsx` + `audit-api.ts`, 28 route `app/api/internal/**` (bọc `withAudit`), `app/api/auth/logout` + `backchannel-logout`, `app/auth/callback`, `server/routes/transactions.ts`, `scripts/create-api-key.ts`, `services/worker.ts`, `prisma/migrations/10_audit_log`, `tests/audit.test.ts`
+- **Hoàn thành:** 2026-11-20 · **Commit:** `d8b3f68` · **Vị trí:** `source/payment-hub/` — `services/audit/logger.ts` (+ `snapshots.ts`), `server/services/audit.service.ts`, `server/routes/audit.ts`, `app/api/internal/audit-logs/**`, `app/api/auth/session/`, `app/audit-log/page.tsx`, `components/ph/AuditLogClient.tsx` + `AuditTable.tsx` + `RawDataModal.tsx` + `audit-api.ts`, 28 route `app/api/internal/**` (bọc `withAudit`), `app/api/auth/logout` + `backchannel-logout`, `app/auth/callback`, `server/routes/transactions.ts`, `scripts/create-api-key.ts`, `services/worker.ts`, `prisma/migrations/10_audit_log`, `tests/audit.test.ts`
 - **Đã làm:**
   - **Append-only ở DB** (migration `10_audit_log`): trigger `BEFORE UPDATE` từ chối mọi sửa và `BEFORE DELETE` từ chối xoá bản ghi < 90 ngày trên `audit_logs`, `transaction_logs`, `transaction_raw_data`, `partner_config_logs` — áp cho mọi client (app, script, console SQL), không chỉ API. `audit_logs` thêm `actor_id` (Keycloak sub), `result` (`success` / `failure` / `denied`), `http_method`, `request_path` + index người thực hiện / loại đối tượng theo thời gian.
   - **Logger** `services/audit/logger.ts` (event-driven): `recordAudit()` ghi rồi phát `auditEvents` "recorded"; không bao giờ làm hỏng nghiệp vụ (lỗi ghi → log console). `sanitize` che mọi khoá dạng secret / password / token / api key / signature / authorization ở mọi tầng, cắt chuỗi / mảng / tổng 16 KB, chuyển `Decimal` / Date / bigint. `withAudit(req, spec, handler)`: bọc route admin — ghi người thực hiện (header do proxy đặt), IP (`clientIp`, chỉ khi `TRUST_PROXY`), User-Agent, method + path, **dữ liệu cũ** (`before()` — `snapshots.ts`) và **mới** (body yêu cầu + `data` trả về), kết quả theo HTTP (2xx success, 403 denied, khác failure kèm thông điệp lỗi; 401 bỏ qua).
