@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getPrisma } from "@/lib/prisma";
 import { ORDER_SOURCE_LABEL, normalizeOrderSource } from "@/lib/omni/marketplace";
 import { bizoneError } from "@/lib/errors";
@@ -53,6 +54,8 @@ interface QuoteArgs {
   items: StoreCartItem[];
   couponCode?: string | null;
   customerId: number | null;
+  /** guest placing an order: CRM customer of the phone, for per-customer flash limits (#161) */
+  limitsCustomerId?: number | null;
 }
 
 /** Price a cart for the website (member discount only for a logged-in customer) */
@@ -63,7 +66,12 @@ export async function storeQuote(ch: StoreChannel, args: QuoteArgs) {
     quantity: i.quantity,
     discountPercent: 0,
   }));
-  const input = { items, customerId: args.customerId, couponCode: args.couponCode || undefined };
+  const input = {
+    items,
+    customerId: args.customerId,
+    limitsCustomerId: args.limitsCustomerId ?? null,
+    couponCode: args.couponCode || undefined,
+  };
   let quote = await quoteCart(input, undefined, "website", { fee: ch.config.shippingFee });
   const fee = shippingFeeFor(ch.config, quote.totals.total);
   if (fee !== ch.config.shippingFee) quote = await quoteCart(input, undefined, "website", { fee });
@@ -164,10 +172,17 @@ async function placeOrder(
     if (!input.returnUrl || !isStorefrontUrl(input.returnUrl, cfg.storefrontUrl))
       throw bizoneError("VALIDATION_ERROR", "returnUrl phải thuộc website của cửa hàng");
   }
+  const guestCustomer = customerId
+    ? null
+    : await getPrisma().customer.findUnique({
+        where: { phone: input.contact.phone },
+        select: { id: true },
+      });
   const { quote, view } = await storeQuote(ch, {
     items: input.items,
     couponCode: input.couponCode,
     customerId,
+    limitsCustomerId: guestCustomer?.id ?? null,
   });
   if (input.couponCode && view.couponError) throw bizoneError("VALIDATION_ERROR", view.couponError);
   if (view.stockProblems.length)
@@ -274,28 +289,34 @@ async function placeOrder(
     { timeout: 15_000 },
   );
 
+  // QA-5 #163: the order is committed — a failure from here on must not fail the request, or
+  // the Idempotency-Key is released and the storefront's retry places a second order
   if (order.moved.length)
-    await enqueueStockChanged({
-      warehouseId,
-      productIds: order.moved,
-      reason: "order",
-      orderId: order.id,
-    });
+    await afterCommit("low-stock check", () =>
+      enqueueStockChanged({
+        warehouseId,
+        productIds: order.moved,
+        reason: "order",
+        orderId: order.id,
+      }),
+    );
   const src = normalizeOrderSource(input.source);
   const channelName = src ? `Website (${ORDER_SOURCE_LABEL[src]})` : "Website";
-  await logSync({
-    channelId: ch.id,
-    syncType: "order",
-    direction: "pull",
-    status: "success",
-    message: `Nhận đơn ${order.orderCode} (${fmtVnd(String(view.total))})`,
-    details: {
-      orderId: order.id,
-      items: order.orderItems.length,
-      paymentMethod: input.paymentMethod,
-      ...(src ? { source: src } : {}),
-    },
-  });
+  await afterCommit("sync log", () =>
+    logSync({
+      channelId: ch.id,
+      syncType: "order",
+      direction: "pull",
+      status: "success",
+      message: `Nhận đơn ${order.orderCode} (${fmtVnd(String(view.total))})`,
+      details: {
+        orderId: order.id,
+        items: order.orderItems.length,
+        paymentMethod: input.paymentMethod,
+        ...(src ? { source: src } : {}),
+      },
+    }),
+  );
   await notify({
     type: "order_new",
     title: `Đơn hàng ${order.orderCode} từ ${channelName} - ${fmtVnd(String(view.total))}`,
@@ -327,6 +348,15 @@ async function placeOrder(
     payment: payment ? { paymentUrl: payment.paymentUrl, txnCode: payment.txnCode } : null,
     paymentError,
   };
+}
+
+/** Best-effort step after the order is committed: logged, never thrown */
+async function afterCommit(label: string, fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch (e) {
+    console.error(`[store] order placed, ${label} failed:`, errorMessage(e));
+  }
 }
 
 function errorMessage(e: unknown): string {
@@ -744,7 +774,9 @@ export async function cancelStoreOrder(id: number, reason: string | null) {
     throw bizoneError("CONFLICT", "Cửa hàng đã xác nhận đơn, liên hệ hotline để huỷ");
   if (o.paymentStatus === "paid")
     throw bizoneError("CONFLICT", "Đơn đã thanh toán online, liên hệ hotline để huỷ và hoàn tiền");
-  await cancelOrderNow(id, `Khách huỷ trên website${reason ? `: ${reason}` : ""}`, null);
+  await cancelOrderNow(id, `Khách huỷ trên website${reason ? `: ${reason}` : ""}`, null, {
+    onlyUnpaid: true,
+  });
   return orderView(id);
 }
 
@@ -775,9 +807,13 @@ export async function expireUnpaidOrders(now = new Date()) {
         select: { paymentStatus: true, status: true },
       });
       if (fresh.paymentStatus === "paid" || fresh.status !== "pending") continue;
-      await cancelOrderNow(o.id, "Quá hạn thanh toán online — tự động huỷ", null);
+      await cancelOrderNow(o.id, "Quá hạn thanh toán online — tự động huỷ", null, {
+        onlyUnpaid: true,
+      });
       cancelled++;
     } catch (e) {
+      // paid / handled meanwhile (#152): nothing to cancel
+      if (e instanceof TRPCError && e.code === "CONFLICT") continue;
       console.error(`[omni] expire ${o.orderCode} failed:`, errorMessage(e));
     }
   }

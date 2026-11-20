@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { refresh } from "next/cache";
 import { bizone, StoreApiError } from "@/lib/bizone-sync";
 import { currentStore } from "@/lib/store";
@@ -109,7 +110,7 @@ export async function placeOrderAction(_: FormState, fd: FormData): Promise<Form
         },
         note: str(fd, "note") || null,
         paymentMethod,
-        ...(paymentMethod === "payhub" ? { returnUrl: paymentReturnUrl() } : {}),
+        ...(paymentMethod === "payhub" ? { returnUrl: paymentReturnUrl(store) } : {}),
         source: await orderSource(),
       },
       { token, idempotencyKey: key },
@@ -168,8 +169,6 @@ export async function lookupOrderAction(_: FormState, fd: FormData): Promise<For
 }
 
 // ─── Account ─────────────────────────────────────────────────────────────────
-
-const safeNext = (v: string) => (v.startsWith("/") && !v.startsWith("//") ? v : "/account");
 
 export async function loginAction(_: FormState, fd: FormData): Promise<FormState> {
   const store = await currentStore();

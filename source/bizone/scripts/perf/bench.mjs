@@ -3,6 +3,7 @@
 //
 //   node scripts/perf/bench.mjs [--url http://localhost:3001] [--tenant tenant_perf]
 //        [--runs 40] [--concurrency 4] [--only product.list,dashboard.summary] [--json out.json]
+//        [--branch <id>]   (pos.catalog: mặc định chi nhánh đầu tiên của user — branch.mine)
 //
 // Gọi tRPC qua HTTP như trình duyệt (superjson GET, header X-Tenant-ID, token Keycloak của user có
 // `tenant_id` = tenant đo — lấy bằng scripts/auth/login.mjs, P6.7). Mỗi endpoint chạy `runs` lần với
@@ -57,10 +58,10 @@ const CASES = {
     "productSearch.search",
     { q: words[i % words.length], limit: 20 },
   ],
-  "pos.catalog": (i) => ["pos.catalog", { branchId: 1, page: 1 + (i % 5), pageSize: 48 }],
+  "pos.catalog": (i) => ["pos.catalog", { branchId: BRANCH, page: 1 + (i % 5), pageSize: 48 }],
   "pos.catalog+search": (i) => [
     "pos.catalog",
-    { branchId: 1, search: words[i % words.length], pageSize: 48 },
+    { branchId: BRANCH, search: words[i % words.length], pageSize: 48 },
   ],
   "pos.invoices": (i) => ["pos.invoices", { page: 1 + (i % 10), pageSize: 20 }],
   "order.list": (i) => ["order.list", { page: 1 + (i % 10), limit: 20 }],
@@ -114,6 +115,17 @@ const redis = new Redis(process.env.REDIS_URL ?? "redis://:123456@localhost:6379
 async function clearRateLimit() {
   const keys = await redis.keys(`rl:*:${TENANT}:*`);
   if (keys.length) await redis.del(...keys);
+}
+
+// QA-5 #165: chi nhánh cho pos.catalog — tham số, không thì chi nhánh đầu tiên user được xem
+// (không gắn cứng #1: DB tenant khác có id khác → 403)
+let BRANCH = args.branch ? Number(args.branch) : null;
+if (!BRANCH) {
+  const res = await fetch(url("branch.mine", undefined), {
+    headers: { "X-Tenant-ID": TENANT, Authorization: `Bearer ${TOKEN}` },
+  });
+  const body = await res.json().catch(() => null);
+  BRANCH = body?.result?.data?.json?.branches?.[0]?.id ?? 1;
 }
 
 const results = [];

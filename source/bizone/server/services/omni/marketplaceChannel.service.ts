@@ -1,5 +1,5 @@
 import { parseMarketplaceConfig } from "@/lib/omni/marketplace-config";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import { bizoneError } from "@/lib/errors";
@@ -213,6 +213,14 @@ export async function setMarketplaceActive(code: MarketplaceCode, isActive: bool
 
 const STATE_TTL = 600;
 const stateKey = (state: string) => `omni:oauth:${state}`;
+const sha256 = (v: string) => createHash("sha256").update(v).digest();
+
+/**
+ * QA-5 #160: the `state` alone would let anyone who gets the authorize link (sent on to another
+ * shop's owner…) attach their shop to this tenant. The admin's browser also keeps a one-time
+ * binding cookie (set by the "Kết nối" button, path = the callback); the callback must present it.
+ */
+export const OAUTH_BINDING_COOKIE = (code: string) => `bz_oauth_${code}`;
 
 export function callbackUrl(code: MarketplaceCode) {
   return `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "")}/api/omni/oauth/${code}/callback`;
@@ -235,13 +243,22 @@ export async function startConnect(code: MarketplaceCode, userId: number | null)
   if (!ch || !parseMarketplaceConfig(ch.config))
     throw bizoneError("CONFLICT", "Lưu cài đặt kênh (chi nhánh nhận đơn) trước khi kết nối");
   const state = randomBytes(24).toString("base64url");
+  const binding = randomBytes(24).toString("base64url");
   await getRedis().set(
     stateKey(state),
-    JSON.stringify({ tenantId: currentTenantId(), code, userId }),
+    JSON.stringify({
+      tenantId: currentTenantId(),
+      code,
+      userId,
+      binding: sha256(binding).toString("base64url"),
+    }),
     "EX",
     STATE_TTL,
   );
-  return { url: connector.authorizeUrl(callbackUrl(code), state) };
+  return {
+    url: connector.authorizeUrl(callbackUrl(code), state),
+    binding: { cookie: OAUTH_BINDING_COOKIE(code), value: binding, maxAge: STATE_TTL },
+  };
 }
 
 /** Which tenant owns this shop (push notifications carry only the shop id) */
@@ -280,7 +297,12 @@ export async function findShopTenant(
  * OAuth callback (route handler, outside any tenant scope): `state` → tenant, code → tokens.
  * Returns where to send the browser back to.
  */
-export async function finishConnect(code: MarketplaceCode, query: URLSearchParams) {
+export async function finishConnect(
+  code: MarketplaceCode,
+  query: URLSearchParams,
+  /** value of the binding cookie the browser sent back (#160) */
+  binding: string | null,
+) {
   const state = query.get("state") ?? "";
   const raw = state ? await getRedis().getdel(stateKey(state)) : null;
   if (!raw)
@@ -288,14 +310,29 @@ export async function finishConnect(code: MarketplaceCode, query: URLSearchParam
       "invalid",
       "Phiên kết nối đã hết hạn hoặc không hợp lệ — bấm Kết nối lại",
     );
-  const saved = JSON.parse(raw) as { tenantId: string; code: string; userId: number | null };
+  const saved = JSON.parse(raw) as {
+    tenantId: string;
+    code: string;
+    userId: number | null;
+    binding?: string;
+  };
   if (saved.code !== code) throw new MarketplaceError("invalid", "Phiên kết nối không khớp kênh");
+  const expected = Buffer.from(saved.binding ?? "", "base64url");
+  const got = binding ? sha256(binding) : Buffer.alloc(0);
+  if (expected.length === 0 || got.length !== expected.length || !timingSafeEqual(got, expected))
+    throw new MarketplaceError(
+      "invalid",
+      "Phải hoàn tất uỷ quyền trên cùng trình duyệt đã bấm Kết nối — bấm Kết nối lại",
+    );
   if (query.get("error"))
     throw new MarketplaceError(
       "invalid",
       `Chủ shop từ chối / huỷ uỷ quyền (${query.get("error")})`,
     );
-  const tokens = await connectorFor(code).exchangeCode(query, callbackUrl(code));
+  const connector = connectorFor(code);
+  if (!connector.configured())
+    throw new MarketplaceError("invalid", `BizOne chưa có thông tin ứng dụng ${connector.name}`);
+  const tokens = await connector.exchangeCode(query, callbackUrl(code));
   const owner = await findShopTenant(code, tokens.shopId);
   return runWithTenant(saved.tenantId, async () => {
     const ch = await findChannel(code);
@@ -399,23 +436,45 @@ async function markAuthProblem(ch: ChannelRow, message: string) {
   });
 }
 
-/** Refresh the tokens of a channel (single flight per channel) */
+/** Lock of one channel's token refresh: longer than a platform call (20 s timeout) + saving */
+const REFRESH_LOCK_MS = 60_000;
+const REFRESH_WAIT_MS = 45_000;
+/** Delete the lock only if it is still ours (it may have expired and been taken by another job) */
+const RELEASE_LOCK = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;
+
+/**
+ * Refresh the tokens of a channel (single flight per channel, across processes).
+ *
+ * QA-5 #154: Shopee's refresh token works once, so two refreshes at the same time cost the shop
+ * its connection. Only the holder of the Redis lock refreshes; a caller that can't get it waits
+ * for the holder and uses its tokens — it never refreshes without the lock, and the lock is
+ * released only by its owner.
+ */
 export async function refreshTokens(
   channelId: number,
   minRemainingMs = REFRESH_BEFORE_MS,
 ): Promise<ChannelRow> {
   const redis = getRedis();
   const lockKey = `omni:refresh:${currentTenantId()}:${channelId}`;
-  for (let i = 0; i < 20; i++) {
-    const got = await redis.set(lockKey, "1", "PX", 30_000, "NX");
-    if (got) break;
+  const owner = randomUUID();
+  const fresh = (ch: ChannelRow | null) =>
+    !!ch?.tokenExpiresAt && ch.tokenExpiresAt.getTime() - Date.now() > minRemainingMs;
+
+  const deadline = Date.now() + REFRESH_WAIT_MS;
+  for (;;) {
+    if (await redis.set(lockKey, owner, "PX", REFRESH_LOCK_MS, "NX")) break;
     await new Promise((r) => setTimeout(r, 500));
+    // the holder may have finished: its tokens are good enough
+    const ch = await channelById(channelId);
+    if (ch && isConnected(ch) && fresh(ch)) return ch;
+    if (Date.now() > deadline)
+      throw new MarketplaceError("network", "Đang làm mới token của shop, thử lại sau");
   }
   try {
     const ch = await channelById(channelId);
     if (!ch || !isConnected(ch)) throw new MarketplaceError("auth", "Shop chưa kết nối");
     // Someone else refreshed while we waited
-    if (ch.tokenExpiresAt && ch.tokenExpiresAt.getTime() - Date.now() > minRemainingMs) return ch;
+    if (fresh(ch)) return ch;
     const refreshToken = decryptToken(ch.refreshToken);
     if (!refreshToken)
       throw new MarketplaceError("auth", "Không đọc được refresh token (OMNI_TOKEN_KEY đã đổi?)");
@@ -433,7 +492,7 @@ export async function refreshTokens(
     }
     return (await channelById(channelId))!;
   } finally {
-    await redis.del(lockKey).catch(() => undefined);
+    await redis.eval(RELEASE_LOCK, 1, lockKey, owner).catch(() => undefined);
   }
 }
 

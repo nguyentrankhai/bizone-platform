@@ -22,6 +22,7 @@ const OTP_MAX_TRIES = 5;
 const SESSION_TTL = 30 * 86_400; // 30 days
 
 const otpKey = (phone: string) => `store:otp:${currentTenantId()}:${phone}`;
+const otpTriesKey = (phone: string) => `store:otp-tries:${currentTenantId()}:${phone}`;
 const sessionKey = (token: string) => `store:sess:${currentTenantId()}:${sha256(token)}`;
 
 /** Dev only: echo the code when no SMS gateway is configured (`STORE_OTP_DEV_ECHO=true`) */
@@ -43,12 +44,11 @@ export async function startRegistration(phone: string, storeName: string) {
     throw bizoneError("RATE_LIMITED", "Đã gửi quá 3 mã trong 10 phút, thử lại sau");
 
   const code = newOtp();
-  await getRedis().set(
-    otpKey(phone),
-    JSON.stringify({ hash: sha256(code), tries: 0 }),
-    "EX",
-    OTP_TTL,
-  );
+  await getRedis()
+    .multi()
+    .set(otpKey(phone), JSON.stringify({ hash: sha256(code) }), "EX", OTP_TTL)
+    .del(otpTriesKey(phone))
+    .exec();
   try {
     await sendSms(phone, `${storeName}: ma xac nhan dang ky cua ban la ${code} (hieu luc 10 phut)`);
   } catch (err) {
@@ -58,21 +58,35 @@ export async function startRegistration(phone: string, storeName: string) {
   return { sent: true, expiresIn: OTP_TTL, ...(devEcho() ? { devCode: code } : {}) };
 }
 
+/**
+ * QA-5 #157: every attempt is counted with an atomic INCR before the code is compared, so
+ * parallel guesses can't share one "try" — the 6th attempt drops the code whatever the timing.
+ */
 async function checkOtp(phone: string, code: string) {
   const redis = getRedis();
   const raw = await redis.get(otpKey(phone));
   if (!raw) throw bizoneError("VALIDATION_ERROR", "Mã xác nhận đã hết hạn — gửi lại mã");
-  const rec = JSON.parse(raw) as { hash: string; tries: number };
+  const [[, tries]] = (await redis
+    .multi()
+    .incr(otpTriesKey(phone))
+    .expire(otpTriesKey(phone), OTP_TTL)
+    .exec()) as [[unknown, number], unknown];
+  if (Number(tries) > OTP_MAX_TRIES) {
+    await redis.del(otpKey(phone), otpTriesKey(phone));
+    throw bizoneError("VALIDATION_ERROR", "Sai mã quá 5 lần — gửi lại mã");
+  }
+  const rec = JSON.parse(raw) as { hash: string };
   if (rec.hash !== sha256(code)) {
-    rec.tries += 1;
-    if (rec.tries >= OTP_MAX_TRIES) await redis.del(otpKey(phone));
-    else await redis.set(otpKey(phone), JSON.stringify(rec), "KEEPTTL");
+    if (Number(tries) >= OTP_MAX_TRIES) await redis.del(otpKey(phone), otpTriesKey(phone));
     throw bizoneError(
       "VALIDATION_ERROR",
-      rec.tries >= OTP_MAX_TRIES ? "Sai mã quá 5 lần — gửi lại mã" : "Mã xác nhận không đúng",
+      Number(tries) >= OTP_MAX_TRIES ? "Sai mã quá 5 lần — gửi lại mã" : "Mã xác nhận không đúng",
     );
   }
-  await redis.del(otpKey(phone));
+  // one use only: a parallel request with the same code finds it gone
+  if (!(await redis.del(otpKey(phone))))
+    throw bizoneError("VALIDATION_ERROR", "Mã xác nhận đã được dùng — gửi lại mã");
+  await redis.del(otpTriesKey(phone));
 }
 
 async function openSession(customerId: number) {
@@ -153,21 +167,37 @@ export async function login(phone: string, password: string) {
   if (!account.customer.isActive)
     throw bizoneError("FORBIDDEN", "Tài khoản đã bị khoá, liên hệ cửa hàng");
   if (!(await verifyPassword(password, account.passwordHash))) {
-    const fails = account.failedAttempts + 1;
-    await prisma.customerAccount.update({
+    // QA-5 #157: atomic increment — parallel wrong passwords each count
+    const { failedAttempts: fails } = await prisma.customerAccount.update({
       where: { id: account.id },
-      data:
-        fails >= LOGIN_MAX_FAILS
-          ? { failedAttempts: 0, lockedUntil: new Date(Date.now() + LOGIN_LOCK_MINUTES * 60_000) }
-          : { failedAttempts: fails },
+      data: { failedAttempts: { increment: 1 } },
+      select: { failedAttempts: true },
     });
-    if (fails >= LOGIN_MAX_FAILS)
+    if (fails >= LOGIN_MAX_FAILS) {
+      await prisma.customerAccount.updateMany({
+        where: { id: account.id, failedAttempts: { gte: LOGIN_MAX_FAILS } },
+        data: {
+          failedAttempts: 0,
+          lockedUntil: new Date(Date.now() + LOGIN_LOCK_MINUTES * 60_000),
+        },
+      });
       throw bizoneError(
         "RATE_LIMITED",
         `Sai mật khẩu ${LOGIN_MAX_FAILS} lần — tài khoản tạm khoá ${LOGIN_LOCK_MINUTES} phút`,
       );
+    }
     throw invalid();
   }
+  // a parallel wrong guess may have locked the account while this password was being checked
+  const now = await prisma.customerAccount.findUniqueOrThrow({
+    where: { id: account.id },
+    select: { lockedUntil: true },
+  });
+  if (now.lockedUntil && now.lockedUntil > new Date())
+    throw bizoneError(
+      "RATE_LIMITED",
+      `Tài khoản tạm khoá do sai mật khẩu nhiều lần, thử lại sau ${LOGIN_LOCK_MINUTES} phút`,
+    );
   await prisma.customerAccount.update({
     where: { id: account.id },
     data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },

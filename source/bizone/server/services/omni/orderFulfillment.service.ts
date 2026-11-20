@@ -46,6 +46,35 @@ const stockItems = (o: OrderForStock) =>
     name: i.product.name,
   }));
 
+/**
+ * Does `warehouseId` hold enough of every stock-tracked line? (Lines of the same product /
+ * variant are added up.) Used before taking stock where a shortage must not fail the caller.
+ */
+export async function hasStockFor(
+  db: Pick<Tx, "product" | "inventory">,
+  warehouseId: number,
+  lines: { productId: number; variantId: number | null; quantity: number }[],
+): Promise<boolean> {
+  const tracked = await db.product.findMany({
+    where: { id: { in: lines.map((l) => l.productId) }, trackInventory: true },
+    select: { id: true },
+  });
+  const need = new Map<string, number>();
+  for (const l of lines.filter((x) => tracked.some((t) => t.id === x.productId))) {
+    const k = `${l.productId}:${l.variantId ?? 0}`;
+    need.set(k, (need.get(k) ?? 0) + l.quantity);
+  }
+  for (const [k, qty] of need) {
+    const [productId, variantId] = k.split(":").map(Number);
+    const inv = await db.inventory.findFirst({
+      where: { warehouseId, productId, variantId: variantId || null },
+      select: { quantity: true },
+    });
+    if (Number(inv?.quantity ?? 0) < qty) return false;
+  }
+  return true;
+}
+
 /** Take the order's stock from `warehouseId` (inside `tx`) — throws CONFLICT when short */
 export async function takeOrderStock(
   tx: Tx,
@@ -117,6 +146,11 @@ type OrderForCompletion = Awaited<ReturnType<typeof loadOrderForCompletion>>;
 /**
  * Write the revenue invoice of a completed order (inside `tx`). Returns the invoice and the
  * products whose stock moved now (orders that hadn't taken stock yet).
+ *
+ * QA-5 #153: a marketplace order imported while the warehouse was short (the platform had already
+ * sold it) still completes when the stock is still short — the sale happened, its revenue must be
+ * recorded; `stockShort` tells the caller to flag it. Other orders keep failing on a shortage
+ * (staff fix the stock first).
  */
 export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: number) {
   if (o.invoiceId) throw bizoneError("CONFLICT", "Đơn hàng đã có hoá đơn");
@@ -127,14 +161,18 @@ export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: n
   if (!branchId) throw bizoneError("VALIDATION_ERROR", "Chưa có chi nhánh để ghi hoá đơn");
 
   let movedProducts: number[] = [];
+  let stockShort = false;
   let warehouseId = o.stockWarehouseId;
   if (!warehouseId) {
     warehouseId = await branchWarehouseId(branchId);
     const tracked = await tx.product.count({
       where: { id: { in: o.orderItems.map((i) => i.productId) }, trackInventory: true },
     });
-    if (warehouseId) movedProducts = await takeOrderStock(tx, o, warehouseId, userId);
-    else if (tracked)
+    if (warehouseId) {
+      if (isMarketplace(o.channel) && !(await hasStockFor(tx, warehouseId, o.orderItems)))
+        stockShort = true;
+      else movedProducts = await takeOrderStock(tx, o, warehouseId, userId);
+    } else if (tracked)
       throw bizoneError("VALIDATION_ERROR", "Chi nhánh chưa có kho hoạt động để trừ tồn");
   }
 
@@ -197,5 +235,5 @@ export async function writeOrderInvoice(tx: Tx, o: OrderForCompletion, userId: n
       notes: `Tích điểm đơn ${o.orderCode}`,
     });
   }
-  return { invoice, movedProducts, warehouseId, points };
+  return { invoice, movedProducts, warehouseId, points, stockShort };
 }

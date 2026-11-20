@@ -1,6 +1,6 @@
 import "server-only";
 import { bizone } from "./bizone-sync";
-import { storefrontUrl, type StoreRef } from "./store";
+import type { StoreRef } from "./store";
 
 /**
  * Online payment of website orders through Payment Hub (P6.1).
@@ -14,9 +14,9 @@ import { storefrontUrl, type StoreRef } from "./store";
  * the browser.
  */
 
-/** Return URL handed to Payment Hub (must be on the storefront URL configured in BizOne) */
-export function paymentReturnUrl(): string {
-  return `${storefrontUrl()}/checkout/result`;
+/** Return URL handed to Payment Hub (must be on the store's website address configured in BizOne) */
+export function paymentReturnUrl(store: StoreRef): string {
+  return `${store.baseUrl}/checkout/result`;
 }
 
 export interface PaymentReturn {
@@ -48,6 +48,6 @@ export async function startOrderPayment(
   code: string,
   who: { token?: string | null; phone?: string | null },
 ): Promise<string> {
-  const r = await bizone.payOrder(store, code, paymentReturnUrl(), who);
+  const r = await bizone.payOrder(store, code, paymentReturnUrl(store), who);
   return r.paymentUrl;
 }

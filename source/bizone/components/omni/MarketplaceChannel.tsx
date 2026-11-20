@@ -98,6 +98,11 @@ export function MarketplaceChannel({
     setBusy(true);
     try {
       const r = await trpc.omni.connect.mutate({ code }, apiContext(auth));
+      // QA-5 #160: the OAuth callback only accepts the browser that started the connection
+      const b = r.binding;
+      document.cookie = `${b.cookie}=${b.value}; Path=/api/omni/oauth; Max-Age=${b.maxAge}; SameSite=Lax${
+        window.location.protocol === "https:" ? "; Secure" : ""
+      }`;
       window.location.href = r.url;
     } catch (e) {
       toast.error(errorMessage(e));

@@ -120,14 +120,23 @@ export function useNotifications(
     };
     window.addEventListener(NOTIFICATION_READ_EVENT, onRead);
 
-    // the socket sends the unread count on connect; a failed connect falls back to polling
-    connect();
+    // the socket sends the unread count on connect; a failed connect falls back to polling.
+    // QA-5 #165: started on the next tick, so an effect that is torn down at once (dev double
+    // run, auth settling) never opens a socket it would close mid-handshake (console error)
+    const start = setTimeout(connect, 0);
     return () => {
       closed = true;
+      clearTimeout(start);
       clearTimeout(retry);
       stopPolling();
       window.removeEventListener(NOTIFICATION_READ_EVENT, onRead);
-      ws?.close(1000);
+      const socket = ws as WebSocket | null;
+      if (socket?.readyState === WebSocket.CONNECTING) {
+        // closing now would log "closed before the connection is established"
+        socket.onopen = () => socket.close(1000);
+        socket.onmessage = null;
+        socket.onclose = null;
+      } else socket?.close(1000);
     };
   }, [auth, tenantId, refresh]);
 

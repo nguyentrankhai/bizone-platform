@@ -489,7 +489,15 @@ function eligibleFor(coupon: ResolvedCoupon | null) {
  * coupon / voucher (or the best auto-apply coupon when none is entered).
  */
 export async function quoteCart(
-  input: QuoteInput & { items: (InvoiceItemInput & { id?: string })[] },
+  input: QuoteInput & {
+    items: (InvoiceItemInput & { id?: string })[];
+    /**
+     * QA-5 #161: customer whose per-customer flash sale limits apply when it differs from
+     * `customerId` (website guest: no member price / member coupons, but the order is booked on
+     * the CRM customer of the phone, so the limits are that customer's).
+     */
+    limitsCustomerId?: number | null;
+  },
   db: Db = getPrisma(),
   channel: SalesChannel = "pos",
   /** Delivery order (website): its shipping fee — a `free_shipping` coupon discounts it */
@@ -499,7 +507,7 @@ export async function quoteCart(
     loadCartLines(input.items, db),
     loadCustomer(input.customerId, db),
   ]);
-  const promoCtx = await loadPromoContext(rawLines, input.customerId, db);
+  const promoCtx = await loadPromoContext(rawLines, input.customerId ?? input.limitsCustomerId, db);
   const { lines, uses } = applyPromotions(rawLines, promoCtx);
   const memberDiscountPercent = customer ? rankingRule(customer.ranking).discountPercent : 0;
   const base = computeCart(lines, { memberDiscountPercent });

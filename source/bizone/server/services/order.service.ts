@@ -309,6 +309,7 @@ export async function updateOrderStatus(
       `Không thể chuyển từ "${order.status}" sang "${input.status}". Các trạng thái cho phép: ${allowed.join(", ") || "không có"}`,
     );
   }
+  assertPaidIfOnline(order);
   if (input.status === "completed") return completeOrder(id, input, userId);
 
   const updateData: Record<string, unknown> = { status: input.status };
@@ -331,6 +332,18 @@ export async function updateOrderStatus(
   });
   await afterStockRelease(released, id);
   return updated;
+}
+
+/**
+ * QA-5 #159: a website order paying online (Payment Hub) moves past "pending" only once paid —
+ * confirming it would stop the payment deadline job, completing it would record money that never
+ * came in. Unpaid → the shop waits or cancels it.
+ */
+function assertPaidIfOnline(order: { paymentMethod: string | null; paymentStatus: string }) {
+  if (order.paymentMethod === "payhub" && order.paymentStatus !== "paid")
+    throw conflict(
+      "Đơn chọn thanh toán online nhưng khách chưa trả — chờ khách thanh toán hoặc huỷ đơn",
+    );
 }
 
 async function orderWithItems(id: number) {
@@ -370,6 +383,7 @@ async function completeOrder(
       "Không xác định được nhân viên hoàn tất đơn (tài khoản chưa có hồ sơ)",
     );
   const order = await loadOrderForCompletion(id);
+  assertPaidIfOnline(order);
   const written = await withInvoiceNumberRetry(async (tx) => {
     const res = await tx.order.updateMany({
       where: { id, status: { in: from }, invoiceId: null },
@@ -388,8 +402,9 @@ async function completeOrder(
         orderId: id,
         status: "completed",
         note:
-          input.note ??
-          `Hoàn thành — hoá đơn ${w.invoice.invoiceCode}${w.points ? `, +${w.points} điểm` : ""}`,
+          (input.note ??
+            `Hoàn thành — hoá đơn ${w.invoice.invoiceCode}${w.points ? `, +${w.points} điểm` : ""}`) +
+          (w.stockShort ? " — CHƯA trừ tồn: kho không đủ hàng, kiểm tra tồn kho" : ""),
         createdBy: userId,
       },
     });
@@ -445,15 +460,31 @@ export async function cancelOrder(id: number, input: CancelOrderInput, userId: n
  * Cancel an order still being prepared (staff, the customer on the website, or the payment
  * deadline job): stock and promotions back, pending online payments dropped. Money already
  * paid online is flagged for a manual refund.
+ *
+ * QA-5 #152: the update is guarded by the payment status read here, so a payment landing
+ * between that read and the cancel makes it fail (CONFLICT) instead of silently cancelling a paid
+ * order. `onlyUnpaid` (customer / deadline job) refuses paid orders outright.
  */
-export async function cancelOrderNow(id: number, reason: string, userId: number | null) {
+export async function cancelOrderNow(
+  id: number,
+  reason: string,
+  userId: number | null,
+  opts: { onlyUnpaid?: boolean } = {},
+) {
   const full = await orderWithItems(id);
+  if (opts.onlyUnpaid && full.paymentStatus === "paid")
+    throw conflict("Đơn đã thanh toán online, không tự huỷ được");
   const released = await getPrisma().$transaction(async (tx) => {
     const res = await tx.order.updateMany({
-      where: { id, status: { in: ["pending", "confirmed", "preparing"] } },
+      where: {
+        id,
+        status: { in: ["pending", "confirmed", "preparing"] },
+        paymentStatus: full.paymentStatus,
+      },
       data: { status: "cancelled", paymentDueAt: null },
     });
-    if (res.count === 0) throw conflict("Đơn hàng đã được xử lý, không huỷ được");
+    if (res.count === 0)
+      throw conflict("Đơn hàng vừa được cập nhật (đã xử lý hoặc vừa thanh toán), tải lại trang");
     await tx.orderPayment.updateMany({
       where: { orderId: id, status: "pending" },
       data: { status: "cancelled" },

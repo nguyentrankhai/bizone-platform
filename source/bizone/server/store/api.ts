@@ -289,7 +289,12 @@ export async function handleStoreRequest(req: Request, segments: string[]): Prom
         return fail(503, "SERVICE_UNAVAILABLE", "Website tạm ngừng bán hàng");
       }
       const clientIp = (req.headers.get("x-client-ip") ?? "").slice(0, 64) || "unknown";
-      await limit(`rl:store:${parsed.tenantId}:${found.channel.id}`, 1200, 60);
+      // QA-5 #164: one budget per visitor (a page view ≈ 2–4 calls), the channel-wide ceiling
+      // only guards BizOne against a leaked key — one busy client no longer blocks the shop
+      // (no per-visitor budget when the storefront can't tell visitors apart — TRUST_PROXY off)
+      if (clientIp !== "unknown" && clientIp !== "storefront")
+        await limit(`rl:store:ip:${parsed.tenantId}:${found.channel.id}:${clientIp}`, 300, 60);
+      await limit(`rl:store:${parsed.tenantId}:${found.channel.id}`, 6000, 60);
       const token = req.headers.get("x-customer-token");
       const ctx: Ctx = {
         req,

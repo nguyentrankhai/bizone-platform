@@ -19,7 +19,7 @@ import { branchWarehouseId } from "@/server/services/invoice.service";
 import { notify } from "@/server/services/notification.service";
 import { enqueueStockChanged } from "@/server/queue/inventory";
 import { cancelOrderNow, completeOrderFrom } from "@/server/services/order.service";
-import { releaseOrderHoldings, takeOrderStock } from "./orderFulfillment.service";
+import { hasStockFor, releaseOrderHoldings, takeOrderStock } from "./orderFulfillment.service";
 import { connectorFor } from "./marketplace/registry";
 import { MarketplaceError, type MarketOrder } from "./marketplace/types";
 import {
@@ -49,7 +49,23 @@ import { logSync, reportSyncFailure } from "./websiteChannel.service";
  */
 
 const RETRY_TTL = 7 * 86_400;
-const retryKey = (channelId: number) => `omni:retry:${currentTenantId()}:${channelId}`;
+/**
+ * Orders to try again: sorted set, score = time of the first failure (QA-5 #162 — each order
+ * is dropped 7 days after it first failed, however often it keeps failing).
+ */
+const retryKey = (channelId: number) => `omni:retryz:${currentTenantId()}:${channelId}`;
+
+/** Order ids still worth retrying (drops the ones that have failed for 7 days) */
+async function retryIds(channelId: number): Promise<string[]> {
+  const redis = getRedis();
+  const key = retryKey(channelId);
+  try {
+    await redis.zremrangebyscore(key, "-inf", String(Date.now() - RETRY_TTL * 1000));
+    return await redis.zrange(key, "0", "-1");
+  } catch {
+    return [];
+  }
+}
 
 class UnlinkedLineError extends Error {}
 
@@ -101,31 +117,6 @@ async function resolveLines(channelId: number, mo: MarketOrder) {
   return out;
 }
 
-async function enoughStock(
-  warehouseId: number,
-  lines: { productId: number; variantId: number | null; quantity: number }[],
-) {
-  const prisma = getPrisma();
-  const tracked = await prisma.product.findMany({
-    where: { id: { in: lines.map((l) => l.productId) }, trackInventory: true },
-    select: { id: true },
-  });
-  const need = new Map<string, number>();
-  for (const l of lines.filter((x) => tracked.some((t) => t.id === x.productId))) {
-    const k = `${l.productId}:${l.variantId ?? 0}`;
-    need.set(k, (need.get(k) ?? 0) + l.quantity);
-  }
-  for (const [k, qty] of need) {
-    const [productId, variantId] = k.split(":").map(Number);
-    const inv = await prisma.inventory.findFirst({
-      where: { warehouseId, productId, variantId: variantId || null },
-      select: { quantity: true },
-    });
-    if (Number(inv?.quantity ?? 0) < qty) return false;
-  }
-  return true;
-}
-
 const orderInclude = { orderItems: { include: { product: { select: { name: true } } } } } as const;
 
 async function createMarketOrder(
@@ -139,7 +130,7 @@ async function createMarketOrder(
   const prisma = getPrisma();
   const lines = await resolveLines(ch.id, mo);
   const warehouseId = await branchWarehouseId(cfg.branchId);
-  let takeStock = !!warehouseId && (await enoughStock(warehouseId, lines));
+  let takeStock = !!warehouseId && (await hasStockFor(getPrisma(), warehouseId, lines));
   const subtotal = lines.reduce((t, l) => t + l.unitPrice * l.quantity, 0);
   const paid = mo.rawStatus !== "UNPAID" && !mo.statuses.includes("unpaid") && !mo.isCod;
 
@@ -431,12 +422,13 @@ export async function importOrders(channelId: number, ids: string[]) {
       else if (r.result === "unchanged") summary.unchanged++;
       else if (r.result === "skipped") summary.skipped++;
       else summary.updated++;
-      await redis.srem(retryKey(channelId), mo.orderId).catch(() => undefined);
+      await redis.zrem(retryKey(channelId), mo.orderId).catch(() => undefined);
     } catch (e) {
       summary.failed++;
       const message = e instanceof Error ? e.message : String(e);
       const key = retryKey(channelId);
-      const isNew = await redis.sadd(key, mo.orderId).catch(() => 0);
+      // NX: the first failure's time stays — the order leaves the set 7 days after it
+      const isNew = await redis.zadd(key, "NX", Date.now(), mo.orderId).catch(() => 0);
       await redis.expire(key, RETRY_TTL).catch(() => undefined);
       if (isNew)
         await reportSyncFailure({
@@ -479,7 +471,7 @@ export async function pollOrders(channelId: number, opts: { manual?: boolean } =
       ),
     );
     const ids = await withShop(ch, (ctx) => connectorFor(code).listOrderIds(ctx, from, to));
-    const retry = await redis.smembers(retryKey(channelId)).catch(() => [] as string[]);
+    const retry = await retryIds(channelId);
     const all = [...new Set([...ids, ...retry])];
     const summary = all.length
       ? await importOrders(channelId, all)
