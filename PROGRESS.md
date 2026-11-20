@@ -340,7 +340,7 @@
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
 | 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99, sửa #93–#97, #99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` (rà soát), `69b4d85` (sửa) |
 | 2026-11-14 | **QA-4** — Rà soát cuối Giai đoạn 4 + 5 (tiêu chí P5.1–P5.6, hồi quy POS → MoMo qua Payment Hub, Docker compose) — phát hiện #123–#128, sửa cả 6 — xem [chi tiết](#qa-4--rà-soát-cuối-giai-đoạn-4--5-2026-11-14) | `c8f3f46` (rà soát), `c94fff7` (sửa) |
-| 2026-11-20 | **QA-5** — Rà soát cuối Giai đoạn 6 (tiêu chí P6.1–P6.7, chất lượng 3 app, rà code GĐ 6) — phát hiện #152–#165 — xem [chi tiết](#qa-5--rà-soát-cuối-giai-đoạn-6-2026-11-20) | _(điền sau)_ |
+| 2026-11-20 | **QA-5** — Rà soát cuối Giai đoạn 6 (tiêu chí P6.1–P6.7, chất lượng 3 app, rà code GĐ 6) — phát hiện #152–#165 — xem [chi tiết](#qa-5--rà-soát-cuối-giai-đoạn-6-2026-11-20) | `02a1a5b` (rà soát) |
 
 ---
 
@@ -2782,7 +2782,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-5 — Rà soát cuối Giai đoạn 6 (2026-11-20)
 
-- **Hoàn thành:** 2026-11-20 · **Commit:** _(điền sau)_ · **Vị trí:** `PROGRESS.md`, `source/storefront/.env.example` (chỉ tài liệu — chưa sửa code)
+- **Hoàn thành:** 2026-11-20 · **Commit:** `02a1a5b` · **Vị trí:** `PROGRESS.md`, `source/storefront/.env.example` (chỉ tài liệu — chưa sửa code)
 - **Bối cảnh:** bước B6 — GĐ 6 không còn task ⬜ (P6.2, P6.3 🟡 chờ app sàn thật #135 / #139). Mốc trước GĐ 7 (P7.1). Người dùng chọn rà soát trước P7.1.
 - **Cách làm:** build production cả 3 app; Payment Hub `next start :4000` + realtime + worker trên **Redis DB 1**, BizOne `next start :3000` + POS / thông báo WS `:3002` + worker trên **Redis DB 2** (`TRUST_PROXY=true`), storefront `:3100` với kênh website tạm "QA5 Store" (tạo + xoay khoá qua tRPC), **MoMo giả** `:4900` (ký HMAC-SHA256 như MoMo), API key tạm của merchant `BIZONE` + webhook Payment Hub → BizOne; mua hàng thật qua trình duyệt tích hợp; script `qa5.mjs` (P6.1 / omni / PWA / auth), `pentest.mjs`, `bench.mjs`; một subagent đọc toàn bộ diff GĐ 6 (`68cdfd8..HEAD`) tìm lỗi phân quyền / tiền / tồn / cache / quy ước — 5 phát hiện mức trung bình được kiểm lại trong code. Snapshot `COUNT` / `MAX(id)` / `CHECKSUM TABLE` mọi bảng 2 DB trước khi chạy.
 
