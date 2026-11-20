@@ -340,7 +340,7 @@
 | 2026-11-07 | **QA-2** — Rà soát cuối Giai đoạn 2 + 3 và sửa lỗi phát hiện (#39–#47, #49–#51) — xem [chi tiết](#qa-2--rà-soát-cuối-giai-đoạn-2--3-2026-11-07) | `3a1e7cd` (rà soát), `6931cb8` (BizOne), `bb59ff9` (Payment Hub) |
 | 2026-11-10 | **QA-3** — Rà soát cuối Giai đoạn 4 (tiêu chí P4.0–P4.8, chất lượng, bảo mật / cô lập chi nhánh) — phát hiện #93–#99, sửa #93–#97, #99 — xem [chi tiết](#qa-3--rà-soát-cuối-giai-đoạn-4-2026-11-10) | `88e21c9` (rà soát), `69b4d85` (sửa) |
 | 2026-11-14 | **QA-4** — Rà soát cuối Giai đoạn 4 + 5 (tiêu chí P5.1–P5.6, hồi quy POS → MoMo qua Payment Hub, Docker compose) — phát hiện #123–#128, sửa cả 6 — xem [chi tiết](#qa-4--rà-soát-cuối-giai-đoạn-4--5-2026-11-14) | `c8f3f46` (rà soát), `c94fff7` (sửa) |
-| 2026-11-20 | **QA-5** — Rà soát cuối Giai đoạn 6 (tiêu chí P6.1–P6.7, chất lượng 3 app, rà code GĐ 6) — phát hiện #152–#165, sửa cả 14 — xem [chi tiết](#qa-5--rà-soát-cuối-giai-đoạn-6-2026-11-20) và [QA-5 fix](#qa-5-fix--sửa-lỗi-rà-soát-gđ-6-2026-11-20) | `02a1a5b` (rà soát), `PENDING` (sửa) |
+| 2026-11-20 | **QA-5** — Rà soát cuối Giai đoạn 6 (tiêu chí P6.1–P6.7, chất lượng 3 app, rà code GĐ 6) — phát hiện #152–#165, sửa cả 14 — xem [chi tiết](#qa-5--rà-soát-cuối-giai-đoạn-6-2026-11-20) và [QA-5 fix](#qa-5-fix--sửa-lỗi-rà-soát-gđ-6-2026-11-20) | `02a1a5b` (rà soát), `095aa72` (sửa) |
 
 ---
 
@@ -2824,7 +2824,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### QA-5 fix — Sửa lỗi rà soát GĐ 6 (2026-11-20)
 
-- **Hoàn thành:** 2026-11-20 · **Commit:** `PENDING` · **Vị trí:** `source/bizone` (order / omni services, `lib/security/ssrf.ts`, OAuth callback, Store API, `useNotifications`, scripts perf / security), `source/storefront` (`lib/store.ts`, `lib/safe-next.ts`, `lib/paymentHubClient.ts`)
+- **Hoàn thành:** 2026-11-20 · **Commit:** `095aa72` · **Vị trí:** `source/bizone` (order / omni services, `lib/security/ssrf.ts`, OAuth callback, Store API, `useNotifications`, scripts perf / security), `source/storefront` (`lib/store.ts`, `lib/safe-next.ts`, `lib/paymentHubClient.ts`)
 - **Lựa chọn của người dùng:** #156 = return URL theo host của request (`{slug}.{STORE_ROOT_DOMAIN}`, scheme / port của `STOREFRONT_URL`); phạm vi = toàn bộ #152–#165.
 - **Đã làm:**
   - **#152** `cancelOrderNow(id, reason, user, { onlyUnpaid })`: `UPDATE … WHERE status IN (…) AND payment_status = <đã đọc>` → thanh toán tới giữa lúc đọc và huỷ làm lệnh huỷ thất bại (409) thay vì huỷ âm thầm đơn đã trả; khách huỷ / job quá hạn truyền `onlyUnpaid`, job bỏ qua 409 (không log lỗi).
