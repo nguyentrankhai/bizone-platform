@@ -15,7 +15,7 @@ const SYNC_AFTER_S = Number(process.env.PAYMENT_STATUS_SYNC_AFTER_S ?? 60);
 const SYNC_BATCH = Number(process.env.PAYMENT_STATUS_SYNC_BATCH ?? 20);
 
 export async function runSyncPendingPayments(): Promise<void> {
-  const types = statusSyncDefinitions().map((d) => d.connectorType);
+  const types = (await statusSyncDefinitions()).map((d) => d.connectorType);
   if (types.length === 0) return;
   const now = new Date();
   const txns = await getPrisma().transaction.findMany({

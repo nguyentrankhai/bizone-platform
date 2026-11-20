@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { PARTNER_STATUS_LABEL, type PartnerView } from "@/lib/partner-types";
+import { PARTNER_STATUS_LABEL, type PartnerTypeSpec, type PartnerView } from "@/lib/partner-types";
 import { PartnerCard } from "./PartnerCard";
 
 interface PartnersClientProps {
   initial: PartnerView[];
   canWrite: boolean;
+  pluginTypes?: Record<string, PartnerTypeSpec>;
 }
 
 const selectCls =
   "h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none";
 
-export function PartnersClient({ initial, canWrite }: PartnersClientProps) {
+export function PartnersClient({ initial, canWrite, pluginTypes }: PartnersClientProps) {
   const [partners, setPartners] = useState(initial);
   const [status, setStatus] = useState("");
   const [env, setEnv] = useState("");
@@ -94,7 +95,13 @@ export function PartnersClient({ initial, canWrite }: PartnersClientProps) {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((p) => (
-            <PartnerCard key={p.id} partner={p} canWrite={canWrite} onChange={replace} />
+            <PartnerCard
+              key={p.id}
+              partner={p}
+              canWrite={canWrite}
+              onChange={replace}
+              pluginTypes={pluginTypes}
+            />
           ))}
         </div>
       )}

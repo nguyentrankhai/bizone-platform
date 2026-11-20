@@ -11,19 +11,44 @@ const SYNC_TIMEOUT_MS = 5_000;
 const RETURN_HITS_PER_MINUTE = 5;
 
 export interface WalletRedirectSpec {
-  /** connectors.code — "momo", "zalopay" */
+  /** connectors.code — "momo", "zalopay", or a plugin code (P7.1) */
   code: string;
   /** PSP name shown to the customer */
   label: string;
-  /** Query parameter holding the PSP order id (MoMo orderId, ZaloPay apptransid) */
-  orderParam: string;
-  /** Query parameter holding the signature (MoMo signature, ZaloPay checksum) */
-  signatureParam: string;
-  txnCodeFromOrderId(orderId: string): string;
+  /** Path of this return URL (recorded with the raw data) */
+  path: string;
+  /** Transaction code + signature of the query string; null = not a payload of this PSP */
+  keys(
+    params: Record<string, string>,
+  ):
+    | { txnCode: string; signature: string }
+    | null
+    | Promise<{ txnCode: string; signature: string } | null>;
+}
+
+/** Spec of a PSP that puts its order id and signature in two query parameters. */
+export function paramSpec(
+  code: string,
+  label: string,
+  orderParam: string,
+  signatureParam: string,
+  txnCodeFromOrderId: (orderId: string) => string,
+): WalletRedirectSpec {
+  return {
+    code,
+    label,
+    path: `/pay/${code}/return`,
+    keys: (params) => {
+      const orderId = params[orderParam];
+      const signature = params[signatureParam];
+      return orderId && signature ? { txnCode: txnCodeFromOrderId(orderId), signature } : null;
+    },
+  };
 }
 
 /**
- * GET /pay/{momo|zalopay}/return — the customer's browser comes back from a wallet PSP.
+ * GET /pay/{momo|zalopay}/return, /pay/plugin/{code}/return — the customer's browser comes back
+ * from a wallet PSP / a connector plugin (P7.1).
  *
  * The query string is signed by the PSP. It is verified but never applied: the IPN / callback — or
  * a server-to-server status query — is the source of truth. When the transaction is still Pending
@@ -35,18 +60,17 @@ export async function handleWalletRedirect(
   spec: WalletRedirectSpec,
 ): Promise<Response> {
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
-  const orderId = params[spec.orderParam];
-  const signature = params[spec.signatureParam];
-  if (!orderId || !signature) {
+  const keys = await spec.keys(params);
+  if (!keys) {
     return renderPayPage({ title: "Liên kết không hợp lệ", tone: "error" }, 400);
   }
+  const { txnCode, signature } = keys;
 
   const prisma = getPrisma();
-  const txnCode = spec.txnCodeFromOrderId(orderId);
   let txn = await prisma.transaction.findUnique({ where: { txnCode } });
 
   const { connector } = await resolveConnectorByCode(spec.code, txn?.partnerConfigId);
-  if (!connector.verifySignature(params, signature)) {
+  if (!(await connector.verifySignature(params, signature))) {
     return renderPayPage(
       {
         title: "Chữ ký không hợp lệ",
@@ -71,7 +95,7 @@ export async function handleWalletRedirect(
         transactionId: txn.id,
         direction: "Request",
         source: "Partner",
-        endpoint: `/pay/${spec.code}/return`,
+        endpoint: spec.path,
         body: params as Prisma.InputJsonValue,
       },
     });
@@ -95,7 +119,7 @@ export async function handleWalletRedirect(
     }
   }
 
-  const result = connector.processResult(params);
+  const result = await connector.processResult(params);
   const resultText =
     result.outcome === "Success" ? "success" : result.outcome === "Failed" ? "failed" : "pending";
 

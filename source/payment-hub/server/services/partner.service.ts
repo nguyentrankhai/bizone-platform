@@ -4,14 +4,18 @@ import { Prisma, type PartnerConfig } from "@/generated/prisma/client";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import {
   PARTNER_TYPES,
+  fieldPattern,
+  pluginPartnerType,
   type PartnerEnv,
+  type PartnerTypeSpec,
   type PartnerLogView,
   type PartnerStatus,
   type PartnerView,
   type RetryPolicy,
   type TestResult,
 } from "@/lib/partner-types";
-import { connectorFromPartnerConfig } from "@/services/connectors/registry";
+import { connectorFromPartnerConfig, pluginDefinition } from "@/services/connectors/registry";
+import { ensureCatalog } from "@/services/connectors/loader";
 import { buildVietQrPayload, parseVietQrPayload, validateAccount } from "@/services/qr/vietqr";
 
 /**
@@ -96,8 +100,41 @@ function safeDecrypt(stored: string): string {
   }
 }
 
-export function toView(pc: PartnerConfig): PartnerView {
-  const spec = PARTNER_TYPES[pc.connectorType];
+/**
+ * Partner types of installed connector plugins (P7.1), from their manifests — serialisable, so the
+ * pages pass them to the partner form. A plugin whose package does not load in this process is
+ * listed as not implemented (configs can be edited, not tested / activated).
+ */
+export async function pluginPartnerTypes(): Promise<Record<string, PartnerTypeSpec>> {
+  const out: Record<string, PartnerTypeSpec> = {};
+  for (const entry of (await ensureCatalog()).values()) {
+    if (!entry.manifest) continue;
+    out[entry.connectorType] = pluginPartnerType({
+      code: entry.code,
+      name: entry.manifest.name,
+      description: entry.manifest.description,
+      implemented: !!pluginDefinition(entry),
+      config: entry.manifest.config,
+    });
+  }
+  return out;
+}
+
+/** Built-in partner types + those of connector plugins. */
+export async function partnerTypes(): Promise<Record<string, PartnerTypeSpec>> {
+  return { ...PARTNER_TYPES, ...(await pluginPartnerTypes()) };
+}
+
+async function specFor(connectorType: string): Promise<PartnerTypeSpec | undefined> {
+  return PARTNER_TYPES[connectorType] ?? (await pluginPartnerTypes())[connectorType];
+}
+
+export function toView(
+  pc: PartnerConfig,
+  types: Record<string, PartnerTypeSpec> = PARTNER_TYPES,
+): PartnerView {
+  // Unknown type (plugin removed): every credential is treated as secret.
+  const spec = types[pc.connectorType];
   const apiKey = safeDecrypt(pc.apiKey);
   const secretKey = safeDecrypt(pc.secretKey);
   return {
@@ -125,8 +162,11 @@ export function toView(pc: PartnerConfig): PartnerView {
   };
 }
 
-function validateTypeFields(input: PartnerInput, isCreate: boolean): void {
-  const spec = PARTNER_TYPES[input.connectorType];
+function validateTypeFields(
+  input: PartnerInput,
+  isCreate: boolean,
+  spec: PartnerTypeSpec | undefined,
+): asserts spec is PartnerTypeSpec {
   if (!spec) throw new PartnerError("VALIDATION_ERROR", "Loại connector không hợp lệ");
   const checks: [keyof PartnerInput, typeof spec.apiKey][] = [
     ["merchantCode", spec.merchantCode],
@@ -140,7 +180,8 @@ function validateTypeFields(input: PartnerInput, isCreate: boolean): void {
       if (required) throw new PartnerError("VALIDATION_ERROR", `Thiếu ${field.label}`);
       continue;
     }
-    if (field.pattern && !field.pattern.test(value)) {
+    const pattern = fieldPattern(field);
+    if (pattern && !pattern.test(value)) {
       throw new PartnerError("VALIDATION_ERROR", field.patternMessage ?? `${field.label} sai`);
     }
   }
@@ -194,12 +235,13 @@ export async function listPartners(filter: PartnerFilter = {}): Promise<PartnerV
     },
     orderBy: [{ connectorType: "asc" }, { environment: "desc" }, { id: "asc" }],
   });
-  return rows.map(toView);
+  const types = await partnerTypes();
+  return rows.map((r) => toView(r, types));
 }
 
 export async function getPartner(id: number): Promise<PartnerView | null> {
   const pc = await getPrisma().partnerConfig.findUnique({ where: { id } });
-  return pc ? toView(pc) : null;
+  return pc ? toView(pc, await partnerTypes()) : null;
 }
 
 export async function listPartnerLogs(
@@ -236,7 +278,8 @@ export async function listPartnerLogs(
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 export async function createPartner(input: PartnerInput, actor: Actor): Promise<PartnerView> {
-  validateTypeFields(input, true);
+  const spec = await specFor(input.connectorType);
+  validateTypeFields(input, true, spec);
   const prisma = getPrisma();
   const pc = await prisma.$transaction(async (tx) => {
     const row = await tx.partnerConfig.create({
@@ -267,7 +310,7 @@ export async function createPartner(input: PartnerInput, actor: Actor): Promise<
     );
     return row;
   });
-  return toView(pc);
+  return toView(pc, await partnerTypes());
 }
 
 export async function updatePartner(
@@ -275,9 +318,9 @@ export async function updatePartner(
   input: PartnerInput,
   actor: Actor,
 ): Promise<PartnerView> {
-  validateTypeFields(input, false);
+  const spec = await specFor(input.connectorType);
+  validateTypeFields(input, false, spec);
   const prisma = getPrisma();
-  const spec = PARTNER_TYPES[input.connectorType]!;
 
   const updated = await prisma.$transaction(async (tx) => {
     const current = await tx.partnerConfig.findUnique({ where: { id } });
@@ -352,7 +395,7 @@ export async function updatePartner(
     await writeLogs(tx, id, logs, actor);
     return row;
   });
-  return toView(updated);
+  return toView(updated, await partnerTypes());
 }
 
 export async function setPartnerStatus(
@@ -366,7 +409,7 @@ export async function setPartnerStatus(
     if (!current) throw new PartnerError("NOT_FOUND", "Không tìm thấy đối tác");
     if (current.status === status) return current;
     if (status === "Active") {
-      if (!PARTNER_TYPES[current.connectorType]?.implemented) {
+      if (!(await specFor(current.connectorType))?.implemented) {
         throw new PartnerError("CONFLICT", `Connector ${current.connectorType} chưa được hỗ trợ`);
       }
       const test = current.testResult as TestResult | null;
@@ -385,11 +428,13 @@ export async function setPartnerStatus(
     if (count === 0) throw new PartnerError("CONFLICT", "Cấu hình vừa bị thay đổi, hãy tải lại");
     const logs: LogRow[] = [{ field: "status", oldValue: current.status, newValue: status }];
     if (status === "Active") {
-      // An activated partner must be routable (QA-4 #127): the connector row is only switched on
-      // by the seed when its env vars are set, and there is no connector screen yet (P7.1).
+      // An activated partner must be routable (QA-4 #127): a built-in connector the seed never
+      // switched on ("Not Installed") is enabled with it. A connector an admin deactivated on
+      // /connectors (P7.1 — status Installed) and plugins stay as they are: that is a decision
+      // of the Connector Manager, not of the partner form.
       const code = current.connectorType.toLowerCase();
       const conn = await tx.connector.findUnique({ where: { code } });
-      if (conn && !conn.isActive) {
+      if (conn && !conn.isActive && conn.source === "builtin" && conn.status === "Not_Installed") {
         await tx.connector.update({
           where: { code },
           data: { isActive: true, status: "Installed" },
@@ -400,7 +445,7 @@ export async function setPartnerStatus(
     await writeLogs(tx, id, logs, actor);
     return { ...current, status };
   });
-  return toView(updated);
+  return toView(updated, await partnerTypes());
 }
 
 // ─── Connection test ──────────────────────────────────────────────────────────
@@ -453,7 +498,7 @@ async function testVietQr(pc: PartnerConfig): Promise<TestResult> {
 }
 
 async function runConnectionTest(pc: PartnerConfig): Promise<TestResult> {
-  const spec = PARTNER_TYPES[pc.connectorType];
+  const spec = await specFor(pc.connectorType);
   if (!spec?.implemented) {
     return {
       success: false,
@@ -463,7 +508,7 @@ async function runConnectionTest(pc: PartnerConfig): Promise<TestResult> {
   }
   if (pc.connectorType === "VietQR") return testVietQr(pc);
   try {
-    const { connector } = connectorFromPartnerConfig(pc);
+    const { connector } = await connectorFromPartnerConfig(pc);
     const health = await connector.healthCheck();
     return { success: health.healthy, message: health.message, response_time_ms: health.latencyMs };
   } catch (e) {
@@ -522,5 +567,5 @@ export async function testPartner(
     return row;
   });
 
-  return { partner: toView(updated), testResult };
+  return { partner: toView(updated, await partnerTypes()), testResult };
 }

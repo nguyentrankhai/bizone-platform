@@ -563,7 +563,7 @@ async function submitDisputeLocked(
     message = "Đã ghi nhận gửi đối tác thủ công";
   } else if (options.api && pc) {
     channel = "Api";
-    const { connector } = connectorFromPartnerConfig(pc);
+    const { connector } = await connectorFromPartnerConfig(pc);
     if (!connector.submitDispute) {
       throw new DisputeError("VALIDATION_ERROR", "Connector không hỗ trợ gửi tra soát");
     }
@@ -696,7 +696,7 @@ export async function checkDispute(id: number, actor: DisputeActor): Promise<Dis
   }
   const pc = d.transaction.partnerConfig;
   if (!pc) throw new DisputeError("VALIDATION_ERROR", "Giao dịch không có cấu hình đối tác");
-  const { connector } = connectorFromPartnerConfig(pc);
+  const { connector } = await connectorFromPartnerConfig(pc);
   if (!connector.queryDispute) {
     throw new DisputeError("VALIDATION_ERROR", "Connector không hỗ trợ tra cứu kết quả tra soát");
   }

@@ -62,7 +62,7 @@ BizOne is a SaaS platform that helps Vietnamese SMEs manage their sales operatio
 | Transactions | Centralized payment processing (hot-plug connector architecture) |
 | QR Payments | VietQR, MoMo, ZaloPay QR generation |
 | Refunds | Full/partial refund processing |
-| PSP Connectors | VNPay, MoMo, ZaloPay, VietQR adapters |
+| PSP Connectors | VNPay, MoMo, ZaloPay, VietQR adapters + signed, sandboxed third-party connector plugins (see `documents/Connector-Plugin-Guide.md`) |
 | Merchant API | HMAC-SHA256 authenticated API for BizOne |
 | Admin Console | Dashboard, transaction monitoring, PSP config |
 | Webhooks | Inbound PSP callbacks + outbound event notifications |
@@ -194,7 +194,7 @@ Xem sơ đồ bên trên (phần tiếng Anh).
 | Giao dịch | Xử lý thanh toán tập trung (kiến trúc connector hot-plug) |
 | QR Thanh toán | Tạo QR VietQR, MoMo, ZaloPay |
 | Hoàn tiền | Hoàn một phần / toàn phần |
-| PSP Connectors | Kết nối VNPay, MoMo, ZaloPay, VietQR |
+| PSP Connectors | Kết nối VNPay, MoMo, ZaloPay, VietQR + connector plugin bên thứ ba (ký số, chạy sandbox — `documents/Connector-Plugin-Guide.md`) |
 | Merchant API | API xác thực HMAC-SHA256 cho BizOne |
 | Admin Console | Dashboard, theo dõi giao dịch, cấu hình PSP |
 | Webhooks | Nhận callback từ PSP + gửi sự kiện ra ngoài |

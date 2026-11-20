@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "code": "demopay",
+  "connectorType": "DemoPay",
+  "name": "DemoPay",
+  "version": "1.0.0",
+  "description": "Ví DemoPay — connector mẫu cho bên thứ ba (PSP giả lập, xem mock-server.mjs)",
+  "publisher": "BizOne Payment Hub (mẫu)",
+  "coreCompatibility": "^1.0.0",
+  "pspApiVersion": "demopay-v1",
+  "entry": "index.mjs",
+  "protocols": ["REST"],
+  "paymentMethods": [
+    {
+      "method": "demopay_wallet",
+      "label": "Ví DemoPay",
+      "minAmount": 1000,
+      "maxAmount": 100000000
+    }
+  ],
+  "config": {
+    "merchantCode": {
+      "label": "Mã merchant DemoPay",
+      "secret": false,
+      "placeholder": "VD: DEMO001",
+      "pattern": "^[A-Z0-9]{3,20}$",
+      "patternMessage": "3–20 ký tự A-Z, 0-9"
+    },
+    "apiKey": { "label": "API Key", "secret": true },
+    "secretKey": { "label": "Secret (ký HMAC)", "secret": true },
+    "usesEndpoints": true,
+    "defaultEndpointSandbox": "http://localhost:4510",
+    "defaultEndpointProduction": "https://api.demopay.example"
+  },
+  "capabilities": {
+    "statusSync": true,
+    "refund": { "partial": true, "windowDays": 30, "async": false }
+  },
+  "callback": {
+    "responses": {
+      "ok": { "status": 200, "body": { "code": "00", "message": "received" } },
+      "invalid_signature": {
+        "status": 200,
+        "body": { "code": "97", "message": "invalid signature" }
+      },
+      "not_found": { "status": 200, "body": { "code": "01", "message": "order not found" } },
+      "amount_mismatch": { "status": 200, "body": { "code": "04", "message": "invalid amount" } },
+      "error": { "status": 500, "body": { "code": "99", "message": "retry later" } }
+    }
+  },
+  "network": { "allowedHosts": ["api.demopay.example"] },
+  "changelog": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-20",
+      "changes": ["Bản đầu tiên: tạo đơn, callback, tra cứu, hoàn tiền, health check"]
+    }
+  ]
+}

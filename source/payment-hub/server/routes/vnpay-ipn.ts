@@ -35,13 +35,13 @@ export async function handleVnpayIpn(req: NextRequest): Promise<Response> {
     });
 
     const { connector } = await resolveConnectorByCode("vnpay", txn?.partnerConfigId);
-    if (!connector.verifySignature(params, signature)) {
+    if (!(await connector.verifySignature(params, signature))) {
       console.warn(`[vnpay-ipn] invalid signature txn=${txnCode}`);
       return reply({ RspCode: "97", Message: "Invalid signature" });
     }
     if (!txn) return reply({ RspCode: "01", Message: "Order not found" });
 
-    const result = connector.processResult(params);
+    const result = await connector.processResult(params);
     const applied = await applyPaymentResult(result, {
       endpoint: "/api/ipn/vnpay",
       createdBy: "partner:vnpay-ipn",

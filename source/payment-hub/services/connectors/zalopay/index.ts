@@ -3,7 +3,7 @@ import type {
   ConnectorConfig,
   CreatePaymentResult,
   HealthResult,
-  PaymentConnector,
+  IConnector,
   PaymentRequest,
   PaymentResult,
   RefundRequest,
@@ -85,7 +85,7 @@ export function parseCallbackData(data: string): Record<string, string> | null {
   return out;
 }
 
-export class ZalopayConnector implements PaymentConnector {
+export class ZalopayConnector implements IConnector {
   readonly code = "zalopay";
   readonly version = "1.0.0";
 

@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
 import {
+  allDefinitions,
   connectorFromPartnerConfig,
   definitionForConnectorType,
 } from "@/services/connectors/registry";
@@ -172,7 +173,7 @@ export async function queryPartnerSide(
   const prisma = getPrisma();
   const pc = await prisma.partnerConfig.findUnique({ where: { id: partnerConfigId } });
   if (!pc) throw new ReconError("NOT_FOUND", "Không tìm thấy cấu hình đối tác");
-  const def = definitionForConnectorType(pc.connectorType);
+  const def = await definitionForConnectorType(pc.connectorType);
   if (!def) {
     throw new ReconError(
       "SOURCE_UNSUPPORTED",
@@ -191,7 +192,7 @@ export async function queryPartnerSide(
   });
   for (const t of unpaid) hub.push(toHub(t, range));
 
-  const { connector } = connectorFromPartnerConfig(pc);
+  const { connector } = await connectorFromPartnerConfig(pc);
   const records = await mapLimit(hub, API_CONCURRENCY, async (t): Promise<PartnerRecord> => {
     const sent = await getLatestPartnerRequest(t.id, def.code);
     const partnerOrderId = sent?.orderId ?? sent?.app_trans_id ?? undefined;
@@ -252,7 +253,7 @@ export async function createRun(input: CreateRunInput) {
   }
   const pc = await prisma.partnerConfig.findUnique({ where: { id: input.partnerConfigId } });
   if (!pc) throw new ReconError("NOT_FOUND", "Không tìm thấy cấu hình đối tác");
-  if (input.source === "Api" && !definitionForConnectorType(pc.connectorType)) {
+  if (input.source === "Api" && !(await definitionForConnectorType(pc.connectorType))) {
     throw new ReconError(
       "SOURCE_UNSUPPORTED",
       `${pc.connectorType} không có API tra cứu giao dịch — đối soát bằng cách nhập file sao kê`,
@@ -405,9 +406,8 @@ export async function dailyCandidates(day: string): Promise<number[]> {
     select: { partnerConfigId: true },
   });
   const skip = new Set(done.map((d) => d.partnerConfigId));
-  return configs
-    .filter((c) => definitionForConnectorType(c.connectorType) && !skip.has(c.id))
-    .map((c) => c.id);
+  const types = new Set((await allDefinitions()).map((d) => d.connectorType));
+  return configs.filter((c) => types.has(c.connectorType) && !skip.has(c.id)).map((c) => c.id);
 }
 
 // ─── Read / resolve ───────────────────────────────────────────────────────────
@@ -695,12 +695,13 @@ export async function reconcilablePartners() {
     select: { id: true, name: true, connectorType: true, status: true, environment: true },
     orderBy: [{ connectorType: "asc" }, { id: "asc" }],
   });
+  const types = new Set((await allDefinitions()).map((d) => d.connectorType));
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     connector_type: r.connectorType,
     status: r.status,
     environment: r.environment,
-    api: !!definitionForConnectorType(r.connectorType),
+    api: types.has(r.connectorType),
   }));
 }

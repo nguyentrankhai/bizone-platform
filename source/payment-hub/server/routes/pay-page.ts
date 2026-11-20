@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { PaymentError, initiatePayment } from "@/server/services/payment.service";
 import type { QrDto } from "@/server/services/qr.service";
-import { ROUTE_MAP, isPaymentMethod } from "@/services/routing/routeMap";
+import { getRoute, methodLabels } from "@/services/routing/routes";
 import { availableMethods } from "@/services/routing/routeEngine";
 
 /** Minimal customer-facing HTML (no admin layout, no client JS). */
@@ -92,7 +92,10 @@ async function renderPicker(
   txn: { txnCode: string; amount: { toString(): string }; merchantId: number },
   notice?: string,
 ): Promise<Response> {
-  const methods = await availableMethods(txn.merchantId, Number(txn.amount));
+  const [methods, labels] = await Promise.all([
+    availableMethods(txn.merchantId, Number(txn.amount)),
+    methodLabels(),
+  ]);
   if (methods.length === 0) {
     return renderPayPage(
       {
@@ -112,8 +115,8 @@ async function renderPicker(
         ? `<p style="margin:12px 0 0;padding:8px 12px;border-radius:8px;background:#FEF3C7;color:#92400E;font-size:14px">${esc(notice)}</p>`
         : undefined,
       links: methods.map((m) => ({
-        href: `/pay/${encodeURIComponent(txn.txnCode)}?method=${m}`,
-        label: ROUTE_MAP[m].label,
+        href: `/pay/${encodeURIComponent(txn.txnCode)}?method=${encodeURIComponent(m)}`,
+        label: labels[m] ?? m,
       })),
     },
     notice ? 503 : 200,
@@ -156,7 +159,8 @@ export async function handlePayEntry(req: NextRequest, txnCode: string): Promise
   const params = req.nextUrl.searchParams;
   const method = params.get("method") ?? (params.get("choose") ? null : txn.paymentMethod);
   if (!method) return renderPicker(txn);
-  if (!isPaymentMethod(method)) {
+  const route = await getRoute(method);
+  if (!route) {
     return renderPayPage({ title: "Phương thức không hỗ trợ", tone: "error" }, 400);
   }
 
@@ -184,7 +188,7 @@ export async function handlePayEntry(req: NextRequest, txnCode: string): Promise
         // Graceful degradation: this method's partners are down → offer the others.
         return renderPicker(
           txn,
-          `${ROUTE_MAP[method].label} tạm thời không khả dụng. Vui lòng chọn phương thức khác.`,
+          `${route.label} tạm thời không khả dụng. Vui lòng chọn phương thức khác.`,
         );
       }
       const status = e.code === "NOT_FOUND" ? 404 : e.code === "VALIDATION_ERROR" ? 400 : 409;

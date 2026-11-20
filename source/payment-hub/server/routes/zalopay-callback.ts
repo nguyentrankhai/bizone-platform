@@ -49,13 +49,13 @@ export async function handleZalopayCallback(req: NextRequest): Promise<Response>
     // Verify with key2 of the partner config that created the order (fallback-safe); an unknown
     // order is checked against the first Active ZaloPay config.
     const { connector } = await resolveConnectorByCode("zalopay", txn?.partnerConfigId);
-    if (!connector.verifySignature({ data }, mac)) {
+    if (!(await connector.verifySignature({ data }, mac))) {
       console.warn(`[zalopay-callback] invalid mac app_trans_id=${appTransId}`);
       return answer(2, "mac not equal");
     }
     if (!txn) return answer(2, "Order not found");
 
-    const result = connector.processResult(fields);
+    const result = await connector.processResult(fields);
     const applied = await applyPaymentResult(result, {
       endpoint: "/api/ipn/zalopay",
       createdBy: "partner:zalopay-callback",

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { txnCodeFromAppTransId } from "@/services/connectors/zalopay/zalopay.util";
-import { handleWalletRedirect } from "@/server/routes/wallet-redirect";
+import { handleWalletRedirect, paramSpec } from "@/server/routes/wallet-redirect";
 
 /**
  * GET /pay/zalopay/return — customer's browser comes back from ZaloPay (embed_data.redirecturl)
@@ -9,11 +9,8 @@ import { handleWalletRedirect } from "@/server/routes/wallet-redirect";
  * customer finished on ZaloPay's page — the callback or a status query decides (wallet-redirect.ts).
  */
 export function handleZalopayRedirect(req: NextRequest): Promise<Response> {
-  return handleWalletRedirect(req, {
-    code: "zalopay",
-    label: "ZaloPay",
-    orderParam: "apptransid",
-    signatureParam: "checksum",
-    txnCodeFromOrderId: txnCodeFromAppTransId,
-  });
+  return handleWalletRedirect(
+    req,
+    paramSpec("zalopay", "ZaloPay", "apptransid", "checksum", txnCodeFromAppTransId),
+  );
 }

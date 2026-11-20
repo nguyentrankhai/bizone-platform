@@ -2,7 +2,9 @@
  * Route map (P3.8) — which connector handles each `payment_method`.
  *
  * Pure data, no server imports: shared by the Route Engine, the API validators and the
- * hosted payment page. Adding a PSP = one entry here + its connector (see P5.1/P5.2).
+ * hosted payment page. Built-in PSPs: one entry here + their connector (see P5.1/P5.2).
+ * Plugins (P7.1) declare their methods in manifest.json — the server-side route table
+ * (./routes.ts: getRouteTable) merges both; only ROUTE_MAP is available without I/O.
  *
  * `kind` tells the payment service how a selected partner is used:
  *   - "redirect": a PaymentConnector builds a PSP payment URL (VNPay, MoMo, ZaloPay)
@@ -24,6 +26,8 @@ export interface RouteMethod {
   maxAmount?: number;
   /** Shortest transaction lifetime the PSP accepts (ZaloPay keeps an order open ≥ 5 min). */
   minExpiryMinutes?: number;
+  /** Served by a connector plugin (P7.1) */
+  plugin?: boolean;
 }
 
 export const ROUTE_MAP = {
@@ -84,8 +88,8 @@ export function routeFor(method: string): RouteMethod | undefined {
 }
 
 /** null when `amount` fits the method's limits, otherwise a message for the API / page. */
-export function amountError(method: string, amount: number): string | null {
-  const route = routeFor(method) as RouteMethod | undefined;
+export function amountError(method: string | RouteMethod, amount: number): string | null {
+  const route = typeof method === "string" ? (routeFor(method) as RouteMethod | undefined) : method;
   if (!route) return null;
   if (route.minAmount !== undefined && amount < route.minAmount) {
     return `${route.label}: số tiền tối thiểu ${route.minAmount.toLocaleString("vi-VN")} ₫`;
@@ -97,8 +101,8 @@ export function amountError(method: string, amount: number): string | null {
 }
 
 /** null when a transaction living `expiryMinutes` suits the method, otherwise a message. */
-export function expiryError(method: string, expiryMinutes: number): string | null {
-  const route = routeFor(method) as RouteMethod | undefined;
+export function expiryError(method: string | RouteMethod, expiryMinutes: number): string | null {
+  const route = typeof method === "string" ? (routeFor(method) as RouteMethod | undefined) : method;
   if (route?.minExpiryMinutes !== undefined && expiryMinutes < route.minExpiryMinutes) {
     return `${route.label}: thời hạn giao dịch tối thiểu ${route.minExpiryMinutes} phút`;
   }

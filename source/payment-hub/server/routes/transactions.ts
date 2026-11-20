@@ -26,7 +26,8 @@ import {
   type InitiatedPayment,
 } from "@/server/services/payment.service";
 import { listRefundsForMerchant } from "@/server/services/refund.service";
-import { amountError, expiryError, isPaymentMethod } from "@/services/routing/routeMap";
+import { amountError, expiryError } from "@/services/routing/routeMap";
+import { getRoute } from "@/services/routing/routes";
 import { availableMethods, planRoute } from "@/services/routing/routeEngine";
 import { QR_SIZES, type QrSize } from "@/services/qr/vietqr";
 
@@ -47,13 +48,14 @@ const createTxnSchema = z
     metadata: z.record(z.string(), z.unknown()).optional(),
     expiry_minutes: z.number().int().min(1).max(1440).default(15),
     /**
-     * Optional (services/routing/routeMap.ts). Redirect methods → payment_url = PSP URL;
-     * `vietqr` → response carries `qr_code`, payment_url = hosted QR page.
-     * Omit / null → hosted page where the customer picks among the available methods.
+     * Optional (services/routing/routeMap.ts + methods of connector plugins, P7.1). Redirect
+     * methods → payment_url = PSP URL; `vietqr` → response carries `qr_code`, payment_url = hosted
+     * QR page. Omit / null → hosted page where the customer picks among the available methods.
      */
     payment_method: z
       .string()
-      .refine((m) => isPaymentMethod(m), "Unsupported payment_method")
+      .max(50)
+      .refine(async (m) => !!(await getRoute(m)), "Unsupported payment_method")
       .nullish(),
     qr_size: z
       .number()
@@ -62,12 +64,14 @@ const createTxnSchema = z
       .optional(),
     customer_ip: z.string().max(45).optional(),
   })
-  .superRefine((v, ctx) => {
+  .superRefine(async (v, ctx) => {
+    const route = v.payment_method ? await getRoute(v.payment_method) : undefined;
+    if (!route) return;
     // PSP amount limits (e.g. MoMo 1 000 – 50 000 000 ₫) — reject before creating the transaction
-    const msg = v.payment_method ? amountError(v.payment_method, v.amount) : null;
+    const msg = amountError(route, v.amount);
     if (msg) ctx.addIssue({ code: "custom", path: ["amount"], message: msg });
     // PSP minimum order lifetime (ZaloPay ≥ 5 minutes)
-    const exp = v.payment_method ? expiryError(v.payment_method, v.expiry_minutes) : null;
+    const exp = expiryError(route, v.expiry_minutes);
     if (exp) ctx.addIssue({ code: "custom", path: ["expiry_minutes"], message: exp });
   });
 
@@ -109,7 +113,7 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     return err("VALIDATION_ERROR", "Invalid JSON body", 400);
   }
 
-  const parsed = createTxnSchema.safeParse(body);
+  const parsed = await createTxnSchema.safeParseAsync(body);
   if (!parsed.success) {
     return err("VALIDATION_ERROR", "Validation failed", 400, parsed.error.flatten().fieldErrors);
   }

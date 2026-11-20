@@ -6,8 +6,10 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Power, PowerOff, Save } from "lucide-react";
 import {
   PARTNER_TYPES,
-  PARTNER_TYPE_CODES,
+  fieldPattern,
+  partnerPaths,
   type PartnerLogView,
+  type PartnerTypeSpec,
   type PartnerView,
 } from "@/lib/partner-types";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,8 @@ interface PartnerFormProps {
   canWrite: boolean;
   /** Public base URL of Payment Hub (APP_URL) — default callback/IPN URLs */
   appUrl: string;
+  /** Partner types of installed connector plugins (P7.1) */
+  pluginTypes?: Record<string, PartnerTypeSpec>;
 }
 
 interface FormState {
@@ -51,8 +55,12 @@ interface FormState {
   disputeEmail: string;
 }
 
-function fromPartner(p: PartnerView | null, appUrl: string): FormState {
-  const spec = p ? PARTNER_TYPES[p.connectorType] : undefined;
+function fromPartner(
+  p: PartnerView | null,
+  appUrl: string,
+  types: Record<string, PartnerTypeSpec>,
+): FormState {
+  const spec = p ? types[p.connectorType] : undefined;
   return {
     connectorType: p?.connectorType ?? "VNPay",
     name: p?.name ?? "",
@@ -134,11 +142,13 @@ export function PartnerForm({
   initialLogs,
   canWrite,
   appUrl,
+  pluginTypes,
 }: PartnerFormProps) {
+  const types = useMemo(() => ({ ...PARTNER_TYPES, ...pluginTypes }), [pluginTypes]);
   const router = useRouter();
   const isNew = initialPartner === null;
   const [partner, setPartner] = useState(initialPartner);
-  const [saved, setSaved] = useState(() => fromPartner(initialPartner, appUrl));
+  const [saved, setSaved] = useState(() => fromPartner(initialPartner, appUrl, types));
   const [form, setForm] = useState(saved);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -147,7 +157,16 @@ export function PartnerForm({
   const [logs, setLogs] = useState(initialLogs);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  const spec = PARTNER_TYPES[form.connectorType]!;
+  // A config whose plugin was removed keeps its form (fields treated as secret, no test / activation)
+  const spec: PartnerTypeSpec = types[form.connectorType] ?? {
+    label: form.connectorType,
+    description: "Connector không còn được cài đặt",
+    merchantCode: { label: "Merchant Code", secret: false },
+    apiKey: { label: "API Key", secret: true },
+    secretKey: { label: "Secret Key", secret: true },
+    usesEndpoints: true,
+    implemented: false,
+  };
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(saved), [form, saved]);
   const readOnly = !canWrite;
 
@@ -157,18 +176,19 @@ export function PartnerForm({
   }
 
   function changeType(type: string) {
-    const next = PARTNER_TYPES[type]!;
+    const next = types[type]!;
     const origin = appUrl;
-    const code = type.toLowerCase();
+    const paths = partnerPaths(type, next);
     setForm((f) => ({
       ...f,
       connectorType: type,
       name: f.name || `${next.label} - ${f.environment}`,
       endpointSandbox: next.defaultEndpointSandbox ?? "",
       endpointProduction: next.defaultEndpointProduction ?? "",
-      // PSPs with a connector get their return / IPN handlers (/pay/{code}/return, /api/ipn/{code})
-      callbackUrl: next.implemented && next.usesEndpoints ? `${origin}/pay/${code}/return` : "",
-      webhookUrl: next.implemented && next.usesEndpoints ? `${origin}/api/ipn/${code}` : "",
+      // PSPs with a connector get their return / IPN handlers (/pay/{code}/return, /api/ipn/{code};
+      // plugins: /pay/plugin/{code}/return, /api/ipn/plugin/{code})
+      callbackUrl: next.implemented && next.usesEndpoints ? `${origin}${paths.returnPath}` : "",
+      webhookUrl: next.implemented && next.usesEndpoints ? `${origin}${paths.ipnPath}` : "",
     }));
     setErrors({});
   }
@@ -184,7 +204,8 @@ export function PartnerForm({
     for (const [key, field, required] of checks) {
       const v = form[key].trim();
       if (!v && required) e[key] = "Bắt buộc";
-      else if (v && field.pattern && !field.pattern.test(v)) e[key] = field.patternMessage;
+      else if (v && fieldPattern(field) && !fieldPattern(field)!.test(v))
+        e[key] = field.patternMessage ?? "Không hợp lệ";
     }
     const t = Number(form.timeout);
     if (!Number.isInteger(t) || t < 1000 || t > 120000) e.timeout = "1 000 – 120 000 ms";
@@ -219,7 +240,7 @@ export function PartnerForm({
 
   function applyPartner(p: PartnerView) {
     setPartner(p);
-    const next = fromPartner(p, appUrl);
+    const next = fromPartner(p, appUrl, types);
     setSaved(next);
     setForm(next);
   }
@@ -389,10 +410,14 @@ export function PartnerForm({
               disabled={!isNew || readOnly}
               onChange={(e) => changeType(e.target.value)}
             >
-              {PARTNER_TYPE_CODES.map((c) => (
+              {!types[form.connectorType] && (
+                <option value={form.connectorType}>{form.connectorType} (đã gỡ)</option>
+              )}
+              {Object.keys(types).map((c) => (
                 <option key={c} value={c}>
-                  {PARTNER_TYPES[c]!.label}
-                  {PARTNER_TYPES[c]!.implemented ? "" : " (chưa hỗ trợ)"}
+                  {types[c]!.label}
+                  {types[c]!.pluginCode ? " · plugin" : ""}
+                  {types[c]!.implemented ? "" : " (chưa hỗ trợ)"}
                 </option>
               ))}
             </select>

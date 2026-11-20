@@ -21,7 +21,7 @@ import {
   type ReportType,
   type TxnFilters,
 } from "@/lib/report";
-import { isPaymentMethod } from "@/services/routing/routeMap";
+import { PAYMENT_METHOD_CODE } from "@/services/connectors/manifest";
 import {
   reconciliationDiscrepancies,
   reconciliationReport,
@@ -115,7 +115,8 @@ function txnQuery(q: URLSearchParams, a: AdminContext): TxnQuery | Response {
   const partner = partnerOf(q);
   if (partner instanceof Response) return partner;
   const method = q.get("payment_method")?.trim() || undefined;
-  if (method && !isPaymentMethod(method)) return bad("payment_method không hợp lệ");
+  // built-in or plugin method (P7.1) — an unknown but well-formed code simply matches nothing
+  if (method && !PAYMENT_METHOD_CODE.test(method)) return bad("payment_method không hợp lệ");
   const merchantId = merchantOf(q, a);
   if (merchantId instanceof Response) return merchantId;
   return {

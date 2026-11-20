@@ -1,6 +1,8 @@
 import { Worker } from "bullmq";
 import { getPrisma } from "@/lib/prisma";
-import { describeError } from "@/lib/redis";
+import { describeError, getRedis } from "@/lib/redis";
+import { runHealthMonitor } from "@/server/services/connector.service";
+import { disposeCatalog } from "@/services/connectors/loader";
 import { queueConnection } from "./queue/connection";
 import { WEBHOOK_QUEUE, webhookBackoff, type WebhookJob } from "./webhook/queue";
 import { processWebhookJob } from "./webhook/deliver";
@@ -126,6 +128,32 @@ setInterval(() => void runExpiryJobs(), EXPIRE_INTERVAL_MS);
 // Run once at startup to catch anything that expired while the worker was down
 void runExpiryJobs();
 
+// Connector Health Monitor (P7.1, SRS-PH-PARTNER-02-11): healthCheck() of every active connector,
+// stored on `connectors` + `connector_health_logs`. One worker instance runs it per period (lock).
+const HEALTH_INTERVAL_MS = Number(process.env.CONNECTOR_HEALTH_INTERVAL_S ?? 300) * 1000;
+async function runConnectorHealth(): Promise<void> {
+  try {
+    const lock = await getRedis().set(
+      "payhub:connector-health:lock",
+      String(process.pid),
+      "PX",
+      Math.max(HEALTH_INTERVAL_MS - 1000, 1000),
+      "NX",
+    );
+    if (lock !== "OK") return;
+    const { checked, unhealthy } = await runHealthMonitor();
+    if (checked > 0) {
+      console.log(
+        `[connector-health] ${checked} checked${unhealthy.length ? `, unhealthy: ${unhealthy.join(", ")}` : ""}`,
+      );
+    }
+  } catch (err) {
+    console.error("[connector-health] error:", err instanceof Error ? err.message : err);
+  }
+}
+setInterval(() => void runConnectorHealth(), HEALTH_INTERVAL_MS);
+setTimeout(() => void runConnectorHealth(), 15_000).unref();
+
 let shuttingDown = false;
 
 async function shutdown(signal: string) {
@@ -135,6 +163,7 @@ async function shutdown(signal: string) {
   // close() waits for Redis; exit before Docker's 10s SIGKILL if Redis is unreachable.
   setTimeout(() => process.exit(1), 8000).unref();
   await Promise.all([webhookWorker.close(), reconWorker.close(), disputeWorker.close()]);
+  disposeCatalog();
   process.exit(0);
 }
 

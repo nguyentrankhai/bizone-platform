@@ -48,13 +48,13 @@ export async function handleMomoIpn(req: NextRequest): Promise<Response> {
     // Verify with the secret of the partner config that created the payment (fallback-safe);
     // an unknown order is checked against the first Active MoMo config.
     const { connector } = await resolveConnectorByCode("momo", txn?.partnerConfigId);
-    if (!connector.verifySignature(payload, signature)) {
+    if (!(await connector.verifySignature(payload, signature))) {
       console.warn(`[momo-ipn] invalid signature order=${orderId}`);
       return fail(400, "Invalid signature");
     }
     if (!txn) return fail(404, "Order not found");
 
-    const result = connector.processResult(payload);
+    const result = await connector.processResult(payload);
     const applied = await applyPaymentResult(result, {
       endpoint: "/api/ipn/momo",
       createdBy: "partner:momo-ipn",

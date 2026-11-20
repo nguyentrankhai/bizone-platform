@@ -21,7 +21,7 @@ import {
   type TxnFilters,
   type TxnReport,
 } from "@/lib/report";
-import { PAYMENT_METHODS } from "@/services/routing/routeMap";
+import { getRouteTable } from "@/services/routing/routes";
 import { DISCREPANCY, toDetailView, type DetailView } from "./reconciliation.service";
 
 /**
@@ -395,7 +395,7 @@ export async function reportOptions(merchantId?: number) {
     partnerTypes: [...new Set(partners.map((p) => p.connectorType))],
     partnerConfigs: partners.map((p) => ({ id: p.id, name: p.name, partner: p.connectorType })),
     merchants,
-    paymentMethods: [...PAYMENT_METHODS],
+    paymentMethods: Object.keys(await getRouteTable()),
   };
 }
 

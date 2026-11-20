@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Search, ChevronRight } from "lucide-react";
+import { Bell, Search, ChevronRight, Menu } from "lucide-react";
+import { setMobileNav } from "./mobile-nav";
 import { UserMenu } from "@/components/auth/AuthProvider";
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -34,14 +35,31 @@ export function PHHeader() {
   const crumbs = useBreadcrumbs();
 
   return (
-    <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm">
+    <header className="flex h-14 flex-shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 md:px-6">
+      <button
+        type="button"
+        aria-label="Mở menu"
+        onClick={() => setMobileNav(true)}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 md:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      {/* Breadcrumb (last crumb only on phones) */}
+      <nav className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm">
         {crumbs.map((crumb, i) => (
-          <span key={crumb.href} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
+          <span
+            key={crumb.href}
+            className={
+              i === crumbs.length - 1
+                ? "flex min-w-0 items-center gap-1.5"
+                : "hidden items-center gap-1.5 sm:flex"
+            }
+          >
+            {i > 0 && <ChevronRight className="hidden h-3.5 w-3.5 text-gray-400 sm:block" />}
             <span
-              className={i === crumbs.length - 1 ? "font-semibold text-gray-800" : "text-gray-400"}
+              className={
+                i === crumbs.length - 1 ? "truncate font-semibold text-gray-800" : "text-gray-400"
+              }
             >
               {crumb.label}
             </span>
@@ -50,8 +68,8 @@ export function PHHeader() {
       </nav>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
+      <div className="flex shrink-0 items-center gap-2 md:gap-3">
+        <div className="relative hidden lg:block">
           <Search className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="search"

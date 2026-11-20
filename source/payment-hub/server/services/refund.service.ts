@@ -19,6 +19,7 @@ import {
   connectorFromPartnerConfig,
   definitionForConnectorType,
   refundCapability,
+  type RefundCapability,
 } from "@/services/connectors/registry";
 import type { RefundResult } from "@/services/connectors/types";
 import { getLatestPartnerRequest } from "./payment.service";
@@ -167,7 +168,12 @@ async function inflightAmount(
   return Number(agg._sum.amount ?? 0);
 }
 
-function eligibilityOf(txn: TxnWithPartner, inflight: number, now = new Date()) {
+function eligibilityOf(
+  txn: TxnWithPartner,
+  inflight: number,
+  capability: RefundCapability | null,
+  now = new Date(),
+) {
   const connectorType = txn.partnerConfig?.connectorType ?? null;
   return evaluateRefund(
     {
@@ -178,7 +184,7 @@ function eligibilityOf(txn: TxnWithPartner, inflight: number, now = new Date()) 
       paidAt: txn.paidAt,
       partner: connectorType ?? (txn.paymentMethod === "vietqr" ? "VietQR" : null),
       partnerTxnId: txn.partnerTxnId,
-      capability: refundCapability(connectorType),
+      capability,
     },
     now,
   );
@@ -196,9 +202,10 @@ export async function getRefundOverview(
     inflightAmount(prisma, txn.id),
     prisma.refund.findMany({ where: { transactionId: txn.id }, orderBy: { id: "desc" } }),
   ]);
-  const asyncPartner = !!refundCapability(txn.partnerConfig?.connectorType)?.async;
+  const capability = await refundCapability(txn.partnerConfig?.connectorType);
+  const asyncPartner = !!capability?.async;
   return {
-    eligibility: eligibilityOf(txn, inflight),
+    eligibility: eligibilityOf(txn, inflight, capability),
     refunds: rows.map((r) =>
       toRefundView({ ...r, transaction: txn }, { admin: true, asyncPartner }),
     ),
@@ -225,19 +232,20 @@ export async function requestRefund(
   const prisma = getPrisma();
   const txn = await findTxn(prisma, txnRef, actor.merchantId);
   if (!txn) throw new RefundError("NOT_FOUND", "Không tìm thấy giao dịch");
+  const capability = await refundCapability(txn.partnerConfig?.connectorType);
 
   // Cheap checks first, so the merchant gets the real reason before anything is reserved.
   const pre = checkRefundAmount(
-    eligibilityOf(txn, await inflightAmount(prisma, txn.id)),
+    eligibilityOf(txn, await inflightAmount(prisma, txn.id), capability),
     input.amount,
   );
   if (!pre.ok) throw new RefundError(pre.code, pre.reason, pre.details);
 
   const pc = txn.partnerConfig!;
-  const def = definitionForConnectorType(pc.connectorType)!;
+  const def = (await definitionForConnectorType(pc.connectorType))!;
   let connector;
   try {
-    connector = connectorFromPartnerConfig(pc).connector;
+    connector = (await connectorFromPartnerConfig(pc)).connector;
   } catch (e) {
     if (e instanceof ConnectorUnavailableError) {
       throw new RefundError(
@@ -257,7 +265,7 @@ export async function requestRefund(
         await tx.$queryRaw`SELECT id FROM transactions WHERE id = ${txn.id} FOR UPDATE`;
         const fresh = (await findTxn(tx, txn.id))!;
         const check = checkRefundAmount(
-          eligibilityOf(fresh, await inflightAmount(tx, txn.id)),
+          eligibilityOf(fresh, await inflightAmount(tx, txn.id), capability),
           input.amount,
         );
         if (!check.ok) throw new RefundError(check.code, check.reason, check.details);
@@ -567,7 +575,7 @@ export async function checkRefundStatus(
       "Đối tác không có API tra cứu hoàn tiền — kiểm tra trên cổng đối tác rồi xác nhận thủ công",
     );
   }
-  const { connector } = connectorFromPartnerConfig(pc);
+  const { connector } = await connectorFromPartnerConfig(pc);
   if (!connector.queryRefund) {
     throw new RefundError(
       "REFUND_NOT_SUPPORTED",
@@ -626,7 +634,7 @@ export async function resolveRefund(
 
 /** Processing refunds whose PSP can be asked again and whose back-off has elapsed. */
 export async function dueRefundChecks(now = new Date(), batch = 20, maxAgeDays = 7) {
-  const asyncTypes = asyncRefundConnectorTypes();
+  const asyncTypes = await asyncRefundConnectorTypes();
   if (asyncTypes.length === 0) return [];
   const rows = await getPrisma().refund.findMany({
     where: {

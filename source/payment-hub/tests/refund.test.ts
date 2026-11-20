@@ -15,6 +15,12 @@ import { ZalopayConnector } from "@/services/connectors/zalopay";
 import type { ConnectorConfig, RefundRequest } from "@/services/connectors/types";
 import { canTransition } from "@/server/services/stateMachine";
 
+// No plugin catalog (DB / Redis) in unit tests: built-in connectors only.
+vi.mock("@/services/connectors/loader", () => ({
+  ensureCatalog: async () => new Map(),
+  catalogSnapshot: () => new Map(),
+}));
+
 const NOW = new Date("2026-11-10T08:00:00Z");
 const paid = (over: Partial<RefundFacts> = {}): RefundFacts => ({
   status: "Success",
@@ -133,13 +139,13 @@ describe("refund amount", () => {
 
 describe("registry capability", () => {
   afterEach(() => vi.unstubAllEnvs());
-  it("VNPay / MoMo / ZaloPay refund, VietQR does not; window from env", () => {
-    expect(refundCapability("VNPay")).toMatchObject({ partial: true, windowDays: 30 });
-    expect(refundCapability("ZaloPay")).toMatchObject({ async: true });
-    expect(refundCapability("VietQR")).toBeNull();
-    expect(refundCapability(null)).toBeNull();
+  it("VNPay / MoMo / ZaloPay refund, VietQR does not; window from env", async () => {
+    expect(await refundCapability("VNPay")).toMatchObject({ partial: true, windowDays: 30 });
+    expect(await refundCapability("ZaloPay")).toMatchObject({ async: true });
+    expect(await refundCapability("VietQR")).toBeNull();
+    expect(await refundCapability(null)).toBeNull();
     vi.stubEnv("REFUND_WINDOW_DAYS", "7");
-    expect(refundCapability("MoMo")?.windowDays).toBe(7);
+    expect((await refundCapability("MoMo"))?.windowDays).toBe(7);
   });
 });
 

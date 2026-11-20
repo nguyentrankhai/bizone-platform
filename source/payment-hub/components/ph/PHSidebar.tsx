@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { setMobileNav, useMobileNav } from "./mobile-nav";
 import {
   LayoutDashboard,
   CreditCard,
@@ -17,6 +18,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  X,
   Zap,
   MessageSquareWarning,
 } from "lucide-react";
@@ -44,78 +46,103 @@ const NAV_ITEMS: NavItem[] = [
 
 export function PHSidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [desktopCollapsed, setCollapsed] = useState(false);
+  const mobileOpen = useMobileNav();
+  // The drawer (< 768 px) always shows labels; collapsing is a desktop feature.
+  const collapsed = desktopCollapsed && !mobileOpen;
 
   return (
-    <aside
-      className={cn(
-        "relative flex h-screen flex-shrink-0 flex-col bg-slate-900 text-slate-100 transition-all duration-200",
-        collapsed ? "w-16" : "w-56",
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Đóng menu"
+          onClick={() => setMobileNav(false)}
+          className="fixed inset-0 z-30 bg-slate-900/50 md:hidden"
+        />
       )}
-    >
-      {/* Logo */}
-      <div
+      <aside
         className={cn(
-          "flex h-14 items-center border-b border-slate-700/60 px-4",
-          collapsed ? "justify-center" : "gap-2.5",
+          "flex h-screen flex-shrink-0 flex-col bg-slate-900 text-slate-100 transition-all duration-200",
+          // < 768 px: off-canvas drawer opened from the header; ≥ 768 px: in the layout
+          "fixed inset-y-0 left-0 z-40 w-64 md:relative md:z-auto md:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          collapsed ? "md:w-16" : "md:w-56",
         )}
       >
-        <Zap className="h-6 w-6 flex-shrink-0 text-blue-400" />
-        {!collapsed && (
-          <span className="truncate text-sm font-bold tracking-wide text-white">Payment Hub</span>
-        )}
-      </div>
+        {/* Logo */}
+        <div
+          className={cn(
+            "flex h-14 items-center border-b border-slate-700/60 px-4",
+            collapsed ? "justify-center" : "gap-2.5",
+          )}
+        >
+          <Zap className="h-6 w-6 flex-shrink-0 text-blue-400" />
+          {!collapsed && (
+            <span className="truncate text-sm font-bold tracking-wide text-white">Payment Hub</span>
+          )}
+          <button
+            type="button"
+            aria-label="Đóng menu"
+            onClick={() => setMobileNav(false)}
+            className="ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:text-white md:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3">
-        {NAV_ITEMS.map((item, idx) => {
-          const isActive =
-            pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
-          const Icon = item.icon;
-          const prevItem = NAV_ITEMS[idx - 1];
-          const showSection = item.section && item.section !== prevItem?.section;
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-3">
+          {NAV_ITEMS.map((item, idx) => {
+            const isActive =
+              pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
+            const Icon = item.icon;
+            const prevItem = NAV_ITEMS[idx - 1];
+            const showSection = item.section && item.section !== prevItem?.section;
 
-          return (
-            <div key={item.href}>
-              {showSection && !collapsed && (
-                <p className="mt-4 px-4 pb-1 text-[10px] font-semibold tracking-widest text-slate-500 uppercase">
-                  {item.section}
-                </p>
-              )}
-              {showSection && collapsed && idx > 0 && (
-                <div className="mx-3 my-2 border-t border-slate-700/60" />
-              )}
-              <Link
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
-                  isActive
-                    ? "bg-blue-600/20 font-semibold text-blue-400"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white",
-                  collapsed && "justify-center px-2",
+            return (
+              <div key={item.href}>
+                {showSection && !collapsed && (
+                  <p className="mt-4 px-4 pb-1 text-[10px] font-semibold tracking-widest text-slate-500 uppercase">
+                    {item.section}
+                  </p>
                 )}
-                title={collapsed ? item.label : undefined}
-              >
-                <Icon className="h-4.5 w-4.5 flex-shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </Link>
-            </div>
-          );
-        })}
-      </nav>
+                {showSection && collapsed && idx > 0 && (
+                  <div className="mx-3 my-2 border-t border-slate-700/60" />
+                )}
+                <Link
+                  href={item.href}
+                  onClick={() => setMobileNav(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
+                    isActive
+                      ? "bg-blue-600/20 font-semibold text-blue-400"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                    collapsed && "justify-center px-2",
+                  )}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className="h-4.5 w-4.5 flex-shrink-0" />
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                </Link>
+              </div>
+            );
+          })}
+        </nav>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute top-16 -right-3 flex h-6 w-6 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-400 hover:text-white"
-        aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
-      >
-        {collapsed ? (
-          <ChevronRight className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronLeft className="h-3.5 w-3.5" />
-        )}
-      </button>
-    </aside>
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setCollapsed(!desktopCollapsed)}
+          className="absolute top-16 -right-3 hidden h-6 w-6 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-400 hover:text-white md:flex"
+          aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </aside>
+    </>
   );
 }

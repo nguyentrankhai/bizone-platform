@@ -1,14 +1,9 @@
 import { getPrisma } from "@/lib/prisma";
 import { getRedis } from "@/lib/redis";
 import type { PartnerConfig } from "@/generated/prisma/client";
-import { definitionForConnectorType } from "@/services/connectors/registry";
-import {
-  PAYMENT_METHODS,
-  amountError,
-  routeFor,
-  type PaymentMethod,
-  type RouteMethod,
-} from "./routeMap";
+import { isConnectorTypeImplemented } from "@/services/connectors/registry";
+import { ROUTE_MAP, amountError, type RouteMethod } from "./routeMap";
+import { getRouteTable, type RouteTable } from "./routes";
 
 /**
  * Route Engine (P3.8, SRS §3.3.4) — picks the partner (partner_configs row) that serves a
@@ -23,10 +18,11 @@ import {
  *  4. executeRoute() tries candidates in order: a partner error/timeout records a failure and
  *     moves to the next one; a business error (transaction expired, invalid input…) stops.
  *
- * Every lookup reads the DB (a few tiny tables), so activating / deactivating a partner or
- * changing a merchant's routes takes effect on the next request — no restart, no cache to
- * invalidate (hot-plug, SRS-PH-PARTNER-02-07). Partners are isolated from each other: one
- * failing partner only affects its own circuit.
+ * Every lookup reads the DB (a few tiny tables), so activating / deactivating a partner or a
+ * connector or changing a merchant's routes takes effect on the next request — no restart, no
+ * cache to invalidate (hot-plug, SRS-PH-PARTNER-02-07). Methods of connector plugins (P7.1) come
+ * from the plugin catalog (services/routing/routes.ts), refreshed within ~1 s of a change.
+ * Partners are isolated from each other: one failing partner only affects its own circuit.
  */
 
 export type SkipReason =
@@ -44,7 +40,7 @@ export interface SkippedPartner {
 }
 
 export interface RoutePlan {
-  method: PaymentMethod;
+  method: string;
   route: RouteMethod;
   merchantId: number | null;
   /** Partners to try, in order */
@@ -223,10 +219,11 @@ export function orderCandidates<P extends PartnerRow>(
 
 // ─── Planning (DB) ────────────────────────────────────────────────────────────
 
+/** Connector code exists in this build / is a loaded plugin (catalog read by getRouteTable). */
 export function isImplemented(route: RouteMethod): boolean {
   return route.kind === "qr"
     ? route.connectorType === "VietQR"
-    : !!definitionForConnectorType(route.connectorType);
+    : isConnectorTypeImplemented(route.connectorType);
 }
 
 export interface RoutingContext {
@@ -236,12 +233,14 @@ export interface RoutingContext {
   /** connectors.code → is_active (a missing row counts as enabled) */
   connectors: Map<string, boolean>;
   open: Set<number>;
+  /** Payment methods: built-in + plugins (default: built-in only) */
+  routes?: RouteTable;
 }
 
 /** Load everything routing needs in 3 queries + 1 Redis MGET. */
 export async function loadRoutingContext(merchantId: number | null): Promise<RoutingContext> {
   const prisma = getPrisma();
-  const [partners, merchantRoutes, connectors] = await Promise.all([
+  const [partners, merchantRoutes, connectors, routes] = await Promise.all([
     prisma.partnerConfig.findMany({ orderBy: { id: "asc" } }),
     merchantId
       ? prisma.merchantRoute.findMany({
@@ -250,6 +249,7 @@ export async function loadRoutingContext(merchantId: number | null): Promise<Rou
         })
       : Promise.resolve([] as MerchantRouteRow[]),
     prisma.connector.findMany({ select: { code: true, isActive: true } }),
+    getRouteTable(),
   ]);
   const open = await openCircuits(partners.filter((p) => p.status === "Active").map((p) => p.id));
   return {
@@ -258,11 +258,17 @@ export async function loadRoutingContext(merchantId: number | null): Promise<Rou
     merchantRoutes,
     connectors: new Map(connectors.map((c) => [c.code, c.isActive])),
     open,
+    routes,
   };
 }
 
+function routeOf(ctx: RoutingContext, method: string): RouteMethod | undefined {
+  const routes = ctx.routes ?? (ROUTE_MAP as RouteTable);
+  return Object.hasOwn(routes, method) ? routes[method] : undefined;
+}
+
 export function planFromContext(ctx: RoutingContext, method: string): RoutePlan {
-  const route = routeFor(method);
+  const route = routeOf(ctx, method);
   if (!route) throw new NoRouteError(method, "unknown_method");
   const { candidates, skipped } = orderCandidates({
     route,
@@ -274,7 +280,7 @@ export function planFromContext(ctx: RoutingContext, method: string): RoutePlan 
     open: ctx.open,
   });
   return {
-    method: method as PaymentMethod,
+    method,
     route,
     merchantId: ctx.merchantId,
     candidates,
@@ -284,20 +290,23 @@ export function planFromContext(ctx: RoutingContext, method: string): RoutePlan 
 }
 
 export async function planRoute(merchantId: number | null, method: string): Promise<RoutePlan> {
-  if (!routeFor(method)) throw new NoRouteError(method, "unknown_method");
-  return planFromContext(await loadRoutingContext(merchantId), method);
+  const ctx = await loadRoutingContext(merchantId);
+  if (!routeOf(ctx, method)) throw new NoRouteError(method, "unknown_method");
+  return planFromContext(ctx, method);
 }
 
-/** Methods a merchant can use right now (at least one candidate), in route-map order. */
-/** Methods with a usable partner for this merchant (and, when given, accepting `amount`). */
+/**
+ * Methods with a usable partner for this merchant (and, when given, accepting `amount`), in
+ * route-table order (built-in first, then plugins).
+ */
 export async function availableMethods(
   merchantId: number | null,
   amount?: number,
-): Promise<PaymentMethod[]> {
+): Promise<string[]> {
   const ctx = await loadRoutingContext(merchantId);
-  return PAYMENT_METHODS.filter(
+  return Object.keys(ctx.routes ?? ROUTE_MAP).filter(
     (m) =>
-      (amount === undefined || amountError(m, amount) === null) &&
+      (amount === undefined || amountError(routeOf(ctx, m)!, amount) === null) &&
       planFromContext(ctx, m).candidates.length > 0,
   );
 }

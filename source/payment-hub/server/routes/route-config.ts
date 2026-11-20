@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { NextRequest } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 import { ADMIN_WRITE_ROLES, requireAdmin, type AdminContext } from "@/server/middleware/adminAuth";
-import { PAYMENT_METHODS, ROUTE_MAP, isPaymentMethod } from "@/services/routing/routeMap";
+import { getRouteTable } from "@/services/routing/routes";
 import {
   circuitState,
   isImplemented,
@@ -55,7 +55,7 @@ const putSchema = z.object({
   routes: z
     .array(
       z.object({
-        payment_method: z.string().refine(isPaymentMethod, "Unsupported payment_method"),
+        payment_method: z.string().max(50),
         partners: z
           .array(
             z.object({
@@ -67,7 +67,7 @@ const putSchema = z.object({
       }),
     )
     .min(1)
-    .max(PAYMENT_METHODS.length),
+    .max(200),
 });
 
 async function describeRoutes(merchantId: number | null) {
@@ -84,14 +84,14 @@ async function describeRoutes(merchantId: number | null) {
   const circuits = await circuitState(ctx.partners.map((p) => p.id));
   const partnerById = new Map(ctx.partners.map((p) => [p.id, p]));
 
-  const methods = PAYMENT_METHODS.map((m) => {
-    const route = ROUTE_MAP[m];
+  const methods = Object.entries(ctx.routes ?? {}).map(([m, route]) => {
     const plan = planFromContext(ctx, m);
     return {
       payment_method: m,
       label: route.label,
       connector_type: route.connectorType,
       kind: route.kind,
+      plugin: !!route.plugin,
       implemented: isImplemented(route),
       connector_enabled: ctx.connectors.get(route.connectorCode) ?? true,
       available: plan.candidates.length > 0,
@@ -188,12 +188,18 @@ export async function handlePutMerchantRoutes(req: NextRequest, rawId: string): 
 
   const errors: Record<string, string> = {};
   const seenMethods = new Set<string>();
+  const table = await getRouteTable();
   parsed.data.routes.forEach((r, i) => {
     if (seenMethods.has(r.payment_method)) {
       errors[`routes.${i}.payment_method`] = "Duplicate payment_method";
     }
     seenMethods.add(r.payment_method);
-    const expected = ROUTE_MAP[r.payment_method as keyof typeof ROUTE_MAP].connectorType;
+    const route = Object.hasOwn(table, r.payment_method) ? table[r.payment_method] : undefined;
+    if (!route) {
+      errors[`routes.${i}.payment_method`] = "Unsupported payment_method";
+      return;
+    }
+    const expected = route.connectorType;
     const seen = new Set<number>();
     r.partners.forEach((p, j) => {
       const key = `routes.${i}.partners.${j}.partner_config_id`;

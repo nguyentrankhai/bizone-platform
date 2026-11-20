@@ -3,7 +3,7 @@ import { z } from "zod";
 import { checkEmailList } from "@/lib/dispute";
 import type { NextRequest } from "next/server";
 import { ADMIN_WRITE_ROLES, requireAdmin, type AdminContext } from "@/server/middleware/adminAuth";
-import { PARTNER_TYPE_CODES, type PartnerEnv, type PartnerStatus } from "@/lib/partner-types";
+import { type PartnerEnv, type PartnerStatus } from "@/lib/partner-types";
 import {
   PartnerError,
   createPartner,
@@ -46,7 +46,8 @@ const optionalUrl = z
   .optional();
 
 const partnerSchema = z.object({
-  connector_type: z.enum(PARTNER_TYPE_CODES as [string, ...string[]]),
+  // built-in type or a connector plugin's (P7.1) — checked against the registry by the service
+  connector_type: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{2,29}$/, "Loại connector không hợp lệ"),
   name: z.string().trim().min(1, "Tên hiển thị là bắt buộc").max(255),
   merchant_code: z.string().trim().max(255).default(""),
   environment: z.enum(ENVS),
@@ -180,7 +181,9 @@ export async function handleListPartners(req: NextRequest): Promise<Response> {
         ? (environment as PartnerEnv)
         : undefined,
       connectorType:
-        connectorType && PARTNER_TYPE_CODES.includes(connectorType) ? connectorType : undefined,
+        connectorType && /^[A-Za-z][A-Za-z0-9_]{2,29}$/.test(connectorType)
+          ? connectorType
+          : undefined,
     }),
   );
 }

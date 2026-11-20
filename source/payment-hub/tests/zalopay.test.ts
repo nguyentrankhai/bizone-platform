@@ -14,6 +14,12 @@ import type { ConnectorConfig } from "@/services/connectors/types";
 import { isBusinessError } from "@/services/routing/routeEngine";
 import { routeFor } from "@/services/routing/routeMap";
 
+// No plugin catalog (DB / Redis) in unit tests: built-in connectors only.
+vi.mock("@/services/connectors/loader", () => ({
+  ensureCatalog: async () => new Map(),
+  catalogSnapshot: () => new Map(),
+}));
+
 const APP_ID = "2553";
 const KEY1 = "KEY1-request-signing";
 const KEY2 = "KEY2-callback-verify";
@@ -400,12 +406,12 @@ describe("ZaloPay query / refund / health", () => {
     expect(bad.message).toContain("-402");
   });
 
-  it("registers zalopay for zalopay_qr with callback + status sync", () => {
+  it("registers zalopay for zalopay_qr with callback + status sync", async () => {
     expect(zalopayApiBase("https://sb-openapi.zalopay.vn/v2/create")).toBe(
       "https://sb-openapi.zalopay.vn/v2",
     );
     expect(routeFor("zalopay_qr")).toMatchObject({ connectorType: "ZaloPay", kind: "redirect" });
-    const def = definitionForCode("zalopay");
+    const def = await definitionForCode("zalopay");
     expect(def?.connectorType).toBe("ZaloPay");
     expect(def?.statusSync).toBe(true);
     expect(def?.defaultIpnUrl).toMatch(/\/api\/ipn\/zalopay$/);

@@ -12,6 +12,8 @@ export interface PartnerFieldSpec {
   secret: boolean;
   placeholder?: string;
   pattern?: RegExp;
+  /** Regex source (connector plugins, P7.1) — plain text so the spec can be sent to the browser */
+  patternSource?: string;
   patternMessage?: string;
 }
 
@@ -27,6 +29,76 @@ export interface PartnerTypeSpec {
   defaultEndpointProduction?: string;
   /** A connector exists in this build → "test connection" and activation are possible. */
   implemented: boolean;
+  /** Served by a connector plugin (P7.1): connector code → /pay/plugin/{code}/return, /api/ipn/plugin/{code} */
+  pluginCode?: string;
+}
+
+/** Validation regex of a field (built-in RegExp or a plugin's regex source). */
+export function fieldPattern(field: PartnerFieldSpec): RegExp | undefined {
+  if (field.pattern) return field.pattern;
+  if (!field.patternSource) return undefined;
+  try {
+    return new RegExp(field.patternSource);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Default return / IPN paths a partner config of this type uses (relative to APP_URL). */
+export function partnerPaths(connectorType: string, spec: PartnerTypeSpec | undefined) {
+  if (spec?.pluginCode) {
+    return {
+      returnPath: `/pay/plugin/${spec.pluginCode}/return`,
+      ipnPath: `/api/ipn/plugin/${spec.pluginCode}`,
+    };
+  }
+  const code = connectorType.toLowerCase();
+  return { returnPath: `/pay/${code}/return`, ipnPath: `/api/ipn/${code}` };
+}
+
+/** Field spec as declared in a plugin manifest (JSON). */
+export interface PluginFieldDecl {
+  label: string;
+  secret: boolean;
+  placeholder?: string;
+  pattern?: string;
+  patternMessage?: string;
+}
+
+/** Partner type of a connector plugin from its manifest (serialisable — no RegExp). */
+export function pluginPartnerType(p: {
+  code: string;
+  name: string;
+  description?: string;
+  implemented: boolean;
+  config: {
+    merchantCode: PluginFieldDecl;
+    apiKey: PluginFieldDecl;
+    secretKey: PluginFieldDecl;
+    usesEndpoints: boolean;
+    defaultEndpointSandbox?: string;
+    defaultEndpointProduction?: string;
+  };
+}): PartnerTypeSpec {
+  const field = (f: PluginFieldDecl): PartnerFieldSpec => ({
+    label: f.label,
+    secret: f.secret,
+    placeholder: f.placeholder,
+    patternSource: f.pattern,
+    patternMessage: f.patternMessage,
+  });
+  return {
+    label: p.name,
+    description: `${p.description ?? p.name} — plugin "${p.code}"`,
+    merchantCode: field(p.config.merchantCode),
+    apiKey: field(p.config.apiKey),
+    secretKey: field(p.config.secretKey),
+    usesEndpoints: p.config.usesEndpoints,
+    defaultEndpointSandbox: p.config.defaultEndpointSandbox,
+    defaultEndpointProduction: p.config.defaultEndpointProduction,
+    implemented: p.implemented,
+    pluginCode: p.code,
+  };
 }
 
 export const PARTNER_TYPES: Record<string, PartnerTypeSpec> = {

@@ -4,7 +4,7 @@ import type {
   ConnectorConfig,
   CreatePaymentResult,
   HealthResult,
-  PaymentConnector,
+  IConnector,
   PaymentRequest,
   PaymentResult,
   RefundRequest,
@@ -52,7 +52,7 @@ const QUERY_RESPONSE_FIELDS = [
   "vnp_PromotionAmount",
 ] as const;
 
-export class VnpayConnector implements PaymentConnector {
+export class VnpayConnector implements IConnector {
   readonly code = "vnpay";
   readonly version = "1.0.0";
 

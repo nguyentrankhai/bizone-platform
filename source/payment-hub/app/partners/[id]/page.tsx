@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { PHLayout } from "@/components/ph/PHLayout";
 import { PartnerForm } from "@/components/ph/PartnerForm";
-import { getPartner, listPartnerLogs } from "@/server/services/partner.service";
+import { getPartner, listPartnerLogs, pluginPartnerTypes } from "@/server/services/partner.service";
 import { pageSession } from "@/lib/page-session";
 import { SessionGate } from "@/components/auth/AuthProvider";
 
@@ -25,6 +25,7 @@ export default async function PartnerPage({ params }: PageProps) {
     );
   }
   const appUrl = process.env.APP_URL ?? "http://localhost:4000";
+  const pluginTypes = await pluginPartnerTypes();
 
   if (id === "new") {
     return (
@@ -34,6 +35,7 @@ export default async function PartnerPage({ params }: PageProps) {
           initialLogs={null}
           canWrite={session.canWrite}
           appUrl={appUrl}
+          pluginTypes={pluginTypes}
         />
       </PHLayout>
     );
@@ -52,6 +54,7 @@ export default async function PartnerPage({ params }: PageProps) {
         initialLogs={logs}
         canWrite={session.canWrite}
         appUrl={appUrl}
+        pluginTypes={pluginTypes}
       />
     </PHLayout>
   );

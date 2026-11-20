@@ -7,7 +7,7 @@ import {
   resolveConnectorByCode,
 } from "@/services/connectors/registry";
 import type { PartnerQr, PaymentResult } from "@/services/connectors/types";
-import { routeFor } from "@/services/routing/routeMap";
+import { getRoute } from "@/services/routing/routes";
 import {
   NoRouteError,
   executeRoute,
@@ -107,7 +107,7 @@ export async function initiatePayment(
   if (txn.expiredAt && txn.expiredAt <= new Date()) {
     throw new PaymentError("CONFLICT", "Transaction has expired");
   }
-  const route = routeFor(paymentMethod);
+  const route = await getRoute(paymentMethod);
   if (!route) throw new PaymentError("VALIDATION_ERROR", "Unsupported payment method");
 
   // VietQR: rendered by Payment Hub; qr.service routes the receiving account itself.
@@ -133,7 +133,7 @@ export async function initiatePayment(
     }
   }
 
-  const def = definitionForConnectorType(route.connectorType);
+  const def = await definitionForConnectorType(route.connectorType);
   if (!def) {
     throw new PaymentError("SERVICE_UNAVAILABLE", "Payment method is not available", {
       payment_method: paymentMethod,
@@ -152,14 +152,14 @@ export async function initiatePayment(
   try {
     const plan = await planRoute(txn.merchantId, paymentMethod);
     outcome = await executeRoute(plan, async (partner) => {
-      const resolved = connectorFromPartnerConfig(partner);
+      const resolved = await connectorFromPartnerConfig(partner);
       return resolved.connector.createTransaction({
         txnCode: txn.txnCode,
         amount: Number(txn.amount),
         currency: txn.currency,
         description: txn.description ?? `Thanh toan ${txn.txnCode}`,
         paymentMethod,
-        returnUrl: resolved.callbackUrl ?? defaultReturnUrl(def.code),
+        returnUrl: resolved.callbackUrl ?? `${APP_URL}${def.returnPath}`,
         ipAddress: ipAddress ?? txn.ipAddress ?? "127.0.0.1",
         createdAt: new Date(),
         expiredAt: txn.expiredAt ?? undefined,
@@ -440,12 +440,12 @@ export async function syncPaymentStatus(
   if (!txn.partnerConfigId) return { kind: "skipped", reason: "no_partner" };
   const prisma = getPrisma();
   const pc = await prisma.partnerConfig.findUnique({ where: { id: txn.partnerConfigId } });
-  const def = pc ? definitionForConnectorType(pc.connectorType) : undefined;
+  const def = pc ? await definitionForConnectorType(pc.connectorType) : undefined;
   if (!pc || !def?.statusSync) return { kind: "skipped", reason: "not_supported" };
 
   const sent = await getLatestPartnerRequest(txn.id, def.code);
   if (!sent) return { kind: "skipped", reason: "no_partner_request" };
-  const { connector } = connectorFromPartnerConfig(pc);
+  const { connector } = await connectorFromPartnerConfig(pc);
   const status = await connector.getStatus({
     txnCode: txn.txnCode,
     partnerOrderId: sent.orderId ?? sent.app_trans_id,
@@ -462,7 +462,7 @@ export async function syncPaymentStatus(
   for (const [k, v] of Object.entries((status.partnerRaw ?? {}) as Record<string, unknown>)) {
     if (v !== undefined && v !== null && typeof v !== "object") raw[k] = String(v);
   }
-  const result = connector.processResult(raw);
+  const result = await connector.processResult(raw);
   if (result.txnCode !== txn.txnCode || result.outcome !== status.outcome) {
     return { kind: "unknown", responseCode: status.responseCode };
   }

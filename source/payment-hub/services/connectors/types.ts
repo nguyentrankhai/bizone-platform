@@ -168,26 +168,5 @@ export interface DisputeQueryResult {
   raw?: unknown;
 }
 
-export interface PaymentConnector {
-  readonly code: string;
-  readonly version: string;
-  createTransaction(req: PaymentRequest): Promise<CreatePaymentResult>;
-  processResult(raw: Record<string, string>): PaymentResult;
-  verifySignature(payload: Record<string, string>, signature: string): boolean;
-  refund(req: RefundRequest): Promise<RefundResult>;
-  /**
-   * Status of an earlier refund by its merchant-side reference (`RefundResult.partnerRefundRef`) —
-   * only PSPs that refund asynchronously (ZaloPay query_refund). Used by the refund poller (P5.3).
-   */
-  queryRefund?(partnerRefundRef: string): Promise<RefundResult>;
-  getStatus(query: StatusQuery): Promise<StatusResult>;
-  /**
-   * Dispute API (P5.6) — optional: none of VNPay / MoMo / ZaloPay / VietQR publishes one (disputes
-   * go through their merchant portals / support e-mail). A connector that implements submitDispute
-   * makes the Hub send disputes automatically; queryDispute lets an operator ask for the result.
-   */
-  submitDispute?(req: DisputeSubmitRequest): Promise<DisputeSubmitResult>;
-  queryDispute?(partnerRef: string): Promise<DisputeQueryResult>;
-  getConfigSchema(): ConfigSchemaField[];
-  healthCheck(): Promise<HealthResult>;
-}
+// The connector contract itself (IConnector) lives in ./interface.ts (P7.1).
+export type { IConnector, PaymentConnector } from "./interface";

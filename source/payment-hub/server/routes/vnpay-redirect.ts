@@ -24,7 +24,7 @@ export async function handleVnpayRedirect(req: NextRequest): Promise<Response> {
   const txn = await prisma.transaction.findUnique({ where: { txnCode } });
 
   const { connector } = await resolveConnectorByCode("vnpay", txn?.partnerConfigId);
-  if (!connector.verifySignature(params, signature)) {
+  if (!(await connector.verifySignature(params, signature))) {
     return renderPayPage(
       {
         title: "Chữ ký không hợp lệ",
@@ -48,7 +48,7 @@ export async function handleVnpayRedirect(req: NextRequest): Promise<Response> {
     },
   });
 
-  const result = connector.processResult(params);
+  const result = await connector.processResult(params);
   const resultText = result.outcome === "Success" ? "success" : "failed";
 
   if (txn.returnUrl) {

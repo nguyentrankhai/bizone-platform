@@ -51,6 +51,17 @@ enum ConnectorStatus {
   Error
 }
 
+enum ConnectorSource {
+  builtin
+  plugin
+}
+
+enum ConnectorHealthStatus {
+  Healthy
+  Degraded
+  Unhealthy
+}
+
 enum TransactionStatus {
   Created
   Pending
@@ -275,20 +286,64 @@ model PartnerConfigLog {
 }
 
 model Connector {
-  id           Int             @id @default(autoincrement())
-  name         String          @db.VarChar(255)
-  code         String          @unique @db.VarChar(50)
-  version      String          @db.VarChar(50)
-  description  String?         @db.Text
-  status       ConnectorStatus @default(Not_Installed)
-  configSchema Json?           @map("config_schema")
-  isActive     Boolean         @default(false) @map("is_active") @db.TinyInt
-  createdAt    DateTime        @default(now()) @map("created_at") @db.DateTime(0)
-  updatedAt    DateTime        @updatedAt @map("updated_at") @db.DateTime(0)
+  id               Int                    @id @default(autoincrement())
+  name             String                 @db.VarChar(255)
+  code             String                 @unique @db.VarChar(50)
+  source           ConnectorSource        @default(builtin)
+  /// partner_configs.connector_type served by a plugin (built-ins map it in code)
+  connectorType    String?                @unique(map: "uq_connectors_type") @map("connector_type") @db.VarChar(50)
+  version          String                 @db.VarChar(50)
+  description      String?                @db.Text
+  status           ConnectorStatus        @default(Not_Installed)
+  configSchema     Json?                  @map("config_schema")
+  currentPackageId Int?                   @map("current_package_id")
+  isActive         Boolean                @default(false) @map("is_active") @db.TinyInt
+  lastError        String?                @map("last_error") @db.VarChar(1000)
+  healthStatus     ConnectorHealthStatus? @map("health_status")
+  healthMessage    String?                @map("health_message") @db.VarChar(500)
+  healthLatencyMs  Int?                   @map("health_latency_ms")
+  healthCheckedAt  DateTime?              @map("health_checked_at") @db.DateTime(0)
+  activatedAt      DateTime?              @map("activated_at") @db.DateTime(0)
+  updatedBy        String?                @map("updated_by") @db.VarChar(100)
+  createdAt        DateTime               @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.DateTime(0)
 
   @@index([code], map: "idx_connectors_code")
   @@index([status], map: "idx_connectors_status")
   @@map("connectors")
+}
+
+/// P7.1: every uploaded version of a connector plugin (signed zip)
+model ConnectorPackage {
+  id            Int      @id @default(autoincrement())
+  connectorCode String   @map("connector_code") @db.VarChar(50)
+  version       String   @db.VarChar(50)
+  sha256        String   @db.Char(64)
+  size          Int
+  manifest      Json
+  package       Bytes    @db.LongBlob
+  publisherKey  String   @map("publisher_key") @db.VarChar(100)
+  uploadedBy    String?  @map("uploaded_by") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  @@unique([connectorCode, version], map: "uq_connector_package_version")
+  @@index([connectorCode], map: "idx_connector_package_code")
+  @@map("connector_packages")
+}
+
+/// P7.1: health check history (Health Monitor in the worker, "check now" in the UI)
+model ConnectorHealthLog {
+  id              BigInt                @id @default(autoincrement())
+  connectorCode   String                @map("connector_code") @db.VarChar(50)
+  partnerConfigId Int?                  @map("partner_config_id")
+  status          ConnectorHealthStatus
+  latencyMs       Int?                  @map("latency_ms")
+  message         String?               @db.VarChar(500)
+  checkedBy       String?               @map("checked_by") @db.VarChar(100)
+  checkedAt       DateTime              @default(now()) @map("checked_at") @db.DateTime(0)
+
+  @@index([connectorCode, checkedAt], map: "idx_chealth_code_time")
+  @@map("connector_health_logs")
 }
 
 model Transaction {

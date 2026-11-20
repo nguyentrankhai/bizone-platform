@@ -4,7 +4,7 @@ import type {
   ConnectorConfig,
   CreatePaymentResult,
   HealthResult,
-  PaymentConnector,
+  IConnector,
   PaymentRequest,
   PaymentResult,
   RefundRequest,
@@ -60,7 +60,7 @@ export function momoApiBase(createUrl: string): string {
   return createUrl.replace(/\/create\/?$/, "");
 }
 
-export class MomoConnector implements PaymentConnector {
+export class MomoConnector implements IConnector {
   readonly code = "momo";
   readonly version = "1.0.0";
 

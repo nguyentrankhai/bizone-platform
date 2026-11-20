@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Loader2, Pencil, Power, PowerOff } from "lucide-react";
-import { PARTNER_TYPES, type PartnerView } from "@/lib/partner-types";
+import { PARTNER_TYPES, type PartnerTypeSpec, type PartnerView } from "@/lib/partner-types";
 import { EnvBadge, PartnerStatusBadge } from "./PartnerStatusBadge";
 import { TestConnectionButton, TestResultLine } from "./TestConnectionButton";
 import { fmtDateTime, partnerApi } from "./partner-api";
@@ -12,10 +12,12 @@ interface PartnerCardProps {
   partner: PartnerView;
   canWrite: boolean;
   onChange: (partner: PartnerView) => void;
+  /** Partner types of connector plugins (P7.1) */
+  pluginTypes?: Record<string, PartnerTypeSpec>;
 }
 
-export function PartnerCard({ partner, canWrite, onChange }: PartnerCardProps) {
-  const spec = PARTNER_TYPES[partner.connectorType];
+export function PartnerCard({ partner, canWrite, onChange, pluginTypes }: PartnerCardProps) {
+  const spec = PARTNER_TYPES[partner.connectorType] ?? pluginTypes?.[partner.connectorType];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canActivate = partner.status !== "Active" && !!partner.testResult?.success;
