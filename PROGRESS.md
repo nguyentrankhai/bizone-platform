@@ -331,7 +331,7 @@
 |----|------|------------|--------|---------|
 | P7.1 | Connector Plugin Architecture | ✅ | `cfd3959` | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
 | P7.2 | Audit Log — Payment Hub | ✅ | `d8b3f68` | Xem [kết quả P7.2](#p72--audit-log--payment-hub) — `audit_logs` + `transaction_logs` append-only (trigger DB), `/audit-log` |
-| P7.3 | Notification System | ✅ | _(xem commit)_ | Xem [kết quả P7.3](#p73--notification-system) — `/notifications`, chuông realtime, email qua hàng đợi `payhub-notification` |
+| P7.3 | Notification System | ✅ | `350b43f` | Xem [kết quả P7.3](#p73--notification-system) — `/notifications`, chuông realtime, email qua hàng đợi `payhub-notification` |
 | P7.4 | Scale & Performance | ⬜ | — | |
 | P7.5 | Disaster Recovery & Monitoring | ⬜ | — | |
 
@@ -2959,7 +2959,7 @@ Ngoài plan, theo yêu cầu người dùng.
 
 ### P7.3 — Notification System
 
-- **Hoàn thành:** 2026-11-21 · **Commit:** _(xem commit)_ · **Vị trí:** `source/payment-hub/` — `services/notification/events.ts` + `sender.ts`, `server/jobs/notificationQueue.ts`, `server/services/notification.service.ts`, `server/routes/notification.ts`, `app/api/internal/notifications/**`, `app/notifications/page.tsx`, `components/ph/NotificationCenter.tsx` + `NotificationBell.tsx` + `notification-api.ts`, `PHHeader.tsx`, `lib/events.ts`, `server/ws/server.ts`, hook ở `payment.service`, `webhook/deliver.ts`, `reconciliation.service`, `refund.service`, `dispute.service`, `connector.service`, `routeEngine.ts`; `services/worker.ts`; `prisma/migrations/11_notification_center`; `tests/notification.test.ts`
+- **Hoàn thành:** 2026-11-21 · **Commit:** `350b43f` · **Vị trí:** `source/payment-hub/` — `services/notification/events.ts` + `sender.ts`, `server/jobs/notificationQueue.ts`, `server/services/notification.service.ts`, `server/routes/notification.ts`, `app/api/internal/notifications/**`, `app/notifications/page.tsx`, `components/ph/NotificationCenter.tsx` + `NotificationBell.tsx` + `notification-api.ts`, `PHHeader.tsx`, `lib/events.ts`, `server/ws/server.ts`, hook ở `payment.service`, `webhook/deliver.ts`, `reconciliation.service`, `refund.service`, `dispute.service`, `connector.service`, `routeEngine.ts`; `services/worker.ts`; `prisma/migrations/11_notification_center`; `tests/notification.test.ts`
 - **Đã làm:**
   - **DB** (`11_notification_center`): bảng `notifications` P1 (chưa dùng, gắn `users`) thay bằng bản cho user Keycloak — mỗi lần sự kiện 1 dòng (`event`, mức độ, `audience` all / admin, `merchant_id`, tiêu đề, nội dung, link, tham chiếu, `data`, `in_app`, `dedupe_key` unique, trạng thái email); `notification_reads` (đã đọc theo `sub` từng người); `notification_settings` (kênh, ngưỡng, khoảng thời gian, người nhận theo sự kiện).
   - **8 sự kiện** (`events.ts`, SRS §9.1 + mặc định): GD thành công / thất bại (mọi người dùng, theo merchant), GD đáng ngờ (≥ 10 GD thất bại cùng IP / 10'), webhook thất bại (đạt 5 lần gửi lỗi hoặc hết lượt thử), đối soát chênh lệch (≥ 1 GD lệch), hoàn tiền hoàn tất, kết nối đối tác lỗi (health check lỗi 3 lần liên tiếp hoặc circuit breaker mở), tra soát có kết quả. Cảnh báo vận hành chỉ `payhub-admin`.
