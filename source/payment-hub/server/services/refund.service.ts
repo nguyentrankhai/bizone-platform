@@ -25,6 +25,7 @@ import type { RefundResult } from "@/services/connectors/types";
 import { getLatestPartnerRequest } from "./payment.service";
 import { assertTransition, type TxnStatus } from "./stateMachine";
 import { dispatchRefundSoon } from "./webhook.service";
+import { notify } from "@/services/notification/sender";
 
 /**
  * Refund module (P5.3, SRS-PH-REFUND-01/02, API-Design §5.1 / §8.2).
@@ -520,6 +521,15 @@ export async function applyRefundOutcome(
       amount: Number(base.amount),
     }).catch(() => {});
     dispatchRefundSoon(refundId);
+    void notify("refund.completed", {
+      title: `Hoàn tiền ${Number(base.amount).toLocaleString("vi-VN")}₫ thành công`,
+      message: `GD ${res.txn.txnCode} — mã hoàn tiền ${base.refundCode}`,
+      link: `/transactions/${res.txn.id}`,
+      merchantId: res.txn.merchantId,
+      referenceType: "refund",
+      referenceId: refundId,
+      dedupeKey: `refund:${refundId}`,
+    });
   }
   return "applied";
 }

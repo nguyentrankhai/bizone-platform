@@ -3,6 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import { recordAttempt } from "@/server/services/webhook.service";
 import { sendWebhook } from "./sender";
+import { getSetting, notify } from "@/services/notification/sender";
 import { webhookBackoff, type WebhookJob } from "./queue";
 
 /**
@@ -50,6 +51,20 @@ export async function processWebhookJob(job: Job<WebhookJob>): Promise<{ status:
 
   if (res.ok) return { status: res.status };
   const message = `${event} → ${url}: ${res.error ?? "failed"} (attempt ${attempt}/${maxAttempts})`;
+  // P7.3: alert when this delivery has failed `threshold` times, or for good (no retry left)
+  const setting = await getSetting("webhook.failed");
+  if (attempt === (setting.threshold ?? 5) || (!willRetry && attempt < (setting.threshold ?? 5))) {
+    await notify("webhook.failed", {
+      title: `Webhook ${event} thất bại ${attempt} lần`,
+      message: `${url}\nLỗi gần nhất: ${res.error ?? `HTTP ${res.status ?? "?"}`}${willRetry ? " — vẫn đang thử lại" : " — đã dừng gửi lại"}.`,
+      link: `/webhooks?tab=logs`,
+      merchantId: config.merchantId,
+      referenceType: "webhook_delivery",
+      referenceId: deliveryId,
+      data: { webhookConfigId, event, url, attempt, maxAttempts, status: res.status, willRetry },
+      dedupeKey: `webhook:${deliveryId}`,
+    });
+  }
   if (!res.retryable) throw new UnrecoverableError(message);
   throw new Error(message);
 }

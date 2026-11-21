@@ -19,6 +19,14 @@ import {
 import { RECON_QUEUE, type ReconJob } from "./reconciliation/queue";
 import { DISPUTE_QUEUE, type DisputeJob } from "./dispute/queue";
 import { sendDisputeResultNotification } from "@/server/services/dispute.service";
+import {
+  NOTIFICATION_QUEUE,
+  markEmailFailed,
+  processNotificationJob,
+  type NotificationJob,
+} from "@/server/jobs/notificationQueue";
+import { purgeNotifications } from "@/services/notification/sender";
+import { NOTIFICATION_RETENTION_DAYS } from "@/services/notification/events";
 
 const webhookWorker = new Worker<WebhookJob>(WEBHOOK_QUEUE, processWebhookJob, {
   connection: queueConnection(),
@@ -96,6 +104,24 @@ disputeWorker.on("failed", (job, err) => {
 });
 disputeWorker.on("error", (err) => console.error(`[dispute] ${describeError(err)}`));
 
+// Notification e-mails (P7.3)
+const notificationWorker = new Worker<NotificationJob>(NOTIFICATION_QUEUE, processNotificationJob, {
+  connection: queueConnection(),
+  concurrency: 4,
+});
+notificationWorker.on("completed", (job, result) =>
+  console.log(`[notification] email #${job.data.notificationId}: ${String(result)}`),
+);
+notificationWorker.on("failed", (job, err) => {
+  console.error(
+    `[notification] email #${job?.data.notificationId} attempt ${job?.attemptsMade}: ${err.message}`,
+  );
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    void markEmailFailed(job.data.notificationId, err.message);
+  }
+});
+notificationWorker.on("error", (err) => console.error(`[notification] ${describeError(err)}`));
+
 // Webhook outbox sweeper: dispatch transaction events nobody enqueued (Redis was down, crash…)
 const OUTBOX_INTERVAL_MS = 30_000;
 setInterval(() => {
@@ -164,6 +190,9 @@ async function runAuditRetention(): Promise<void> {
     const n = await purgeAuditLogs();
     if (n > 0)
       console.log(`[audit-retention] deleted ${n} entries older than ${retentionDays()} days`);
+    // P7.3: the notification center keeps 30 days (SRS-PH-NOTIF-03)
+    const m = await purgeNotifications(new Date(), NOTIFICATION_RETENTION_DAYS);
+    if (m > 0) console.log(`[notification-retention] deleted ${m} notifications`);
   } catch (err) {
     console.error("[audit-retention] error:", err instanceof Error ? err.message : err);
   }
@@ -179,7 +208,12 @@ async function shutdown(signal: string) {
   console.log(`[worker] ${signal} received, draining…`);
   // close() waits for Redis; exit before Docker's 10s SIGKILL if Redis is unreachable.
   setTimeout(() => process.exit(1), 8000).unref();
-  await Promise.all([webhookWorker.close(), reconWorker.close(), disputeWorker.close()]);
+  await Promise.all([
+    webhookWorker.close(),
+    reconWorker.close(),
+    disputeWorker.close(),
+    notificationWorker.close(),
+  ]);
   disposeCatalog();
   process.exit(0);
 }

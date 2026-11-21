@@ -160,6 +160,18 @@ enum NotificationChannel {
   Email
 }
 
+enum NotificationAudience {
+  all
+  admin
+}
+
+enum NotificationEmailStatus {
+  none
+  pending
+  sent
+  failed
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -181,7 +193,6 @@ model User {
   disputesCreated   Dispute[]          @relation("DisputeCreator")
   disputesResolved  Dispute[]          @relation("DisputeResolver")
   partnerConfigLogs PartnerConfigLog[]
-  notifications     Notification[]
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
@@ -707,25 +718,59 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// P7.3: one row per event occurrence (Keycloak admins are not `users` rows → read state per sub)
 model Notification {
-  id            BigInt              @id @default(autoincrement())
-  userId        Int                 @map("user_id")
-  type          NotificationType    @default(Info)
-  title         String              @db.VarChar(255)
-  message       String?             @db.Text
-  referenceType String?             @map("reference_type") @db.VarChar(50)
-  referenceId   String?             @map("reference_id") @db.VarChar(100)
-  channel       NotificationChannel @default(System)
-  isRead        Boolean             @default(false) @map("is_read") @db.TinyInt
-  readAt        DateTime?           @map("read_at") @db.DateTime(0)
-  createdAt     DateTime            @default(now()) @map("created_at") @db.DateTime(0)
+  id            BigInt                  @id @default(autoincrement())
+  event         String                  @db.VarChar(50)
+  severity      NotificationType        @default(Info)
+  audience      NotificationAudience    @default(all)
+  merchantId    Int?                    @map("merchant_id")
+  title         String                  @db.VarChar(255)
+  message       String?                 @db.Text
+  link          String?                 @db.VarChar(255)
+  referenceType String?                 @map("reference_type") @db.VarChar(50)
+  referenceId   String?                 @map("reference_id") @db.VarChar(100)
+  data          Json?
+  inApp         Boolean                 @default(true) @map("in_app") @db.TinyInt
+  dedupeKey     String?                 @unique(map: "uq_notification_dedupe") @map("dedupe_key") @db.VarChar(150)
+  emailStatus   NotificationEmailStatus @default(none) @map("email_status")
+  emailError    String?                 @map("email_error") @db.VarChar(500)
+  emailSentAt   DateTime?               @map("email_sent_at") @db.DateTime(0)
+  createdAt     DateTime                @default(now()) @map("created_at") @db.DateTime(0)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_notif_user")
+  reads NotificationRead[]
 
-  @@index([userId], map: "idx_notif_user")
-  @@index([userId, isRead], map: "idx_notif_read")
-  @@index([createdAt], map: "idx_notif_created")
+  @@index([createdAt], map: "idx_notification_created")
+  @@index([inApp, createdAt], map: "idx_notification_inapp_created")
+  @@index([event, createdAt], map: "idx_notification_event_created")
+  @@index([merchantId, createdAt], map: "idx_notification_merchant_created")
   @@map("notifications")
+}
+
+model NotificationRead {
+  notificationId BigInt   @map("notification_id")
+  userSub        String   @map("user_sub") @db.VarChar(64)
+  readAt         DateTime @default(now()) @map("read_at") @db.DateTime(0)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notification_read")
+
+  @@id([notificationId, userSub])
+  @@index([userSub], map: "idx_notification_reads_user")
+  @@map("notification_reads")
+}
+
+/// P7.3: per-event channels + thresholds (no row = defaults in services/notification/events.ts)
+model NotificationSetting {
+  event         String   @id @db.VarChar(50)
+  inApp         Boolean  @default(true) @map("in_app") @db.TinyInt
+  email         Boolean  @default(false) @db.TinyInt
+  threshold     Int?
+  windowMinutes Int?     @map("window_minutes")
+  emailTo       String?  @map("email_to") @db.VarChar(500)
+  updatedBy     String?  @map("updated_by") @db.VarChar(100)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(0)
+
+  @@map("notification_settings")
 }
 
 model QrCode {

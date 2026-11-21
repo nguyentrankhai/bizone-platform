@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Search, ChevronRight, Menu } from "lucide-react";
+import { Search, ChevronRight, Menu } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 import { setMobileNav } from "./mobile-nav";
 import { UserMenu } from "@/components/auth/AuthProvider";
 
@@ -16,6 +17,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/reconciliation": "Đối soát",
   "/reports": "Báo cáo",
   "/audit-log": "Audit Log",
+  "/notifications": "Thông báo",
   "/settings": "Cài đặt",
 };
 
@@ -77,11 +79,7 @@ export function PHHeader() {
             className="h-8 w-60 rounded-lg border border-gray-200 bg-gray-50 pr-3 pl-8 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:outline-none"
           />
         </div>
-
-        <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100">
-          <Bell className="h-4.5 w-4.5" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
-        </button>
+        <NotificationBell />
 
         <UserMenu />
       </div>

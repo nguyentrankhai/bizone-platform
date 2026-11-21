@@ -122,6 +122,20 @@ export async function recordPartnerFailure(id: number): Promise<boolean> {
       .del(failKey(id))
       .exec();
     console.warn(`[route] circuit OPEN for partner config #${id} (${count} failures)`);
+    // P7.3: "Kết nối đối tác lỗi" — loaded lazily (keeps the engine free of queue / DB imports)
+    void import("@/services/notification/sender")
+      .then(({ notify }) =>
+        notify("connector.down", {
+          title: `Circuit breaker mở cho cấu hình đối tác #${id}`,
+          message: `${count} lần lỗi liên tiếp khi tạo thanh toán — tạm ngắt ${Math.round(CB_OPEN_MS / 1000)} s, giao dịch chuyển sang đối tác khác nếu có.`,
+          link: `/partners/${id}`,
+          referenceType: "partner_config",
+          referenceId: id,
+          data: { partnerConfigId: id, failures: count },
+          dedupeKey: `circuit:${id}:${Math.floor(Date.now() / CB_OPEN_MS)}`,
+        }),
+      )
+      .catch(() => {});
     return true;
   });
   return opened ?? false;

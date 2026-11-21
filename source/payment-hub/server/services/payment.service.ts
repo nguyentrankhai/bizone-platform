@@ -16,6 +16,7 @@ import {
   type RouteAttempt,
 } from "@/services/routing/routeEngine";
 import { OUTBOX_PENDING, dispatchSoon } from "@/server/services/webhook.service";
+import { notifyPaymentResult } from "@/services/notification/sender";
 import { QrError, generateQr, type QrDto } from "@/server/services/qr.service";
 import { renderQrPng, type QrSize } from "@/services/qr/vietqr";
 
@@ -413,6 +414,16 @@ export async function applyPaymentResult(
     toStatus,
   }).catch(() => {});
   dispatchSoon(txn.id);
+  // P7.3: notification center (+ suspicious-IP tracking for failures)
+  void notifyPaymentResult({
+    id: txn.id,
+    txnCode: txn.txnCode,
+    merchantId: txn.merchantId,
+    amount: Number(txn.amount),
+    status: toStatus,
+    error: result.errorMessage ?? result.errorCode ?? null,
+    ipAddress: txn.ipAddress,
+  });
 
   return { kind: "applied", status: toStatus };
 }

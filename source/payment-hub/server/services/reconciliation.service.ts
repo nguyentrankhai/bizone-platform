@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
+import { getSetting, notify } from "@/services/notification/sender";
 import {
   allDefinitions,
   connectorFromPartnerConfig,
@@ -334,6 +335,24 @@ export async function executeRun(
       discrepancies,
       totalDiscrepancy: summary.totalDiscrepancy,
     }).catch(() => {});
+    // P7.3: discrepancy alert (SRS-PH-RECON-01-05)
+    const reconSetting = await getSetting("recon.discrepancy");
+    if (discrepancies > 0 && discrepancies >= (reconSetting.threshold ?? 1)) {
+      const pc = await prisma.partnerConfig.findUnique({
+        where: { id: run.partnerConfigId },
+        select: { name: true },
+      });
+      const [y, m, d] = day.split("-");
+      await notify("recon.discrepancy", {
+        title: `Đối soát ngày ${d}/${m}/${y}: ${discrepancies} GD lệch`,
+        message: `${pc?.name ?? `Đối tác #${run.partnerConfigId}`} — tổng chênh lệch ${Number(summary.totalDiscrepancy).toLocaleString("vi-VN")}₫ (Hub thiếu ${summary.unmatchedPartner}, đối tác thiếu ${summary.unmatchedPaymenthub}, lệch số tiền ${summary.amountMismatchCount}).`,
+        link: `/reconciliation?run=${runId}`,
+        referenceType: "reconciliation_run",
+        referenceId: runId,
+        data: { runId, day, discrepancies, totalDiscrepancy: Number(summary.totalDiscrepancy) },
+        dedupeKey: `recon:${runId}`,
+      });
+    }
     if (discrepancies > 0) {
       console.warn(
         `[recon] run #${runId} (${day}, partner config #${run.partnerConfigId}): ${discrepancies} discrepancies, ${summary.totalDiscrepancy} VND`,

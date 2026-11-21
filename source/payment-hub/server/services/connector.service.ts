@@ -17,6 +17,7 @@ import {
 import { PluginSandbox, SandboxError, pluginBaseDir } from "@/services/connectors/sandbox";
 import { ROUTE_MAP } from "@/services/routing/routeMap";
 import { PARTNER_TYPES } from "@/lib/partner-types";
+import { getSetting, notify } from "@/services/notification/sender";
 
 /**
  * Connector Manager (P7.1, SRS §3.3.4–3.3.5 / SRS-PH-PARTNER-02) — lifecycle of connectors:
@@ -624,6 +625,31 @@ async function recordHealth(row: Connector, h: HealthOutcome, by: string): Promi
   if (row.healthStatus && row.healthStatus !== h.status) {
     console.warn(`[connectors] ${row.code} health ${row.healthStatus} → ${h.status}: ${h.message}`);
   }
+  if (h.status === "Unhealthy") await alertIfDown(row, h);
+}
+
+/** P7.3: `threshold` consecutive Unhealthy checks → "Kết nối đối tác lỗi" (once per outage). */
+async function alertIfDown(row: Connector, h: HealthOutcome): Promise<void> {
+  const setting = await getSetting("connector.down");
+  const n = setting.threshold ?? 3;
+  const last = await getPrisma().connectorHealthLog.findMany({
+    where: { connectorCode: row.code },
+    orderBy: { id: "desc" },
+    take: n + 1,
+    select: { id: true, status: true },
+  });
+  const streak = last.findIndex((l) => l.status !== "Unhealthy");
+  const consecutive = streak === -1 ? last.length : streak;
+  if (consecutive !== n) return; // exactly the n-th failure of this outage
+  await notify("connector.down", {
+    title: `Kết nối ${row.name} lỗi ${n} lần liên tiếp`,
+    message: h.message,
+    link: "/connectors",
+    referenceType: "connector",
+    referenceId: row.code,
+    data: { code: row.code, latencyMs: h.latencyMs, partnerConfigId: h.partnerConfigId },
+    dedupeKey: `connector-down:${row.code}:${last[n - 1]?.id ?? Date.now()}`,
+  });
 }
 
 export async function checkConnectorHealth(code: string, actor: Actor): Promise<HealthOutcome> {

@@ -161,4 +161,5 @@ export const ACTION_LABELS: Record<string, string> = {
   "dispute.attachment_remove": "Xoá chứng từ tra soát",
   "apikey.create": "Cấp API key",
   "audit.export": "Xuất nhật ký",
+  "notification.settings": "Cấu hình thông báo",
 };

@@ -48,3 +48,7 @@ export async function reconDetailSnapshot(detailId: string) {
   const n = int(detailId);
   return n ? getPrisma().reconciliationDetail.findUnique({ where: { id: n } }) : null;
 }
+
+export async function notificationSettingsSnapshot() {
+  return getPrisma().notificationSetting.findMany({ orderBy: { event: "asc" } });
+}

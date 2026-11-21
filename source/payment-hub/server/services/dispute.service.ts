@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { getPrisma } from "@/lib/prisma";
 import { Prisma, type DisputeSubmitChannel } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
+import { notify } from "@/services/notification/sender";
 import {
   ATTACHMENTS_PER_DISPUTE,
   DISPUTE_STATUSES,
@@ -809,6 +810,15 @@ async function closeDispute(
     txnCode: d.transaction.txnCode,
     status: to,
   }).catch(() => {});
+  void notify("dispute.resolved", {
+    title: `Tra soát ${d.disputeCode} ${to === "Resolved" ? "đã giải quyết" : "bị từ chối"}`,
+    message: `GD ${d.transaction.txnCode}${resolution ? ` — ${resolution}` : ""}`,
+    link: `/disputes/${id}`,
+    merchantId: d.transaction.merchantId,
+    referenceType: "dispute",
+    referenceId: id,
+    dedupeKey: `dispute:${id}:${to}`,
+  });
 }
 
 export async function updateDispute(

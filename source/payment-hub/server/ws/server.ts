@@ -21,6 +21,8 @@ export const PAYHUB_WS_PROTOCOL = "payhub-events";
 interface Client {
   userId: string;
   merchantId?: number;
+  /** payhub-admin (receives audience "admin" notifications, P7.3) */
+  admin: boolean;
   expiresAt: number; // epoch ms
 }
 
@@ -81,7 +83,12 @@ async function authorize(
     }
   }
 
-  return { userId: user.id, merchantId, expiresAt: user.expiresAt * 1000 };
+  return {
+    userId: user.id,
+    merchantId,
+    admin: user.roles.includes("payhub-admin"),
+    expiresAt: user.expiresAt * 1000,
+  };
 }
 
 http.on("upgrade", (req, socket, head) => {

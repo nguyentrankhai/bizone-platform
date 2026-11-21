@@ -5,7 +5,7 @@
 
 **Trạng thái:** ✅ Hoàn thành · 🟡 Đang làm · ⬜ Chưa bắt đầu · ⛔ Bị chặn
 
-**Cập nhật lần cuối:** 2026-11-20 (P7.2 — Audit Log Payment Hub: nhật ký hệ thống + nhật ký giao dịch append-only bằng trigger DB, 29 thao tác admin + đăng nhập / đăng xuất được ghi, `/audit-log` lọc / xem raw / xuất CSV-Excel; Payment Hub 184 test, e2e 34/34. Kế tiếp: P7.3)
+**Cập nhật lần cuối:** 2026-11-21 (P7.3 — Notification System Payment Hub: 8 sự kiện, trung tâm thông báo + chuông realtime theo audience, email qua hàng đợi, ngưỡng cấu hình được, lưu 30 ngày; Payment Hub 190 test, e2e 22/22 + cảnh báo kết nối. Kế tiếp: P7.4)
 
 ---
 
@@ -19,8 +19,8 @@
 | 4 — BizOne Mở rộng | 9 | 9 | 0 | 0 |
 | 5 — Payment Hub Mở rộng | 6 | 4 | 2 | 0 |
 | 6 — BizOne Nâng cao | 7 | 5 | 2 | 0 |
-| 7 — Payment Hub Nâng cao | 5 | 2 | 0 | 3 |
-| **Tổng** | **53** | **43** | **7** | **3** |
+| 7 — Payment Hub Nâng cao | 5 | 3 | 0 | 2 |
+| **Tổng** | **53** | **44** | **7** | **2** |
 
 ---
 
@@ -61,7 +61,7 @@
 | 30 | BizOne `/api/webhooks/payhub`: áp `payment.*` cho thanh toán POS (`BZ-{tenant}-{intentId}`, P4.5) và **đơn website (`WEB-{tenant}-{paymentId}`, P6.1)**. Còn lại: một bộ `PAYHUB_API_KEY/SECRET` + `PAYHUB_WEBHOOK_SECRET` cho cả app (một merchant Payment Hub cho mọi tenant — chưa map merchant ↔ tenant; P6.1 giữ nguyên vì cần registry tenant #20) | P3.6 | Onboarding tenant (#20) — P6.1 làm phần thanh toán đơn online |
 | 31 | API webhook cho merchant (`POST /api/v1/webhooks`, `POST /api/v1/webhook-test` trong OpenAPI / API-Design §5.4) chưa có — hiện chỉ admin cấu hình qua `/api/internal/webhooks` | P3.6 | Cổng merchant / P7.x |
 | 32 | Production: không đặt `WEBHOOK_ALLOW_PRIVATE_NETWORKS` (chặn SSRF tới IP nội bộ, bắt buộc https). Nếu BizOne nằm cùng mạng nội bộ với Payment Hub cần thêm allowlist host thay vì bật cờ này | P3.6 | Khi triển khai (P6.5 không xử lý) |
-| 33 | Cảnh báo dashboard dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`: ≥ 5 GD lỗi và ≥ 30 % trong 60 phút; ≥ 5 lần gửi webhook lỗi/giờ; outbox kẹt > 5 phút). Chưa có cảnh báo "đối tác mất kết nối" như mockup — chưa có nguồn dữ liệu. ~~Hoàn tiền~~ ✅ P5.3 (chờ xác nhận > 15'), ~~đối soát chênh lệch~~ ✅ P5.4 (lệch chưa xử lý 3 ngày gần nhất + đợt lỗi) | P3.7 | P7.1 / P7.5 (giám sát connector, cấu hình ngưỡng) — QA-4: hoàn tiền, đối soát, tra soát đã có cảnh báo |
+| 33 | Cảnh báo **dashboard** vẫn dùng ngưỡng cố định trong code (`ALERT_RULES` ở `lib/dashboard.ts`). **P7.3**: thông báo (trung tâm + email) có ngưỡng cấu hình được ở `/notifications` (webhook lỗi N lần, IP đáng ngờ N lần / M phút, số GD lệch đối soát, số lần health check lỗi liên tiếp) và có cảnh báo "kết nối đối tác lỗi" (Health Monitor + circuit mở) | P3.7 | Khi cần đồng bộ ngưỡng dashboard với cấu hình thông báo |
 | 34 | Dashboard theo merchant (token có claim `merchant_id`) mới kiểm bằng code + unit, chưa kiểm end-to-end vì chưa có user Keycloak mang claim này (#22) | P3.7 | Khi có tài khoản merchant |
 | 35 | Route Engine chỉ có API admin (`/api/internal/routes/*`), chưa có màn hình cấu hình ưu tiên đối tác theo merchant / xem circuit. P7.1 thêm màn hình **Connector** (bật / tắt, sức khoẻ) nhưng chưa có màn hình ưu tiên đối tác theo merchant | P3.8 | Module Merchant (P7.x) |
 | 36 | Circuit breaker mức nhẹ (bộ đếm Redis, chỉ tính lỗi lúc tạo thanh toán, không ghi DB), `retry_policy` của partner chưa áp; trạng thái circuit mất khi Redis bị xoá. **P7.1**: đã có Health Monitor định kỳ (worker, `connector_health_logs`, trạng thái trên `connectors`) + kiểm tra tay; chưa tự vô hiệu hoá connector sau 3 lần lỗi / chưa cảnh báo (SRS §3.3.9) | P3.8 | P7.3 (cảnh báo) / P7.5 |
@@ -142,7 +142,7 @@
 | ~~111~~ | ~~Chi tiết GD hiện "Tên merchant: —"~~ | ~~P5.3~~ | ✅ P5.6 (trang chi tiết nạp tên merchant + đối tác) |
 | 112 | Đối soát (P5.4) chỉ đối chiếu **thanh toán**; hoàn tiền (`refunds`) và phí giao dịch chưa đối soát với đối tác — yêu cầu hoàn `Processing` (#108) vẫn xác nhận tay. P5.5: báo cáo doanh thu có cột "đã hoàn" + phí **ước tính** (#117), vẫn chưa đối chiếu với số đối tác | P5.4 | Khi có file đối soát hoàn tiền / phí của đối tác |
 | 113 | Nguồn `Api` = 1 lệnh tra cứu / GD (VNPay `querydr`, MoMo `query`, ZaloPay `query`) — không thấy được tiền đối tác thu cho đơn Hub không biết (chỉ nhập file mới thấy). ZaloPay trả `-101` (không có đơn) cho GD Hub ghi đã trả → `Unverified` thay vì "đối tác thiếu". **Chưa có file đối soát thật** của VNPay / MoMo / ZaloPay / ngân hàng: cột nhận theo tên tiêu đề phổ biến (`statement.ts`), cần kiểm lại với file mẫu thật khi có tài khoản merchant (#16, #100, #104) | P5.4 | Khi có credential / file mẫu đối tác |
-| 114 | Thông báo chênh lệch đối soát (SRS-PH-RECON-01-05) chỉ qua cảnh báo dashboard + sự kiện realtime `recon.completed` + log worker; chưa gửi email / thông báo hệ thống (bảng `notifications` gắn `users` — user Keycloak không có trong bảng). **P5.6: Payment Hub đã có dịch vụ email** (`lib/mail.ts`, `SMTP_*`) — dùng cho tra soát; đối soát chưa gửi email | P5.4 | Module thông báo Payment Hub (P7.x) |
+| ~~114~~ | ~~Thông báo chênh lệch đối soát chỉ qua dashboard / realtime / log~~ | ~~P5.4~~ | ✅ P7.3 (`recon.discrepancy` — trung tâm + email, ngưỡng số GD lệch) |
 | 115 | Đối soát không bao giờ đổi trạng thái GD: tiền đối tác đã thu cho GD `Expired`/`Failed`/`Pending` (thanh toán muộn #19, VietQR #24) chỉ được báo + đánh dấu "đã xử lý" bằng ghi chú. Chưa có thao tác "xác nhận thanh toán" / "tạo yêu cầu hoàn" từ dòng lệch. **P5.6: dòng lệch có link "Tra soát"** (mở form tra soát của GD, lý do điền sẵn) — kết quả tra soát vẫn không đổi trạng thái GD | P5.4 | Khi có quyết định nghiệp vụ (xác nhận thanh toán muộn) |
 | 116 | Xuất báo cáo đối soát Excel/PDF tải trực tiếp trong request (10 000 dòng ~0,4 MB, < 2 s), chưa theo mô hình task bất đồng bộ `export/{taskId}` của API-Design §10.1. `npm audit --omit=dev` Payment Hub nay có 2 moderate `exceljs → uuid` (như BizOne, chỉ ảnh hưởng uuid v3/v5/v6 có `buf`) | P5.4 | P5.5: báo cáo chung cũng tải trực tiếp (20 000 GD → Excel 1,3 MB / 1,2 s, CSV 0,2 s; danh sách ≤ 50 000 dòng) — task bất đồng bộ khi dữ liệu lớn hơn (P7.x) / khi exceljs cập nhật |
 | 117 | Phí GD trong báo cáo là **ước tính** = `round(số tiền × fee_percent / 100) + fee_fixed` theo biểu phí **hiện hành** của cấu hình đối tác (P5.5, mặc định 0 → phí 0 tới khi nhập ở `/partners/{id}`): không lưu phí theo từng GD nên đổi biểu phí làm đổi số liệu quá khứ; biểu phí chỉ 1 mức % + cố định / cấu hình (chưa theo phương thức — VNPay thẻ quốc tế khác QR — hay theo bậc); phí thực đối tác thu (file đối soát) chưa đối chiếu | P5.5 | Khi có hợp đồng phí / file đối soát đối tác (#112) |
@@ -150,7 +150,7 @@
 | 119 | Báo cáo tổng hợp trực tiếp trên `transactions` mỗi lần gọi (index `created_at`, `paid_at` mới), không cache / không bảng tổng hợp ngày: 20 000 GD / 1 năm < 250 ms; khi lên hàng triệu GD cần bảng tổng hợp theo ngày hoặc cache Redis | P5.5 | P6.x/P7.x (hiệu năng) |
 | 120 | **Chưa đối tác nào có API tra soát**: VNPay / MoMo / ZaloPay / VietQR không công bố API → `disputeApi` trong `registry.ts` đều tắt, hook `submitDispute` / `queryDispute` của connector chỉ kiểm bằng unit test quy tắc. Tra soát gửi bằng **email** tới `partner_configs.dispute_email` (chưa có địa chỉ thật của đối tác — cần lấy theo hợp đồng) hoặc ghi nhận thủ công sau khi gửi qua cổng merchant. Phản hồi email của đối tác về hộp `DISPUTE_REPLY_TO`, **không tự đọc vào Hub** — vận hành "Cập nhật phản hồi" / "Cập nhật kết quả" tay. Dev chưa có SMTP (`SMTP_*` trống → email chỉ ghi log máy chủ; e2e dùng SMTP giả cục bộ) | P5.6 | Người dùng (email tra soát + SMTP thật) / P7.1 (connector có API) |
 | 121 | Chứng từ tra soát: dev lưu MinIO local (`S3_*` trong `.env.local`, bucket `payment-hub`); không có `S3_ENDPOINT` thì lưu thư mục `./storage` — Docker compose Payment Hub **chưa có volume** cho thư mục này (mất tệp khi tạo lại container) và chưa có MinIO trong compose; chưa quét virus (chỉ kiểm đuôi + magic bytes), chưa có chính sách giữ / xoá tệp | P5.6 | P7.5 (triển khai, lưu trữ) |
-| 122 | Tra soát chỉ qua admin API / UI: merchant chưa tạo / xem tra soát qua merchant API (`/api/v1`), chỉ nhận webhook `dispute.resolved` khi đóng (chưa có `dispute.created` / cập nhật giữa chừng); BizOne chưa nhận / hiển thị sự kiện này. Thông báo kết quả = email người tạo (claim `email`) + `DISPUTE_NOTIFY_EMAILS` + realtime, chưa có trung tâm thông báo (#114). Quyền ghi = `payhub-admin` (chưa tách vai trò Operations, như #110) | P5.6 | Cổng merchant / P7.3 Notification / khi BizOne cần |
+| 122 | Tra soát chỉ qua admin API / UI: merchant chưa tạo / xem tra soát qua merchant API (`/api/v1`), chỉ nhận webhook `dispute.resolved` khi đóng (chưa có `dispute.created` / cập nhật giữa chừng); BizOne chưa nhận / hiển thị sự kiện này. Thông báo kết quả = email người tạo (claim `email`) + `DISPUTE_NOTIFY_EMAILS` + realtime, **P7.3**: `dispute.resolved` vào trung tâm thông báo. Quyền ghi = `payhub-admin` (chưa tách vai trò Operations, như #110) | P5.6 | Cổng merchant / P7.3 Notification / khi BizOne cần |
 | ~~123~~ | ~~[Trung bình] Hoàn tiền merchant: `Idempotency-Key` tuỳ chọn + key bị nhả sau khi đã gọi PSP → có thể hoàn 2 lần~~ | ~~QA-4~~ | ✅ QA-4 fix (key bắt buộc; lỗi sau giữ chỗ → 202, giữ key) |
 | ~~124~~ | ~~[Thấp] Hoàn tiền admin không idempotency; cập nhật `processing` không điều kiện; lộ lỗi kỹ thuật `NO_RESPONSE` cho merchant~~ | ~~QA-4~~ | ✅ QA-4 fix |
 | ~~125~~ | ~~[Thấp] Thiếu rate limit xuất báo cáo / trang return ví; tin `X-Forwarded-For`; zip bomb XLSX~~ | ~~QA-4~~ | ✅ QA-4 fix (`TRUST_PROXY`, rate limit, kiểm kích thước giải nén) |
@@ -196,12 +196,13 @@
 | ~~165~~ | ~~Công cụ kiểm thử: `scripts/perf/bench.mjs` gắn cứng chi nhánh #1 cho `pos.catalog` (403 trên `bizonedb`); `pentest.mjs` ca 100/phút sai 1 nếu token đã gọi API trong 60 s trước; chuông thông báo log 1 lỗi WS ở lần kết nối đầu (effect chạy lại, sau đó kết nối được)~~ | ~~QA-5~~ | ✅ QA-5 fix (`--branch` / `branch.mine`, pentest chờ cửa sổ + `--only`, WS mở ở tick sau) |
 | 166 | Sandbox plugin (P7.1) chặn mạng ở mức `fetch` + chặn import `node:net/http/https/tls/dgram` (Node 24 permission model không lọc mạng): plugin ký hợp lệ vẫn có thể cố vượt qua bằng kỹ thuật cấp thấp — production nên thêm chặn egress ở hạ tầng (network policy / proxy ra ngoài chỉ tới host PSP); process plugin chạy cùng user OS với app | P7.1 | P7.5 (triển khai) |
 | ~~167~~ | ~~Thao tác connector chưa vào audit log~~ | ~~P7.1~~ | ✅ P7.2 (`connector.upload` / `status` / `remove` / `health_check`) |
-| 168 | Health Monitor chỉ ghi trạng thái: chưa cảnh báo admin / tự vô hiệu hoá khi lỗi 3 lần liên tiếp, chưa có metrics TPS / latency / tỷ lệ lỗi theo connector (bảng `connector_metrics`, `connector_events` của migration_001 chưa dùng) | P7.1 | P7.3 / P7.5 |
+| 168 | ~~Health Monitor chưa cảnh báo~~ ✅ P7.3 (`connector.down` khi lỗi N lần liên tiếp + khi circuit mở, email). Còn lại: chưa tự vô hiệu hoá connector, chưa có metrics TPS / latency / tỷ lệ lỗi theo connector (`connector_metrics`, `connector_events` của migration_001 chưa dùng) | P7.1 | P7.5 |
 | 169 | Plugin 1.0.0: chỉ kiểu thanh toán chuyển hướng (không có kiểu core tự sinh QR như VietQR), cấu hình đối tác chỉ 3 trường credential + endpoint, chưa có API tra soát cho plugin, chỉ giao thức HTTP (`fetch` — SOAP qua HTTP được, MQ / SFTP thì không). Bộ lọc phương thức ở danh sách giao dịch + nhãn trong báo cáo / file xuất hiện mã phương thức của plugin (nhãn tĩnh `ROUTE_MAP`); trang `/pay`, API, báo cáo vẫn nhận phương thức plugin | P7.1 | Khi có PSP thật cần |
 | 170 | Khoá ký dev `payhub-dev` (riêng máy này: `.secrets/payhub-dev.private.pem`, không commit; public key trong `.env.local` / `.env.development`). Production: mỗi nhà phát hành tự tạo khoá (`scripts/connector-plugin.mjs keygen`), đơn vị vận hành thêm public key vào `CONNECTOR_TRUSTED_KEYS` sau khi thẩm định | P7.1 | Người dùng / P7.5 |
-| 171 | 32 dòng `audit_logs` do kiểm thử P7.2 (2026-11-20, người thực hiện `payhub.admin` / `payhub.viewer` / `cli:steve`, kể cả dòng `test.trigger`) **không xoá được** — đúng quy tắc append-only; sẽ tự bị dọn sau 90 ngày | P7.2 | Tự hết hạn (2027-02-18) |
+| 171 | 41 dòng `audit_logs` do kiểm thử P7.2 / P7.3 (2026-11-20, người thực hiện `payhub.admin` / `payhub.viewer` / `cli:steve`, kể cả dòng `test.trigger`) **không xoá được** — đúng quy tắc append-only; sẽ tự bị dọn sau 90 ngày | P7.2 | Tự hết hạn (2027-02-18) |
 | 172 | Append-only dựa trên trigger DB: chặn mọi client SQL (app, script, console) nhưng tài khoản có quyền `TRIGGER` / `DROP` (root dev) vẫn gỡ được trigger. Production: app dùng user DB **không** có `TRIGGER`, `DROP`, `ALTER` trên `paymentdb` (migration chạy bằng user riêng); cân nhắc đẩy audit ra kho chỉ ghi (SIEM / object lock) | P7.2 | P7.5 (triển khai) |
 | 173 | Đăng nhập được ghi khi trang quản trị gọi `POST /api/auth/session` sau khi Keycloak trả về (1 lần / phiên `sid`) — đăng nhập Keycloak mà không mở trang quản trị, **đăng nhập sai** và khoá tài khoản chỉ có trong event của Keycloak (chưa bật lưu event / chưa kéo về). Nhật ký giao dịch giữ cùng giao dịch (không dọn theo 90 ngày); API merchant (`/api/v1/*` — tạo GD, hoàn tiền) ghi vào nhật ký giao dịch, không vào `audit_logs` | P7.2 | Khi cần (Keycloak events → audit) |
+| 174 | Thông báo: người nhận email lấy ở **tiến trình phát sự kiện** (app: GD / đối soát chạy tay / health "kiểm tra ngay" / circuit; worker: webhook / đối soát hằng ngày / Health Monitor) — `NOTIFY_EMAILS` phải đặt cho cả app và worker (hoặc cấu hình người nhận từng sự kiện ở `/notifications`; kiểm thật: cảnh báo kết nối do app phát không có email vì app dev chưa đặt biến). Cấu hình kênh / ngưỡng là **chung cho cả hệ thống** (chưa có tuỳ chọn riêng từng người); `transaction.success` bật mặc định → mỗi GD thành công 1 thông báo (tắt ở cấu hình nếu nhiều); IP đáng ngờ chỉ đếm khi biết IP khách (`TRUST_PROXY=true`) | P7.3 | Khi cần tuỳ chọn theo người / triển khai (P7.5) |
 | 6 | Bản rollback MariaDB 10.3 (container `mariadbtest-10.3` + volume gốc) còn giữ → xoá khi chắc chắn không cần | Nâng cấp MariaDB | Người dùng |
 
 ### Đã giải quyết
@@ -330,7 +331,7 @@
 |----|------|------------|--------|---------|
 | P7.1 | Connector Plugin Architecture | ✅ | `cfd3959` | Xem [kết quả P7.1](#p71--connector-plugin-architecture) — gói ký Ed25519 (`CONNECTOR_TRUSTED_KEYS`), sandbox tiến trình riêng, `/connectors`, hướng dẫn `documents/Connector-Plugin-Guide.md` |
 | P7.2 | Audit Log — Payment Hub | ✅ | `d8b3f68` | Xem [kết quả P7.2](#p72--audit-log--payment-hub) — `audit_logs` + `transaction_logs` append-only (trigger DB), `/audit-log` |
-| P7.3 | Notification System | ⬜ | — | |
+| P7.3 | Notification System | ✅ | _(xem commit)_ | Xem [kết quả P7.3](#p73--notification-system) — `/notifications`, chuông realtime, email qua hàng đợi `payhub-notification` |
 | P7.4 | Scale & Performance | ⬜ | — | |
 | P7.5 | Disaster Recovery & Monitoring | ⬜ | — | |
 
@@ -2955,3 +2956,39 @@ Ngoài plan, theo yêu cầu người dùng.
   - **Lỗi gặp khi kiểm thật, đã sửa:** `Decimal` của Prisma (`fee_percent`) không serialize được → audit đầu tiên không ghi (nghiệp vụ vẫn chạy) → `sanitize` dùng `toJSON()` của đối tượng không thuần + test; danh sách "trường thay đổi" so sánh số dạng chuỗi / số. Lượt e2e đầu sửa nhầm cấu hình VNPay seed (đổi tên, secret, xoá kết quả test) → đã khôi phục (secret mã hoá lại từ `VNPAY_HASH_SECRET`, kết quả test cũ); kịch bản chuyển sang cấu hình tạm.
   - #171 (dòng audit thử), #172 (trigger vs quyền DB — P7.5), #173 (đăng nhập sai / Keycloak events). Đóng #38, #167; #110 còn phần phân quyền Operations.
   - Env mới: `AUDIT_RETENTION_DAYS` (≥ 90). Production chạy `npm run db:migrate` (`10_audit_log` — cần quyền tạo trigger cho user chạy migration).
+
+### P7.3 — Notification System
+
+- **Hoàn thành:** 2026-11-21 · **Commit:** _(xem commit)_ · **Vị trí:** `source/payment-hub/` — `services/notification/events.ts` + `sender.ts`, `server/jobs/notificationQueue.ts`, `server/services/notification.service.ts`, `server/routes/notification.ts`, `app/api/internal/notifications/**`, `app/notifications/page.tsx`, `components/ph/NotificationCenter.tsx` + `NotificationBell.tsx` + `notification-api.ts`, `PHHeader.tsx`, `lib/events.ts`, `server/ws/server.ts`, hook ở `payment.service`, `webhook/deliver.ts`, `reconciliation.service`, `refund.service`, `dispute.service`, `connector.service`, `routeEngine.ts`; `services/worker.ts`; `prisma/migrations/11_notification_center`; `tests/notification.test.ts`
+- **Đã làm:**
+  - **DB** (`11_notification_center`): bảng `notifications` P1 (chưa dùng, gắn `users`) thay bằng bản cho user Keycloak — mỗi lần sự kiện 1 dòng (`event`, mức độ, `audience` all / admin, `merchant_id`, tiêu đề, nội dung, link, tham chiếu, `data`, `in_app`, `dedupe_key` unique, trạng thái email); `notification_reads` (đã đọc theo `sub` từng người); `notification_settings` (kênh, ngưỡng, khoảng thời gian, người nhận theo sự kiện).
+  - **8 sự kiện** (`events.ts`, SRS §9.1 + mặc định): GD thành công / thất bại (mọi người dùng, theo merchant), GD đáng ngờ (≥ 10 GD thất bại cùng IP / 10'), webhook thất bại (đạt 5 lần gửi lỗi hoặc hết lượt thử), đối soát chênh lệch (≥ 1 GD lệch), hoàn tiền hoàn tất, kết nối đối tác lỗi (health check lỗi 3 lần liên tiếp hoặc circuit breaker mở), tra soát có kết quả. Cảnh báo vận hành chỉ `payhub-admin`.
+  - **Sender** `notify(event, …)`: đọc cấu hình (cache 10 s), lưu 1 dòng (trùng `dedupe_key` → bỏ qua), in-app → `publishEvent("notification.created")` → tiến trình realtime đẩy qua WebSocket (lọc audience mới: `canReceive` bỏ cảnh báo admin với viewer; vẫn lọc merchant), email → job BullMQ `payhub-notification` (worker dựng mẫu text + HTML, gửi SMTP `lib/mail.ts`, 4 lần thử, ghi `email_status`). Không bao giờ ném lỗi vào nghiệp vụ.
+  - **Ngưỡng**: đếm GD thất bại theo IP khách (Redis, cửa sổ trượt) → báo đúng 1 lần ở lần thứ N; webhook báo ở lần gửi lỗi thứ N của 1 delivery (hoặc lần cuối nếu ít hơn N); Health Monitor báo khi đúng N lần lỗi liên tiếp (1 lần / đợt sự cố); đối soát báo khi số GD lệch ≥ N.
+  - **API** `/api/internal/notifications` (admin + viewer; token gắn merchant chỉ thấy merchant đó): danh sách (chưa đọc / loại / mức độ, phân trang, `meta.unread`), `POST /read` (`ids` hoặc `all`, trạng thái riêng từng người), `GET/PUT /settings` (chỉ `payhub-admin`, PUT ghi audit `notification.settings`, kiểm email người nhận).
+  - **UI**: chuông ở thanh trên mọi trang (số chưa đọc, 8 thông báo mới nhất, đánh dấu đã đọc, toast khi có thông báo realtime; poll 30 s khi mất WS); `/notifications` — danh sách 30 ngày, lọc, đánh dấu đã đọc, link tới GD / webhook / đối soát / connector / tra soát; tab **Cấu hình** (admin): bật / tắt trong ứng dụng / email, ngưỡng + khoảng thời gian, người nhận theo sự kiện.
+  - **Lưu 30 ngày**: worker xoá thông báo cũ hơn 30 ngày mỗi ngày (cùng job dọn audit).
+  - Test `tests/notification.test.ts` (6): cấu hình hiệu lực, lọc realtime theo audience / merchant, chống trùng, tắt kênh, không người nhận → không email, đếm IP đáng ngờ.
+
+- **Kiểm thử** (build production `TRUST_PROXY=true :4000` + realtime `dist/server.mjs :4001` + worker `dist/worker.mjs` với SMTP giả :2525 + endpoint webhook luôn 500; 2 WebSocket admin / viewer; token Keycloak thật; e2e 22 ca + trình duyệt):
+
+  | Tiêu chí (PLAN) | Kết quả |
+  |-----------------|---------|
+  | GD thất bại → notif hiện | ✅ IPN VNPay (mã 24, chữ ký thật) → GD `Failed` → thông báo "Thanh toán 150.000₫ thất bại" trong trung tâm (chưa đọc, link `/transactions/{id}`); trình duyệt đang mở dashboard hiện **toast + số chưa đọc** ngay |
+  | Webhook fail 5 lần → gửi email | ✅ endpoint payment.failed luôn 500 (retry 1 s) → đúng **lần thử thứ 5**: 1 thông báo `webhook.failed` / delivery, worker gửi email tới SMTP giả (`ops@example.test`, tiêu đề "Webhook payment.failed thất bại 5 lần"), `email_status = sent` |
+  | Real-time | ✅ WebSocket admin nhận `notification.created` ≤ 1,6 s sau IPN; viewer nhận thông báo GD (audience all) nhưng **không** nhận cảnh báo admin (WS + API) |
+  | Ngưỡng cấu hình được | ✅ đổi ngưỡng IP đáng ngờ = 3 (audit `notification.settings`) → lần thất bại thứ 3 cùng IP → "3 giao dịch thất bại từ cùng IP …" (1 lần), IP khác không báo; health check VNPay lỗi 4 lần → "Kết nối VNPay lỗi 3 lần liên tiếp" đúng 1 lần ở lần thứ 3; email người nhận sai → 400; viewer đọc cấu hình → 403 |
+  | Lưu 30 ngày / đánh dấu đã đọc | ✅ đánh dấu 1 → chưa đọc −1; đánh dấu tất cả chỉ áp cho người đó (viewer vẫn còn 4 chưa đọc); body sai 400, không token 401; dọn 30 ngày chạy trong job hằng ngày của worker |
+  | UI | ✅ chuông + dropdown + toast, trang `/notifications` + tab Cấu hình (desktop); 375 px: dropdown vừa màn hình, không cuộn ngang |
+  | format / lint / typecheck / test / build / build:jobs | ✅ Payment Hub; test 190 (thêm 6) |
+  | Dọn dẹp | ✅ dừng app / realtime / worker / SMTP giả; xoá GD `P73-*`, webhook thử, mọi thông báo + cấu hình thử, lịch sử health VNPay, API key tạm, khoá Redis `payhub:notify:*` |
+
+- **Khác biệt so với plan:**
+  - Bảng `notifications` cũ (gắn `users`) bị thay — admin là user Keycloak, trạng thái đã đọc lưu theo `sub`.
+  - "GD thành công / thất bại → BizOne" (SRS §9.1): BizOne đã nhận qua webhook (P3.6); trung tâm thông báo phục vụ người dùng trang quản trị (lọc theo merchant cho token gắn merchant).
+  - Cấu hình ngưỡng là chung hệ thống (không theo từng người); ngưỡng cảnh báo dashboard (#33) chưa đồng bộ.
+- **Quyết định thiết kế:** một điểm vào `notify()` cho mọi module, kênh / ngưỡng đọc từ DB (không hard-code ở module); realtime dùng lại relay Redis → WebSocket sẵn có (thêm audience vào bộ lọc); email luôn qua hàng đợi (SMTP không làm chậm IPN / API); chống trùng bằng `dedupe_key` unique thay vì khoá.
+- **Vấn đề / lưu ý:**
+  - **Lỗi gặp khi kiểm thật, đã sửa:** phần dọn 30 ngày chưa vào worker (chuỗi thay thế không khớp sau khi prettier định dạng — lint báo biến không dùng) → đã thêm.
+  - #174 (người nhận theo tiến trình — đặt `NOTIFY_EMAILS` cho cả app và worker; cấu hình chung; `transaction.success` mặc định bật). Đóng #114; cập nhật #33, #122, #168. Phiên trình duyệt hết hạn trong lúc kiểm → đăng nhập lại Keycloak local bằng user dev trong realm JSON.
+  - Env mới: `NOTIFY_EMAILS`. Production: `npm run db:migrate` (`11_notification_center`).
