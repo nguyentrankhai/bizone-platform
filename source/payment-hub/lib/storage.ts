@@ -1,5 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -21,6 +22,10 @@ export interface StorageDriver {
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
+  /** P7.5 health check: storage reachable and writable / bucket readable. Throws otherwise. */
+  probe(): Promise<void>;
+  /** P7.5 backup: every stored key */
+  list(): AsyncGenerator<string>;
 }
 
 export class StorageError extends Error {
@@ -33,6 +38,15 @@ export class StorageError extends Error {
 const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,400}$/;
 function assertKey(key: string): void {
   if (!KEY_RE.test(key) || key.includes("..")) throw new StorageError(`Invalid storage key`);
+}
+
+function decodeXml(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 // ─── S3 / MinIO (Signature V4) ────────────────────────────────────────────────
@@ -62,10 +76,32 @@ function encodePath(p: string): string {
     .join("/");
 }
 
+const rfc3986 = (v: string) =>
+  encodeURIComponent(v).replace(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+export function canonicalQuery(query: Record<string, string> | undefined): string {
+  if (!query) return "";
+  return Object.keys(query)
+    .sort()
+    .map((k) => `${rfc3986(k)}=${rfc3986(query[k])}`)
+    .join("&");
+}
+
 /** Authorization headers of a path-style S3 request (exported for tests). */
 export function signS3Request(
   cfg: Pick<S3Config, "region" | "accessKey" | "secretKey">,
-  req: { method: string; host: string; path: string; body: Buffer; now: Date },
+  req: {
+    method: string;
+    host: string;
+    path: string;
+    body: Buffer;
+    now: Date;
+    /** P7.5: query parameters (ListObjectsV2) — signed as the canonical query string */
+    query?: Record<string, string>;
+  },
 ): Record<string, string> {
   const amzDate = req.now
     .toISOString()
@@ -86,7 +122,7 @@ export function signS3Request(
   const canonicalRequest = [
     req.method,
     encodePath(req.path),
-    "",
+    canonicalQuery(req.query),
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -179,6 +215,46 @@ class S3Storage implements StorageDriver {
     const res = await this.request("DELETE", key);
     if (!res.ok && res.status !== 404) throw new StorageError(`Delete failed: HTTP ${res.status}`);
   }
+
+  async *list(): AsyncGenerator<string> {
+    const base = new URL(this.cfg.endpoint);
+    const path = `/${this.cfg.bucket}`;
+    let token: string | undefined;
+    do {
+      const query: Record<string, string> = { "list-type": "2", "max-keys": "1000" };
+      if (token) query["continuation-token"] = token;
+      const auth = signS3Request(this.cfg, {
+        method: "GET",
+        host: base.host,
+        path,
+        body: Buffer.alloc(0),
+        now: new Date(),
+        query,
+      });
+      const res = await fetch(
+        `${base.protocol}//${base.host}${encodePath(path)}?${canonicalQuery(query)}`,
+        { headers: auth, signal: AbortSignal.timeout(20_000) },
+      ).catch((e: unknown) => {
+        throw new StorageError(`Storage unreachable: ${(e as Error).message}`);
+      });
+      if (res.status === 404) return; // bucket not created yet = nothing stored
+      if (!res.ok) throw new StorageError(`List failed: HTTP ${res.status}`);
+      const xml = await res.text();
+      for (const m of xml.matchAll(/<Key>([^<]*)<\/Key>/g)) yield decodeXml(m[1]);
+      const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+      token = truncated
+        ? decodeXml(/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(xml)?.[1] ?? "")
+        : undefined;
+    } while (token);
+  }
+
+  async probe(): Promise<void> {
+    const head = await this.request("HEAD", "");
+    // 404 = bucket not created yet (first upload creates it) — the server answers
+    if (!head.ok && head.status !== 404) {
+      throw new StorageError(`Storage bucket check: HTTP ${head.status}`);
+    }
+  }
 }
 
 // ─── Local directory ──────────────────────────────────────────────────────────
@@ -213,6 +289,26 @@ class LocalStorage implements StorageDriver {
 
   async delete(key: string): Promise<void> {
     await rm(this.fileOf(key), { force: true });
+  }
+
+  async *list(): AsyncGenerator<string> {
+    let entries: string[];
+    try {
+      entries = await readdir(this.root, { recursive: true });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw e;
+    }
+    for (const rel of entries.sort()) {
+      const key = rel.split(path.sep).join("/");
+      if (!KEY_RE.test(key)) continue;
+      if ((await stat(path.join(this.root, rel))).isFile()) yield key;
+    }
+  }
+
+  async probe(): Promise<void> {
+    await mkdir(this.root, { recursive: true });
+    await access(this.root, constants.W_OK);
   }
 }
 

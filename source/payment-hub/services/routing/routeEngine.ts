@@ -147,6 +147,35 @@ export async function recordPartnerSuccess(id: number): Promise<void> {
   await bestEffort(() => getRedis().del(failKey(id)));
 }
 
+/**
+ * P7.5 (SRS 3.3.9 "Connector Down → auto-deactivate", NFR-20 auto-recovery): the Health Monitor
+ * holds the circuit of every Active partner config of a connector open while its health checks
+ * keep failing (`ttlMs` ≥ the check interval, refreshed by each failing check) and closes it on
+ * the first healthy check — routing skips the partner meanwhile, other partners keep serving.
+ * Softer than flipping `connectors.is_active`: no admin action needed to recover.
+ */
+export async function holdCircuitsOpen(ids: number[], ttlMs: number): Promise<void> {
+  if (ids.length === 0) return;
+  await bestEffort(async () => {
+    const m = getRedis().multi();
+    for (const id of ids) m.set(openKey(id), `health:${Date.now()}`, "PX", ttlMs);
+    await m.exec();
+  });
+}
+
+/** Close circuits that the Health Monitor opened (manual / failure-count circuits untouched). */
+export async function releaseHealthCircuits(ids: number[]): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const released = await bestEffort(async () => {
+    const redis = getRedis();
+    const values = await redis.mget(...ids.map(openKey));
+    const mine = ids.filter((_, i) => values[i]?.startsWith("health:"));
+    if (mine.length) await redis.del(...mine.map(openKey));
+    return mine;
+  });
+  return released ?? [];
+}
+
 /** Admin: close a partner's circuit and clear its failure count. */
 export async function resetCircuit(id: number): Promise<void> {
   await bestEffort(() => getRedis().del(failKey(id), openKey(id)));

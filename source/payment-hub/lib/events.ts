@@ -15,7 +15,13 @@ export async function publishEvent(type: string, data: unknown): Promise<void> {
   const bump = affectsTxnList(type)
     ? bumpTxnListVersion(Number((data as { merchantId?: unknown } | null)?.merchantId))
     : null;
-  await Promise.all([getRedis().publish(REALTIME_CHANNEL, JSON.stringify(event)), bump]);
+  // P7.5: best effort — the business change is already committed; a Redis outage only delays the
+  // realtime push (UIs poll) and the list cache expires by TTL. Never fail the caller.
+  try {
+    await Promise.all([getRedis().publish(REALTIME_CHANNEL, JSON.stringify(event)), bump]);
+  } catch (err) {
+    console.error(`[events] ${type} not published: ${(err as Error).message}`);
+  }
 }
 
 /**

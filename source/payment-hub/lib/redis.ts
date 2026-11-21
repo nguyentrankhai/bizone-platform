@@ -64,21 +64,54 @@ export function describeError(err: Error): string {
 }
 
 /**
- * New connection (subscribers and BullMQ need their own). `maxRetriesPerRequest: null` — BullMQ
- * workers require it so blocking commands are never aborted.
+ * Retry / timeout options of a connection.
+ *
+ * - `blocking` (subscribers, BullMQ): `maxRetriesPerRequest: null` — BullMQ workers require it so
+ *   blocking commands are never aborted; commands wait for Redis to come back.
+ * - `command` (P7.5, `getRedis()` — request paths: rate limits, idempotency, caches, events):
+ *   fail fast instead. With `null` every command issued while Redis is down waited forever, so
+ *   one Redis outage hung every API request (even those that degrade gracefully without Redis).
+ *   Now a command fails at once while the connection is down (offline queue off after the first
+ *   connect, see `createRedis`), after `REDIS_MAX_RETRIES` reconnect attempts (default 1) while
+ *   still connecting, or after `REDIS_COMMAND_TIMEOUT_MS` (default 2 000) on a connected but
+ *   unresponsive server.
  */
-export function createRedis(): RedisClient {
+export function redisRetryOptions(
+  mode: "command" | "blocking",
+  env: Record<string, string | undefined> = process.env,
+): { maxRetriesPerRequest: number | null; commandTimeout?: number } {
+  if (mode === "blocking") return { maxRetriesPerRequest: null };
+  const retries = Number(env.REDIS_MAX_RETRIES);
+  const timeout = Number(env.REDIS_COMMAND_TIMEOUT_MS);
+  return {
+    maxRetriesPerRequest: Number.isInteger(retries) && retries >= 0 ? retries : 1,
+    commandTimeout: Number.isFinite(timeout) && timeout > 0 ? timeout : 2000,
+  };
+}
+
+/** New connection (subscribers and BullMQ need their own — `blocking`, the default). */
+export function createRedis(mode: "command" | "blocking" = "blocking"): RedisClient {
   const nodes = clusterNodes();
+  const retry = redisRetryOptions(mode);
   const client: RedisClient = nodes
     ? new Cluster(nodes, {
-        redisOptions: { ...clusterAuth(process.env), maxRetriesPerRequest: null },
+        redisOptions: { ...clusterAuth(process.env), ...retry },
         // Required by BullMQ on a cluster: commands wait for the slot map instead of failing
         enableOfflineQueue: true,
         scaleReads: "master",
       })
-    : new Redis(redisUrl(), { maxRetriesPerRequest: null });
+    : new Redis(redisUrl(), retry);
   // Without a listener ioredis prints a full stack trace on every reconnect attempt.
   client.on("error", (err: Error) => console.error(`[redis] ${describeError(err)}`));
+  if (mode === "command") {
+    // P7.5: commands sent before the first connection wait for it (startup); once connected, a
+    // lost connection rejects commands at once ("Stream isn't writeable") instead of each one
+    // waiting for a reconnect attempt — measured: a transaction create took 20.9 s with Redis
+    // down (≈ 10 Redis calls × ~2 s) before this, see PROGRESS P7.5.
+    client.once("ready", () => {
+      client.options.enableOfflineQueue = false;
+    });
+  }
   return client;
 }
 
@@ -86,7 +119,7 @@ export function createRedis(): RedisClient {
 const globalForRedis = globalThis as unknown as { payhubRedis?: RedisClient };
 
 export function getRedis(): RedisClient {
-  globalForRedis.payhubRedis ??= createRedis();
+  globalForRedis.payhubRedis ??= createRedis("command");
   return globalForRedis.payhubRedis;
 }
 

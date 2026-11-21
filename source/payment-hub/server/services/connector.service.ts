@@ -16,6 +16,7 @@ import {
 } from "@/services/connectors/registry";
 import { PluginSandbox, SandboxError, pluginBaseDir } from "@/services/connectors/sandbox";
 import { ROUTE_MAP } from "@/services/routing/routeMap";
+import { holdCircuitsOpen, releaseHealthCircuits } from "@/services/routing/routeEngine";
 import { PARTNER_TYPES } from "@/lib/partner-types";
 import { getSetting, notify } from "@/services/notification/sender";
 
@@ -626,20 +627,65 @@ async function recordHealth(row: Connector, h: HealthOutcome, by: string): Promi
     console.warn(`[connectors] ${row.code} health ${row.healthStatus} → ${h.status}: ${h.message}`);
   }
   if (h.status === "Unhealthy") await alertIfDown(row, h);
+  await tripOrRecover(row, h);
+}
+
+/** Consecutive Unhealthy checks of a connector, newest first (capped at `cap`). */
+async function unhealthyStreak(code: string, cap: number) {
+  const last = await getPrisma().connectorHealthLog.findMany({
+    where: { connectorCode: code },
+    orderBy: { id: "desc" },
+    take: cap,
+    select: { id: true, status: true },
+  });
+  const streak = last.findIndex((l) => l.status !== "Unhealthy");
+  return { last, consecutive: streak === -1 ? last.length : streak };
+}
+
+/** Health checks failed in a row before routing skips the connector (0 = never). */
+export function healthTripThreshold(env: Record<string, string | undefined> = process.env): number {
+  const n = Number(env.CONNECTOR_HEALTH_TRIP_AFTER);
+  return Number.isInteger(n) && n >= 0 ? n : 3;
+}
+
+/**
+ * P7.5: `CONNECTOR_HEALTH_TRIP_AFTER` (3) consecutive Unhealthy checks → circuits of the
+ * connector's Active partner configs held open (Route Engine skips them, fallback partners
+ * serve); first Healthy / Degraded check → released. Manual checks count too.
+ */
+async function tripOrRecover(row: Connector, h: HealthOutcome): Promise<void> {
+  const n = healthTripThreshold();
+  if (n === 0) return;
+  const type = typeOfRow(row);
+  if (!type) return;
+  const partners = await getPrisma().partnerConfig.findMany({
+    where: { connectorType: type, status: "Active" },
+    select: { id: true },
+  });
+  const ids = partners.map((p) => p.id);
+  if (h.status !== "Unhealthy") {
+    const released = await releaseHealthCircuits(ids);
+    if (released.length)
+      console.warn(
+        `[connectors] ${row.code} healthy again — circuit closed for #${released.join(", #")}`,
+      );
+    return;
+  }
+  const { consecutive } = await unhealthyStreak(row.code, n);
+  if (consecutive < n) return;
+  // open until the next check confirms (interval + margin); a healthy check releases earlier
+  const intervalMs = (Number(process.env.CONNECTOR_HEALTH_INTERVAL_S) || 300) * 1000;
+  await holdCircuitsOpen(ids, intervalMs * 2 + 60_000);
+  console.warn(
+    `[connectors] ${row.code} unhealthy ${consecutive}× — routing skips partner config #${ids.join(", #")}`,
+  );
 }
 
 /** P7.3: `threshold` consecutive Unhealthy checks → "Kết nối đối tác lỗi" (once per outage). */
 async function alertIfDown(row: Connector, h: HealthOutcome): Promise<void> {
   const setting = await getSetting("connector.down");
   const n = setting.threshold ?? 3;
-  const last = await getPrisma().connectorHealthLog.findMany({
-    where: { connectorCode: row.code },
-    orderBy: { id: "desc" },
-    take: n + 1,
-    select: { id: true, status: true },
-  });
-  const streak = last.findIndex((l) => l.status !== "Unhealthy");
-  const consecutive = streak === -1 ? last.length : streak;
+  const { last, consecutive } = await unhealthyStreak(row.code, n + 1);
   if (consecutive !== n) return; // exactly the n-th failure of this outage
   await notify("connector.down", {
     title: `Kết nối ${row.name} lỗi ${n} lần liên tiếp`,

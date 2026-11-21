@@ -185,8 +185,16 @@ function bruteForceKey(req: NextRequest, apiKey: string): string {
 async function enforceRateLimit(apiKey: string, limit: number): Promise<void> {
   // One round trip (P7.4): INCR + EXPIRE NX in a MULTI on the same key (cluster-safe)
   const key = `rate:payhub:${apiKey}`;
-  const res = await getRedis().multi().incr(key).expire(key, RATE_WINDOW_SECONDS, "NX").exec();
-  const count = Number(res?.[0]?.[1] ?? 0);
+  let count = 0;
+  try {
+    const res = await getRedis().multi().incr(key).expire(key, RATE_WINDOW_SECONDS, "NX").exec();
+    count = Number(res?.[0]?.[1] ?? 0);
+  } catch (err) {
+    // P7.5 graceful degradation: Redis down → serve without the per-key limit (logged) rather
+    // than refuse every payment; the HMAC signature + brute-force rules still apply.
+    console.error(`[api-auth] rate limit unavailable: ${(err as Error).message}`);
+    return;
+  }
   if (count > limit) {
     throw new ApiAuthError(
       "RATE_LIMITED",

@@ -11,6 +11,7 @@ import {
   requestFingerprint,
 } from "@/server/middleware/idempotency";
 import { requireAdmin } from "@/server/middleware/adminAuth";
+import { isInfraError } from "@/server/middleware/degrade";
 import { getPrisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { isTxnStatus } from "@/server/services/stateMachine";
@@ -140,7 +141,19 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
   const url = new URL(req.url);
   const fp = requestFingerprint("POST", url.pathname + url.search, rawBody);
   if (idempotencyKey) {
-    const claim = await claimIdempotency("txn", merchant.merchantId, idempotencyKey, fp);
+    let claim: Awaited<ReturnType<typeof claimIdempotency>>;
+    try {
+      claim = await claimIdempotency("txn", merchant.merchantId, idempotencyKey, fp);
+    } catch (e) {
+      if (!isInfraError(e)) throw e;
+      // P7.5 graceful degradation: Redis down → create without the idempotency cache. A retry
+      // cannot create a second transaction (unique merchant_txn_id → 409 CONFLICT), it just
+      // gets the 409 instead of the replayed 201.
+      console.warn(
+        `[degraded] idempotency unavailable (${(e as Error).message}) — unique merchant_txn_id only`,
+      );
+      return createUnguarded(req, input, merchant, idempotencyKey);
+    }
     if (claim.kind === "replay") return replay(claim.response, claim.status);
     if (claim.kind === "in_progress")
       return err("CONFLICT", "A request with this Idempotency-Key is still being processed", 409);
@@ -162,6 +175,19 @@ export async function handleCreateTransaction(req: NextRequest): Promise<Respons
     if (idempotencyKey) await releaseIdempotency("txn", merchant.merchantId, idempotencyKey);
     throw e;
   }
+}
+
+async function createUnguarded(
+  req: NextRequest,
+  input: z.infer<typeof createTxnSchema>,
+  merchant: { merchantId: number; apiKeyId: number },
+  idempotencyKey: string,
+): Promise<Response> {
+  const result = await createAndInitiate(req, input, merchant, idempotencyKey);
+  if (!result.ok) return result.response;
+  const res = ok(result.data, 201);
+  res.headers.set("Idempotency-Status", "unavailable");
+  return res;
 }
 
 /** Replayed idempotent response — same body as the first call, flagged for the merchant */

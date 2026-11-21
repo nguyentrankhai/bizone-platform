@@ -15,7 +15,8 @@ export const RATE_LIMITS = { general: 100, auth: 10 } as const;
 
 /** Rule for a public (unauthenticated) path — API or page; `null` = not limited here. */
 export function publicRateRule(pathname: string): RateRule | null {
-  if (pathname.startsWith("/api/health")) return null;
+  // health probes: answered from a 5 s in-process cache (server/services/health.service.ts)
+  if (pathname.startsWith("/api/health") || pathname === "/api/v1/health") return null;
   if (pathname.startsWith("/api/auth/backchannel-logout"))
     return { name: "backchannel", limit: 300, window: 60, by: "ip" };
   if (pathname.startsWith("/api/auth/"))

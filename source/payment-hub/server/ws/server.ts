@@ -4,6 +4,8 @@ import { WebSocket, WebSocketServer } from "ws";
 import { authenticateToken } from "@/lib/auth";
 import { REALTIME_CHANNEL, canReceive, type RealtimeEvent } from "@/lib/events";
 import { createRedis } from "@/lib/redis";
+import { startHeartbeat } from "@/lib/heartbeat";
+import { installProcessHandlers } from "@/lib/sentry";
 import { ADMIN_READ_ROLES } from "@/server/middleware/adminAuth";
 import { DashboardRelay } from "./dashboard";
 
@@ -13,6 +15,8 @@ import { DashboardRelay } from "./dashboard";
  * Requires role payhub-admin | payhub-viewer; a token carrying `merchant_id` only receives
  * events of that merchant. The socket is closed when the token expires.
  */
+
+installProcessHandlers("realtime");
 
 const port = Number(process.env.WS_PORT ?? 4001);
 const WS_PATH = "/ws";
@@ -32,11 +36,18 @@ const dashboard = new DashboardRelay();
 
 const http = createServer((req, res) => {
   if (req.url === "/health") {
-    res.writeHead(200, { "content-type": "application/json" });
+    // P7.5: unhealthy while the Redis subscription is down — nothing would be relayed
+    const ok = subscriber.status === "ready";
+    res.writeHead(ok ? 200 : 503, { "content-type": "application/json" });
     res.end(
       JSON.stringify({
-        success: true,
-        data: { status: "ok", clients: clients.size, dashboardSubscribers: dashboard.size },
+        success: ok,
+        data: {
+          status: ok ? "ok" : "down",
+          redis: subscriber.status,
+          clients: clients.size,
+          dashboardSubscribers: dashboard.size,
+        },
       }),
     );
     return;
@@ -154,6 +165,7 @@ subscriber
   .subscribe(REALTIME_CHANNEL)
   .then(() => {
     dashboard.start();
+    stopHeartbeat = startHeartbeat("realtime");
     http.listen(port, () => {
       console.log(`[realtime] ws://0.0.0.0:${port}/ws relaying "${REALTIME_CHANNEL}"`);
     });
@@ -164,12 +176,14 @@ subscriber
   });
 
 let shuttingDown = false;
+let stopHeartbeat: (() => void) | undefined;
 
 function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[realtime] ${signal} received, closing…`);
   clearInterval(heartbeat);
+  stopHeartbeat?.();
   dashboard.stop();
   for (const socket of wss.clients) socket.close(1001, "server shutting down");
   wss.close();

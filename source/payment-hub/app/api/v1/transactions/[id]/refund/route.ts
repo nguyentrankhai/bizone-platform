@@ -1,3 +1,4 @@
+import { guarded } from "@/server/middleware/degrade";
 import type { NextRequest } from "next/server";
 import { handleMerchantRefund } from "@/server/routes/refund";
 
@@ -6,5 +7,5 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
-  return handleMerchantRefund(req, id);
+  return guarded(req, "/api/v1/transactions/[id]/refund", () => handleMerchantRefund(req, id));
 }

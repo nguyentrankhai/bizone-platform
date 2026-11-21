@@ -20,6 +20,7 @@ import { IDENTITY_HEADERS } from "@/server/middleware/adminAuth";
 
 const PUBLIC_PATHS = [
   "/api/health",
+  "/api/v1/health", // P7.5 monitoring endpoint (public summary; details need a token)
   "/api/v1/webhooks", // inbound partner webhooks (verified by HMAC, not JWT)
   "/api/ipn/", // PSP IPN callbacks (verified by the connector's signature, not JWT)
   "/api/auth/logout", // verifies the bearer token itself (P6.7)

@@ -1,5 +1,5 @@
 import { Queue, type Job } from "bullmq";
-import { describeError, withLock } from "@/lib/redis";
+import { describeError, getRedis, withLock } from "@/lib/redis";
 import { queueOptions } from "@/services/queue/connection";
 
 /**
@@ -10,6 +10,11 @@ import { queueOptions } from "@/services/queue/connection";
  */
 
 export const MAINTENANCE_QUEUE = "payhub-maintenance";
+
+/** Hash task → epoch ms of the last completed run (P7.5 health check). */
+export const MAINTENANCE_LAST_RUN_KEY = "payhub:{hb}:maintenance";
+/** Field of that hash: when a worker last (re)registered the schedulers. */
+export const SCHEDULED_AT_FIELD = "_scheduledAt";
 
 export type MaintenanceTask =
   "webhook-outbox" | "expiry" | "connector-health" | "retention" | "archive";
@@ -73,6 +78,10 @@ export function getMaintenanceQueue(): Queue<MaintenanceJob> {
 /** Idempotent: upserting the same scheduler id from several workers keeps one schedule. */
 export async function scheduleMaintenance(): Promise<void> {
   const queue = getMaintenanceQueue();
+  // P7.5: a task that has not run yet is only "stalled" once its limit passed since scheduling
+  await getRedis()
+    .hset(MAINTENANCE_LAST_RUN_KEY, SCHEDULED_AT_FIELD, String(Date.now()))
+    .catch(() => {});
   for (const s of taskSchedules()) {
     await queue.upsertJobScheduler(
       s.task,
@@ -92,6 +101,11 @@ export function maintenanceProcessor(run: TaskRunner) {
     const result = await withLock(`maintenance:${task}`, locks.get(task) ?? 60_000, () =>
       run(task),
     );
-    return result === undefined ? { skipped: "locked" } : result;
+    if (result === undefined) return { skipped: "locked" };
+    // P7.5: last completed run per task — the health check flags a stalled scheduler
+    await getRedis()
+      .hset(MAINTENANCE_LAST_RUN_KEY, task, String(Date.now()))
+      .catch(() => {});
+    return result;
   };
 }

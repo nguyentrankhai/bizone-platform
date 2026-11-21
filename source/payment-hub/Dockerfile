@@ -30,9 +30,23 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 # Dispute evidence when no S3 endpoint is configured (STORAGE_LOCAL_DIR default ./storage)
-RUN mkdir -p /app/storage && chown nextjs:nodejs /app/storage
+# P7.5: uptime monitor state (compose volume monitor-data — a new named volume takes the owner
+# of the image directory, so the nextjs user can write it)
+RUN mkdir -p /app/storage /app/monitor && chown nextjs:nodejs /app/storage /app/monitor
 
 USER nextjs
 EXPOSE 4000 4001
 
 CMD ["node", "server.js"]
+
+# P7.5 — operations image: same app + bundles, plus the MariaDB client / openssl for
+# scripts/backup.sh, restore.sh, backup-verify.sh and the daily scheduler (compose service
+# "backup"). Build it explicitly (target ops); the app services use target runner.
+FROM runner AS ops
+USER root
+RUN apk add --no-cache bash mariadb-client openssl tar tzdata coreutils \
+    && mkdir -p /backups && chown nextjs:nodejs /backups
+COPY --chown=nextjs:nodejs scripts/backup-lib.sh scripts/backup.sh scripts/restore.sh scripts/backup-verify.sh scripts/backup-cron.sh ./scripts/
+ENV BACKUP_DIR=/backups TZ=Asia/Ho_Chi_Minh
+USER nextjs
+CMD ["bash", "scripts/backup-cron.sh"]

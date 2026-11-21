@@ -1,6 +1,8 @@
 import { Worker } from "bullmq";
 import { getPrisma } from "@/lib/prisma";
 import { describeError } from "@/lib/redis";
+import { startHeartbeat } from "@/lib/heartbeat";
+import { captureException, flushSentry, installProcessHandlers } from "@/lib/sentry";
 import { runHealthMonitor } from "@/server/services/connector.service";
 import { disposeCatalog } from "@/services/connectors/loader";
 import { purgeAuditLogs, retentionDays } from "@/services/audit/logger";
@@ -37,12 +39,14 @@ import {
 import { purgeNotifications } from "@/services/notification/sender";
 import { NOTIFICATION_RETENTION_DAYS } from "@/services/notification/events";
 
+installProcessHandlers("worker");
 const roles = parseWorkerRoles(process.env.WORKER_QUEUES);
 console.log(`[worker] pid ${process.pid} — queues: ${[...roles].join(", ")}`);
 
 /** Same listeners for every queue: errors logged, process exits if Redis is unreachable at start. */
 function started<T extends Worker>(worker: T, label: string): T {
   worker.on("error", (err) => console.error(`[${label}] ${describeError(err)}`));
+  reportFinalFailures(worker, label);
   worker
     .waitUntilReady()
     .then(() =>
@@ -53,6 +57,21 @@ function started<T extends Worker>(worker: T, label: string): T {
       process.exit(1);
     });
   return worker;
+}
+
+/**
+ * P7.5: a job that failed its last attempt → Sentry. Webhook deliveries are left out: a merchant
+ * endpoint being down is the merchant's problem (webhook logs + P7.3 notifications cover it).
+ */
+function reportFinalFailures(worker: Worker, label: string): void {
+  if (label === "webhook") return;
+  worker.on("failed", (job, err) => {
+    if (job && job.attemptsMade < (job.opts.attempts ?? 1)) return;
+    captureException(err, {
+      tags: { queue: worker.name, job: job?.name },
+      extra: { jobId: job?.id, attemptsMade: job?.attemptsMade },
+    });
+  });
 }
 
 // Webhooks (P3.6). Several worker instances may consume the queue: BullMQ hands each job to one
@@ -225,6 +244,10 @@ maintenanceWorker?.on("failed", (job, err) =>
   console.error(`[maintenance] ${job?.data.task} failed: ${err.message}`),
 );
 maintenanceWorker?.on("error", (err) => console.error(`[maintenance] ${describeError(err)}`));
+if (maintenanceWorker) reportFinalFailures(maintenanceWorker, "maintenance");
+
+// P7.5: liveness for /api/v1/health (no live worker = degraded) and Docker's healthcheck
+const stopHeartbeat = startHeartbeat("worker");
 if (maintenanceWorker) {
   void scheduleMaintenance()
     .then(() => console.log(`[worker] maintenance scheduled (queue "${MAINTENANCE_QUEUE}")`))
@@ -247,6 +270,8 @@ async function shutdown(signal: string) {
     ),
   );
   disposeCatalog();
+  stopHeartbeat();
+  await flushSentry(1000);
   process.exit(0);
 }
 

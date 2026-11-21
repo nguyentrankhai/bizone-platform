@@ -363,6 +363,24 @@ model ConnectorHealthLog {
   @@map("connector_health_logs")
 }
 
+/// P7.5: backup / restore-test journal (scripts/backup.sh, scripts/backup-verify.sh)
+model BackupRun {
+  id         BigInt   @id @default(autoincrement())
+  kind       String   @db.VarChar(20)
+  status     String   @db.VarChar(20)
+  backupName String?  @map("backup_name") @db.VarChar(100)
+  startedAt  DateTime @map("started_at") @db.DateTime(0)
+  finishedAt DateTime @map("finished_at") @db.DateTime(0)
+  durationS  Int      @default(0) @map("duration_s")
+  sizeBytes  BigInt?  @map("size_bytes")
+  host       String?  @db.VarChar(100)
+  details    Json?
+  error      String?  @db.VarChar(1000)
+
+  @@index([kind, status, finishedAt], map: "idx_backup_kind_status")
+  @@map("backup_runs")
+}
+
 model Transaction {
   id              Int               @id @default(autoincrement())
   txnCode         String            @unique @map("txn_code") @db.VarChar(100)

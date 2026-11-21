@@ -30,7 +30,9 @@ services:
     restart: "no"
 
   app:
-    build: .
+    build:
+      context: .
+      target: runner
     image: bizone-payhub
     container_name: payhub-app
     ports:
@@ -38,13 +40,18 @@ services:
     env_file:
       - path: .env.local
         required: false
-    environment: *app-env
+    environment:
+      <<: *app-env
+      # P7.5: /api/v1/health reports the age of the last backup of the "backup" service
+      BACKUP_MONITOR: ${BACKUP_MONITOR:-true}
+      HEALTH_TOKEN: ${HEALTH_TOKEN:-}
     depends_on:
       <<: *depends
       migrate:
         condition: service_completed_successfully
     volumes:
       - storage:/app/storage
+    # readiness: 503 only when the database is unreachable (P7.5 — Redis / workers → degraded)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
       interval: 30s
@@ -66,11 +73,26 @@ services:
     env_file:
       - path: .env.local
         required: false
-    environment: *app-env
+    environment:
+      <<: *app-env
+      HEARTBEAT_FILE: /tmp/payhub-worker.alive
     depends_on:
       <<: *depends
       app:
         condition: service_started
+    # P7.5: the heartbeat file is touched every 10 s once Redis accepted the beat
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "process.exit(Date.now() - require('fs').statSync('/tmp/payhub-worker.alive').mtimeMs < 60000 ? 0 : 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
 
   realtime:
@@ -93,6 +115,81 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # P7.5: daily backup (DB + stored files) at BACKUP_TIME (01:30 Asia/Ho_Chi_Minh), restore test
+  # right after, 30-day retention, optional off-site copy (BACKUP_UPLOAD_CMD). Manual run:
+  #   docker compose run --rm backup bash scripts/backup.sh
+  #   docker compose run --rm backup bash scripts/backup-verify.sh latest
+  #   docker compose run --rm backup bash scripts/restore.sh latest --target-db paymentdb --force --files
+  backup:
+    build:
+      context: .
+      target: ops
+    image: bizone-payhub-ops
+    container_name: payhub-backup
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      <<: *app-env
+      BACKUP_DIR: /backups
+      BACKUP_TIME: ${BACKUP_TIME:-01:30}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      BACKUP_VERIFY: ${BACKUP_VERIFY:-true}
+      BACKUP_UPLOAD_CMD: ${BACKUP_UPLOAD_CMD:-}
+      BACKUP_ENCRYPTION_KEY_FILE: ${BACKUP_ENCRYPTION_KEY_FILE:-}
+    volumes:
+      - ${BACKUP_HOST_DIR:-backups}:/backups
+      - storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const t = Number(require('fs').readFileSync('/tmp/payhub-backup.alive', 'utf8')); process.exit(Date.now() / 1000 - t < 120 ? 0 : 1)",
+        ]
+      interval: 60s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+  # P7.5: uptime monitor (PagerDuty / e-mail on downtime). Opt-in — `--profile monitoring`; in
+  # production run it on ANOTHER host (or an external uptime service on /api/v1/health).
+  monitor:
+    image: bizone-payhub
+    pull_policy: never
+    container_name: payhub-monitor
+    profiles: ["monitoring"]
+    command: ["node", "dist/monitor.mjs"]
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      MONITOR_TARGETS: ${MONITOR_TARGETS:-app=http://app:4000/api/v1/health,realtime=http://realtime:4001/health}
+      MONITOR_STATE_FILE: /app/monitor/monitor-state.json
+      HEALTH_TOKEN: ${HEALTH_TOKEN:-}
+      PAGERDUTY_ROUTING_KEY: ${PAGERDUTY_ROUTING_KEY:-}
+      PAGERDUTY_EVENTS_URL: ${PAGERDUTY_EVENTS_URL:-https://events.pagerduty.com/v2/enqueue}
+      MONITOR_ALERT_EMAILS: ${MONITOR_ALERT_EMAILS:-}
+      MONITOR_INTERVAL_S: ${MONITOR_INTERVAL_S:-30}
+    ports:
+      - "${MONITOR_HOST_PORT:-4002}:4002"
+    volumes:
+      - monitor-data:/app/monitor
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4002/health"]
+      interval: 30s
+      timeout: 5s
       retries: 3
     restart: unless-stopped
 
@@ -139,3 +236,5 @@ volumes:
   db-data:
   cache-data:
   storage:
+  backups:
+  monitor-data:
