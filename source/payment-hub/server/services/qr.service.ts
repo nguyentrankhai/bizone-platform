@@ -319,9 +319,11 @@ export async function generateQr(
   const ttlMs = new Date(dto.expires_at).getTime() - Date.now();
   if (ttlMs > 0) {
     await bestEffort(async () => {
-      const pipe = redis.multi().set(key, JSON.stringify(dto), "PX", ttlMs);
-      if (outcome.kind === "created") pipe.set(imageKey(token), png, "PX", ttlMs);
-      await pipe.exec();
+      // Two keys in different cluster slots → two commands, not one MULTI (P7.4)
+      await Promise.all([
+        redis.set(key, JSON.stringify(dto), "PX", ttlMs),
+        outcome.kind === "created" ? redis.set(imageKey(token), png, "PX", ttlMs) : null,
+      ]);
     });
   }
 

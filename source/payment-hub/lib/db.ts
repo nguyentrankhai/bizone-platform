@@ -10,8 +10,9 @@ function createDbPool(): Pool {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1),
-    connectionLimit: 5,
-    acquireTimeout: 5000,
+    // P7.4: pool per process — instances × DB_POOL_SIZE must stay below MariaDB max_connections
+    connectionLimit: poolSize(),
+    acquireTimeout: Number(process.env.DB_ACQUIRE_TIMEOUT_MS) || 5000,
   });
 }
 
@@ -21,4 +22,9 @@ const globalForDb = globalThis as unknown as { payhubDb?: Pool };
 export function getDb(): Pool {
   globalForDb.payhubDb ??= createDbPool();
   return globalForDb.payhubDb;
+}
+
+function poolSize(): number {
+  const n = Number(process.env.DB_POOL_SIZE);
+  return Number.isInteger(n) && n > 0 && n <= 200 ? n : 10;
 }

@@ -7,7 +7,7 @@ NextJS 16 (App Router) + TypeScript + Tailwind v4 + shadcn/ui, with a BullMQ wor
 | Process  | Entry                                    | Port | Role                                                  |
 | -------- | ---------------------------------------- | ---- | ----------------------------------------------------- |
 | app      | Next.js (`app/`)                         | 4000 | Admin UI + REST API (`/api/*`)                        |
-| worker   | `services/worker.ts` → `dist/worker.js`  | —    | BullMQ jobs (queue `webhook-delivery`)                |
+| worker   | `services/worker.ts` → `dist/worker.js`  | —    | BullMQ jobs (webhooks, recon, e-mail, maintenance)    |
 | realtime | `server/ws/server.ts` → `dist/server.js` | 4001 | WebSocket `/ws`, relays Redis channel `payhub:events` |
 
 Next.js Route Handlers can't hold WebSocket connections, so realtime runs as its own process. The app publishes with `publishEvent()` (`lib/events.ts`), and the relay broadcasts to every connected client.
@@ -44,6 +44,31 @@ docker compose down            # add -v to drop db/cache volumes
 ```
 
 One image runs all three processes; `worker` and `realtime` override the command.
+
+## Scaling (P7.4)
+
+- **App**: stateless — run several instances behind a load balancer (rate limits, idempotency keys,
+  list cache, circuit breakers, connector catalog version all live in the shared Redis).
+- **Worker**: `docker compose up -d --scale worker=3` (or `WORKER_REPLICAS`); `WORKER_QUEUES` /
+  `WORKER_CONCURRENCY_<QUEUE>` specialise instances. Periodic jobs are BullMQ job schedulers on
+  `payhub-maintenance` (one run per tick, Redis lock per task) — not one `setInterval` per process.
+- **Redis Cluster**: `REDIS_CLUSTER_NODES=host:port,…` (`lib/redis.ts`); keys used together share a
+  hash tag, BullMQ uses the `{payhub}` prefix.
+- **DB**: `transactions` stays unpartitioned (unique keys + 7 FKs); final transactions older than
+  `TXN_ARCHIVE_MONTHS` (24) move nightly to `transactions_archive`, partitioned by month — see
+  `scripts/partition-transactions.sql`.
+
+### Load test
+
+```bash
+# throw-away database + Redis DB index recommended (all data uses LT-… merchants)
+npx tsx --env-file=.env.local scripts/load-test.ts api --concurrency 500 --requests 5000 \
+  --targets http://localhost:4000,http://localhost:4002 --seed 200000
+npx tsx --env-file=.env.local scripts/load-test.ts webhooks --count 10000 --fail-rate 0.05   # worker(s) running
+VNPAY_API_URL=http://127.0.0.1:4591/querydr npm run dev:worker                               # for recon
+npx tsx --env-file=.env.local scripts/load-test.ts recon --count 10000 --latency 80
+npx tsx --env-file=.env.local scripts/load-test.ts cleanup
+```
 
 ## Layout
 

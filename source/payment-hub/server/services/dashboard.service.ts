@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/prisma";
-import { getRedis } from "@/lib/redis";
+import { getRedis, scanKeys, unlinkKeys } from "@/lib/redis";
 import { Prisma } from "@/generated/prisma/client";
 import {
   ALERT_RULES,
@@ -458,15 +458,8 @@ export async function getDashboard(
 
 /** Drops every cached dashboard (called by the realtime relay on transaction events). */
 export async function invalidateDashboardCache(): Promise<number> {
-  const redis = getRedis();
-  let cursor = "0";
-  let removed = 0;
-  do {
-    const [next, keys] = await redis.scan(cursor, "MATCH", `${CACHE_PREFIX}*`, "COUNT", 100);
-    cursor = next;
-    if (keys.length) removed += await redis.unlink(...keys);
-  } while (cursor !== "0");
-  return removed;
+  // scanKeys / unlinkKeys walk every master of a Redis Cluster (P7.4)
+  return unlinkKeys(await scanKeys(`${CACHE_PREFIX}*`));
 }
 
 /** Today's top-bar numbers straight from the DB (realtime `dashboard:stats`). */

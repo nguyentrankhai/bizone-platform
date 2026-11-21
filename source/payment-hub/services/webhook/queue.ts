@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import { describeError } from "@/lib/redis";
-import { queueConnection } from "@/services/queue/connection";
+import { queueOptions } from "@/services/queue/connection";
 
 /**
  * BullMQ queue for outgoing webhooks. A job carries no secret (issue #3): the worker reads the
@@ -28,7 +28,7 @@ const globalForQueue = globalThis as unknown as { payhubWebhookQueue?: Queue<Web
 export function getWebhookQueue(): Queue<WebhookJob> {
   if (!globalForQueue.payhubWebhookQueue) {
     const queue = new Queue<WebhookJob>(WEBHOOK_QUEUE, {
-      connection: queueConnection(),
+      ...queueOptions(),
       defaultJobOptions: {
         backoff: { type: "webhook" },
         removeOnComplete: { age: 7 * 86400, count: 5000 },

@@ -197,7 +197,7 @@ describe("executeRoute", () => {
       [1, false],
       [3, true],
     ]);
-    expect(store.get("payhub:route:fail:1")).toBe("1");
+    expect(store.get("payhub:route:{cb}:fail:1")).toBe("1");
   });
 
   it("falls back on timeout", async () => {

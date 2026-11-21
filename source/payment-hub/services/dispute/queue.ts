@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import { describeError } from "@/lib/redis";
-import { queueConnection } from "@/services/queue/connection";
+import { queueOptions } from "@/services/queue/connection";
 
 /**
  * BullMQ queue for dispute notifications (P5.6): `notify` e-mails the result of a dispute to its
@@ -16,7 +16,7 @@ const globalForQueue = globalThis as unknown as { payhubDisputeQueue?: Queue<Dis
 export function getDisputeQueue(): Queue<DisputeJob> {
   if (!globalForQueue.payhubDisputeQueue) {
     const queue = new Queue<DisputeJob>(DISPUTE_QUEUE, {
-      connection: queueConnection(),
+      ...queueOptions(),
       defaultJobOptions: {
         attempts: 4,
         backoff: { type: "exponential", delay: 30_000 },

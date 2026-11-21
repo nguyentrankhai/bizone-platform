@@ -90,8 +90,10 @@ const CB_FAILURES = Number(process.env.ROUTE_CB_FAILURES ?? 5);
 const CB_WINDOW_MS = Number(process.env.ROUTE_CB_WINDOW_S ?? 60) * 1000;
 const CB_OPEN_MS = Number(process.env.ROUTE_CB_OPEN_S ?? 30) * 1000;
 
-const failKey = (id: number) => `payhub:route:fail:${id}`;
-const openKey = (id: number) => `payhub:route:open:${id}`;
+// One hash tag for every circuit key (P7.4): MGET / MULTI over several partners stay valid on a
+// Redis Cluster (all keys in one slot).
+const failKey = (id: number) => `payhub:route:{cb}:fail:${id}`;
+const openKey = (id: number) => `payhub:route:{cb}:open:${id}`;
 
 async function bestEffort<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {

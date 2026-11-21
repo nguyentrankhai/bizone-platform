@@ -209,32 +209,68 @@ export function dispatchSoon(transactionId: number): void {
   );
 }
 
-/** Re-dispatch outbox rows nobody claimed (called by the worker every 30 s). */
+/**
+ * Re-dispatch outbox rows nobody claimed (worker maintenance task, every 30 s). P7.4: drains a
+ * backlog (Redis was down, burst of thousands of status changes…) in batches of
+ * OUTBOX_SWEEP_BATCH, OUTBOX_SWEEP_CONCURRENCY dispatches at a time, for up to
+ * OUTBOX_SWEEP_BUDGET_MS — was 200 rows per tick one by one (≈ 400 webhooks / minute).
+ * Dispatch is a conditional claim, so overlapping sweeps / app dispatches never double-send.
+ */
 export async function sweepWebhookOutbox(minAgeMs = 10_000): Promise<number> {
-  const before = new Date(Date.now() - minAgeMs);
+  const batch = envInt("OUTBOX_SWEEP_BATCH", 500);
+  const concurrency = envInt("OUTBOX_SWEEP_CONCURRENCY", 20);
+  const deadline = Date.now() + envInt("OUTBOX_SWEEP_BUDGET_MS", 25_000);
   const prisma = getPrisma();
-  const [rows, refunds, disputes] = await Promise.all([
-    prisma.transaction.findMany({
-      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
-      select: { id: true },
-      take: 200,
-    }),
-    prisma.refund.findMany({
-      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
-      select: { id: true },
-      take: 200,
-    }),
-    prisma.dispute.findMany({
-      where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
-      select: { id: true },
-      take: 200,
-    }),
-  ]);
   let enqueued = 0;
-  for (const r of rows) enqueued += await dispatchTransactionWebhook(r.id).catch(() => 0);
-  for (const r of refunds) enqueued += await dispatchRefundWebhook(r.id).catch(() => 0);
-  for (const d of disputes) enqueued += await dispatchDisputeWebhook(d.id).catch(() => 0);
-  return enqueued;
+  for (;;) {
+    const before = new Date(Date.now() - minAgeMs);
+    const [rows, refunds, disputes] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+        select: { id: true },
+        take: batch,
+      }),
+      prisma.refund.findMany({
+        where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+        select: { id: true },
+        take: batch,
+      }),
+      prisma.dispute.findMany({
+        where: { notifyWebhook: true, webhookSentAt: null, updatedAt: { lte: before } },
+        select: { id: true },
+        take: batch,
+      }),
+    ]);
+    const tasks: (() => Promise<number>)[] = [
+      ...rows.map((r) => () => dispatchTransactionWebhook(r.id)),
+      ...refunds.map((r) => () => dispatchRefundWebhook(r.id)),
+      ...disputes.map((d) => () => dispatchDisputeWebhook(d.id)),
+    ];
+    enqueued += await runLimited(tasks, concurrency);
+    const full = rows.length === batch || refunds.length === batch || disputes.length === batch;
+    if (!full || Date.now() >= deadline) return enqueued;
+  }
+}
+
+function envInt(name: string, fallback: number): number {
+  const n = Number(process.env[name]);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+/** Runs the tasks `limit` at a time; a failing dispatch counts 0 (released, retried next sweep). */
+async function runLimited(tasks: (() => Promise<number>)[], limit: number): Promise<number> {
+  let next = 0;
+  let total = 0;
+  const lane = async () => {
+    while (next < tasks.length) {
+      const task = tasks[next++];
+      // not `total += await …`: that reads `total` before the await and loses concurrent adds
+      const n = await task().catch(() => 0);
+      total += n;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, lane));
+  return total;
 }
 
 // ─── Refund outbox (P5.3) ─────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { Queue } from "bullmq";
 import { getPrisma } from "@/lib/prisma";
 import { describeError } from "@/lib/redis";
 import { sendMail } from "@/lib/mail";
-import { queueConnection } from "@/services/queue/connection";
+import { queueOptions } from "@/services/queue/connection";
 import { NOTIFICATION_EVENTS, isNotificationEvent } from "@/services/notification/events";
 
 /**
@@ -23,7 +23,7 @@ const globalForQueue = globalThis as unknown as {
 export function getNotificationQueue(): Queue<NotificationJob> {
   if (!globalForQueue.payhubNotificationQueue) {
     const queue = new Queue<NotificationJob>(NOTIFICATION_QUEUE, {
-      connection: queueConnection(),
+      ...queueOptions(),
       defaultJobOptions: {
         attempts: 4,
         backoff: { type: "exponential", delay: 30_000 },

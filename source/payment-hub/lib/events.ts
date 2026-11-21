@@ -1,4 +1,5 @@
 import { getRedis } from "./redis";
+import { affectsTxnList, bumpTxnListVersion } from "./txn-list-cache";
 
 export const REALTIME_CHANNEL = "payhub:events";
 
@@ -10,7 +11,11 @@ export type RealtimeEvent = {
 
 export async function publishEvent(type: string, data: unknown): Promise<void> {
   const event: RealtimeEvent = { type, data, at: new Date().toISOString() };
-  await getRedis().publish(REALTIME_CHANNEL, JSON.stringify(event));
+  // P7.4: a transaction event invalidates the cached transaction lists (lib/txn-list-cache.ts)
+  const bump = affectsTxnList(type)
+    ? bumpTxnListVersion(Number((data as { merchantId?: unknown } | null)?.merchantId))
+    : null;
+  await Promise.all([getRedis().publish(REALTIME_CHANNEL, JSON.stringify(event)), bump]);
 }
 
 /**

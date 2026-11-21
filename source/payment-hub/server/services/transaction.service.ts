@@ -3,6 +3,8 @@ import { Prisma } from "@/generated/prisma/client";
 import { publishEvent } from "@/lib/events";
 import { InvalidTransitionError, assertTransition, type TxnStatus } from "./stateMachine";
 import { OUTBOX_PENDING, dispatchSoon } from "./webhook.service";
+import { findArchivedTransaction } from "./archive.service";
+import { cachedTxnList } from "@/lib/txn-list-cache";
 
 const DEFAULT_EXPIRY_MINUTES = 15;
 const BASE_PAYMENT_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:4000";
@@ -18,6 +20,17 @@ export function generateTxnCode(): string {
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
+
+const TXN_CODE_ATTEMPTS = 5;
+
+/** Unique violation on txn_code (not on merchant_txn_id — that one is the merchant's duplicate). */
+export function isTxnCodeCollision(e: unknown): boolean {
+  if (typeof e !== "object" || e === null || (e as { code?: string }).code !== "P2002")
+    return false;
+  const meta = (e as { meta?: Record<string, unknown> }).meta ?? {};
+  const text = JSON.stringify(meta) + String((e as { message?: string }).message ?? "");
+  return /txn_code|txnCode/.test(text) && !/merchant_txn|merchantTxnId/.test(text);
+}
 
 export interface CreateTransactionInput {
   merchantTxnId?: string;
@@ -42,30 +55,45 @@ export async function createTransaction(
 ) {
   const prisma = getPrisma();
 
-  const txnCode = generateTxnCode();
   const expiredAt = new Date(Date.now() + (input.expiryMinutes ?? DEFAULT_EXPIRY_MINUTES) * 60_000);
 
-  const txn = await prisma.transaction.create({
-    data: {
-      txnCode,
-      merchantId,
-      apiKeyId,
-      merchantTxnId: input.merchantTxnId ?? null,
-      amount: input.amount,
-      currency: input.currency ?? "VND",
-      description: input.description ?? null,
-      status: "Created",
-      returnUrl: input.returnUrl ?? null,
-      webhookUrl: input.webhookUrl ?? null,
-      customerName: input.customerName ?? null,
-      customerEmail: input.customerEmail ?? null,
-      customerPhone: input.customerPhone ?? null,
-      ipAddress: input.ipAddress ?? null,
-      metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : Prisma.DbNull,
-      idempotencyKey: input.idempotencyKey ?? null,
-      expiredAt,
-    },
-  });
+  // P7.4: txn_code has 6 random digits per day (format parsed by reconciliation / VietQR /
+  // ZaloPay) — at thousands of transactions a day collisions happen; retry with a new code.
+  let txnCode = generateTxnCode();
+  let txn;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      txn = await insertTransaction(txnCode);
+      break;
+    } catch (e) {
+      if (attempt >= TXN_CODE_ATTEMPTS || !isTxnCodeCollision(e)) throw e;
+      txnCode = generateTxnCode();
+    }
+  }
+
+  async function insertTransaction(txnCode: string) {
+    return prisma.transaction.create({
+      data: {
+        txnCode,
+        merchantId,
+        apiKeyId,
+        merchantTxnId: input.merchantTxnId ?? null,
+        amount: input.amount,
+        currency: input.currency ?? "VND",
+        description: input.description ?? null,
+        status: "Created",
+        returnUrl: input.returnUrl ?? null,
+        webhookUrl: input.webhookUrl ?? null,
+        customerName: input.customerName ?? null,
+        customerEmail: input.customerEmail ?? null,
+        customerPhone: input.customerPhone ?? null,
+        ipAddress: input.ipAddress ?? null,
+        metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : Prisma.DbNull,
+        idempotencyKey: input.idempotencyKey ?? null,
+        expiredAt,
+      },
+    });
+  }
 
   // Create initial state log
   await prisma.transactionLog.create({
@@ -94,7 +122,8 @@ export async function getTransactionById(id: number, merchantId?: number) {
     where: { id },
     include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20 } },
   });
-  if (!txn) return null;
+  // P7.4: moved to transactions_archive (read-only)
+  if (!txn) return findArchivedTransaction({ id }, { merchantId });
   if (merchantId !== undefined && txn.merchantId !== merchantId) return null;
   return txn;
 }
@@ -105,17 +134,49 @@ export async function getTransactionByCode(txnCode: string, merchantId?: number)
     where: { txnCode },
     include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20 } },
   });
-  if (!txn) return null;
+  if (!txn) return findArchivedTransaction({ txnCode }, { merchantId });
   if (merchantId !== undefined && txn.merchantId !== merchantId) return null;
   return txn;
 }
 
 export async function getTransactionByMerchantTxnId(merchantTxnId: string, merchantId: number) {
   const prisma = getPrisma();
-  return prisma.transaction.findFirst({
+  const txn = await prisma.transaction.findFirst({
     where: { merchantTxnId, merchantId },
     include: { logs: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 } },
   });
+  // P7.4: an archived transaction still owns its merchant_txn_id (duplicates → 409)
+  return txn ?? findArchivedTransaction({ merchantId, merchantTxnId }, { logLimit: 10 });
+}
+
+/**
+ * Duplicate check before creating a transaction (P7.4 — light: no logs; the archive is read only
+ * when it holds rows, cached per process for a minute).
+ */
+export async function findMerchantTxnCode(
+  merchantTxnId: string,
+  merchantId: number,
+): Promise<string | null> {
+  const hot = await getPrisma().transaction.findFirst({
+    where: { merchantTxnId, merchantId },
+    select: { txnCode: true },
+  });
+  if (hot) return hot.txnCode;
+  if (!(await archiveHasRows())) return null;
+  const archived = await getPrisma().transactionArchive.findFirst({
+    where: { merchantId, merchantTxnId },
+    select: { txnCode: true },
+  });
+  return archived?.txnCode ?? null;
+}
+
+let archiveRows: { at: number; value: boolean } | null = null;
+
+async function archiveHasRows(): Promise<boolean> {
+  if (archiveRows && Date.now() - archiveRows.at < 60_000) return archiveRows.value;
+  const one = await getPrisma().transactionArchive.findFirst({ select: { id: true } });
+  archiveRows = { at: Date.now(), value: one !== null };
+  return archiveRows.value;
 }
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -133,7 +194,41 @@ export interface ListTransactionsInput {
   search?: string;
 }
 
+/** P7.4: cached in Redis (lib/txn-list-cache.ts) — invalidated by every transaction event. */
 export async function listTransactions(input: ListTransactionsInput) {
+  return cachedTxnList(
+    { ...input },
+    input.merchantId,
+    () => queryTransactions(input),
+    reviveTxnList,
+  );
+}
+
+type TxnListResult = Awaited<ReturnType<typeof queryTransactions>>;
+
+const LIST_DATE_FIELDS = [
+  "expiredAt",
+  "paidAt",
+  "webhookSentAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+function reviveTxnList(raw: TxnListResult): TxnListResult {
+  return {
+    ...raw,
+    items: raw.items.map((t) => {
+      const out = { ...t } as Record<string, unknown>;
+      for (const f of LIST_DATE_FIELDS) {
+        const v = out[f];
+        if (typeof v === "string") out[f] = new Date(v);
+      }
+      return out as (typeof raw.items)[number];
+    }),
+  };
+}
+
+async function queryTransactions(input: ListTransactionsInput) {
   const prisma = getPrisma();
   const {
     page = 1,

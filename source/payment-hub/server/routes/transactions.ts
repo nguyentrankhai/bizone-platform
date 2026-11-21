@@ -16,6 +16,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { isTxnStatus } from "@/server/services/stateMachine";
 import {
   createTransaction,
+  findMerchantTxnCode,
   getTransactionById,
   getTransactionByCode,
   getTransactionByMerchantTxnId,
@@ -27,7 +28,12 @@ import {
   initiatePayment,
   type InitiatedPayment,
 } from "@/server/services/payment.service";
-import { listRefundsForMerchant } from "@/server/services/refund.service";
+import {
+  listRefundsForMerchant,
+  toRefundView,
+  type RefundWithTxn,
+} from "@/server/services/refund.service";
+import type { ArchivedRefund } from "@/server/services/archive.service";
 import { amountError, expiryError } from "@/services/routing/routeMap";
 import { getRoute } from "@/services/routing/routes";
 import { availableMethods, planRoute } from "@/services/routing/routeEngine";
@@ -178,9 +184,8 @@ async function createAndInitiate(
   merchant: { merchantId: number; apiKeyId: number },
   idempotencyKey: string | undefined,
 ): Promise<CreateResult> {
-  const duplicate = await getTransactionByMerchantTxnId(input.merchant_txn_id, merchant.merchantId);
-  if (duplicate)
-    return { ok: false, response: duplicateTxn(input.merchant_txn_id, duplicate.txnCode) };
+  const duplicate = await findMerchantTxnCode(input.merchant_txn_id, merchant.merchantId);
+  if (duplicate) return { ok: false, response: duplicateTxn(input.merchant_txn_id, duplicate) };
 
   // Fail fast when the Route Engine has no partner for the requested method (before
   // creating the transaction). Other methods keep working — tell the merchant which.
@@ -225,8 +230,8 @@ async function createAndInitiate(
   } catch (e) {
     // Lost a race with a concurrent request carrying the same merchant_txn_id
     if (!isUniqueViolation(e)) throw e;
-    const other = await getTransactionByMerchantTxnId(input.merchant_txn_id, merchant.merchantId);
-    return { ok: false, response: duplicateTxn(input.merchant_txn_id, other?.txnCode) };
+    const other = await findMerchantTxnCode(input.merchant_txn_id, merchant.merchantId);
+    return { ok: false, response: duplicateTxn(input.merchant_txn_id, other ?? undefined) };
   }
 
   let paymentUrl = txn.paymentUrl;
@@ -418,7 +423,31 @@ export async function handleListTransactions(req: NextRequest): Promise<Response
 // ─── Serialize ────────────────────────────────────────────────────────────────
 
 /** Transaction + its refund history (P5.3) — how a merchant follows an asynchronous refund. */
-async function withRefunds(txn: Parameters<typeof serializeTxnFull>[0] & { id: number }) {
+async function withRefunds(
+  txn: Parameters<typeof serializeTxnFull>[0] & {
+    id: number;
+    archived?: true;
+    archivedRefunds?: ArchivedRefund[];
+    txnCode?: string;
+    currency?: string;
+  },
+) {
+  // P7.4: an archived transaction keeps its refunds in `history` (rows were moved)
+  if (txn.archived) {
+    const { archivedRefunds = [], ...rest } = txn;
+    return {
+      ...serializeTxnFull(rest),
+      refunds: archivedRefunds.map((r) =>
+        toRefundView({
+          ...(r as unknown as RefundWithTxn),
+          amount: r.amount as unknown as RefundWithTxn["amount"],
+          processedAt: r.processedAt ? new Date(String(r.processedAt)) : null,
+          createdAt: new Date(String(r.createdAt)),
+          transaction: { txnCode: String(txn.txnCode), currency: String(txn.currency ?? "VND") },
+        }),
+      ),
+    };
+  }
   return { ...serializeTxnFull(txn), refunds: await listRefundsForMerchant(txn.id) };
 }
 

@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import { describeError } from "@/lib/redis";
-import { queueConnection } from "@/services/queue/connection";
+import { queueOptions } from "@/services/queue/connection";
 
 /**
  * BullMQ queue for reconciliation (P5.4): `run` executes one Running run created by the admin API
@@ -17,7 +17,7 @@ const globalForQueue = globalThis as unknown as { payhubReconQueue?: Queue<Recon
 export function getReconQueue(): Queue<ReconJob> {
   if (!globalForQueue.payhubReconQueue) {
     const queue = new Queue<ReconJob>(RECON_QUEUE, {
-      connection: queueConnection(),
+      ...queueOptions(),
       defaultJobOptions: {
         attempts: 1,
         removeOnComplete: { age: 7 * 86400, count: 1000 },

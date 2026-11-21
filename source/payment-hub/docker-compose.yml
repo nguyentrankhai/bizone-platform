@@ -53,11 +53,16 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # P7.4: several worker instances share the BullMQ queues (one job → one worker; periodic jobs
+  # run once per tick for the whole deployment). No container_name so it can be scaled:
+  # WORKER_REPLICAS=3 or `docker compose up -d --scale worker=3`. WORKER_QUEUES picks the queues
+  # of an instance (default all), WORKER_CONCURRENCY_<QUEUE> the parallel jobs per instance.
   worker:
     image: bizone-payhub
     pull_policy: never
-    container_name: payhub-worker
     command: ["node", "dist/worker.mjs"]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
     env_file:
       - path: .env.local
         required: false

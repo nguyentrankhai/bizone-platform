@@ -102,7 +102,7 @@ export interface RefundInput {
 
 export type { RefundOutcomeView, RefundView };
 
-type RefundWithTxn = Refund & { transaction: { txnCode: string; currency: string } };
+export type RefundWithTxn = Refund & { transaction: { txnCode: string; currency: string } };
 
 export function toRefundView(
   r: RefundWithTxn,
